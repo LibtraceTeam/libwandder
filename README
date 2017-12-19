@@ -1,0 +1,77 @@
+libwandder -- C library for DER encoding and decoding.
+
+Current Stable Version: unreleased.
+
+---------------------------------------------------------------------------
+Copyright (c) 2017 The University of Waikato, Hamilton, New Zealand.
+All rights reserved.
+
+This code has been developed by the University of Waikato WAND
+research group. For further information please see http://www.wand.net.nz/.
+---------------------------------------------------------------------------
+
+See the file COPYING and COPYING.LESSER for full licensing details for this
+software.
+
+Bugs, questions or comments may be sent to contact@wand.net.nz or filed as
+issues on the libwandder github page: https://github.com/wanduow/libwandder
+
+Authors:
+        Shane Alcock
+
+
+Introduction
+============
+
+Libwandder is a helper library that can be used to perform some typical
+tasks related to the encoding and decoding of data structures defined
+using the ASN.1 format.
+
+This library also includes some routines that are specifically useful for
+capturing and processing records using the ETSI Lawful Intercept standards.
+
+Note: at this stage, only the code for decoding data structures has been
+written -- encoding will follow in the near future.
+
+
+Installation
+============
+After having installed the required libraries, running the following series
+of commands should install libwandder
+
+        ./bootstrap.sh (only if you've cloned the source from GitHub)
+        ./configure
+        make
+        sudo make install
+
+By default, libwandder installs to /usr/local - this can be changed by
+appending the --prefix=<new location> option to ./configure.
+
+
+API
+===
+
+There are two APIs included within libwandder: the generic DER API and the
+ETSILI-specific API. Both APIs are extremely under-documented right now, but
+hopefully this can be addressed sometime soon.
+
+The generic API can be accessed by including the header file "libwandder.h".
+This API can be used to sequentially decode each field in an encoded message,
+giving the user access to the tag, class, length and values for each decoded
+field. If the message only uses universal types, the API can also convert
+the tags and values into printable strings.
+
+The ETSILI API can be accessed by including the header file
+"libwandder_etsili.h". This API can be used to search for certain ETSI-LI
+fields in the ETSI headers (e.g. timestamp, PDU length) or get a pointer to
+the start of the actual captured IP payload. The ETSILI API is also capable
+of decoding and interpreting many of the fields defined in the standard and
+producing human-readable strings describing each field or encapsulating
+structure.
+
+Please note that the ETSI specification implemented within the libwandder API
+is not yet complete -- standard IP Communication Contents and Intercept
+Related Information records are supported, but other interception types are
+still on the TODO list (e.g. IP Multimedia, Email, etc).
+
+
