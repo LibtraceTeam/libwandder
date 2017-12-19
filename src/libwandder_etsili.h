@@ -37,15 +37,49 @@ typedef struct wandder_etsistack {
     int *atthislevel;
 } wandder_etsi_stack_t;
 
-wandder_dumper_t *wandder_get_etsili_structure(void);
+typedef struct wandder_etsispec {
+    wandder_dumper_t ipaddress;
+    wandder_dumper_t ipvalue;
+    wandder_dumper_t ipiriid;
+    wandder_dumper_t ipiricontents;
+    wandder_dumper_t ipiri;
+    wandder_dumper_t iricontents;
+    wandder_dumper_t iripayload;
+    wandder_dumper_t netelid;
+    wandder_dumper_t root;
+    wandder_dumper_t netid;
+    wandder_dumper_t cid;
+    wandder_dumper_t msts;
+    wandder_dumper_t cccontents;
+    wandder_dumper_t ccpayloadseq;
+    wandder_dumper_t ccpayload;
+    wandder_dumper_t payload;
+    wandder_dumper_t psheader;
+    wandder_dumper_t pspdu;
+    wandder_dumper_t ipcc;
+    wandder_dumper_t ipcccontents;
+    wandder_dumper_t iripayloadseq;
 
-struct timeval wandder_etsili_get_header_timestamp(wandder_decoder_t *dec);
-uint32_t wandder_etsili_get_pdu_length(wandder_decoder_t *dec);
-char *wandder_etsili_get_next_fieldstr(wandder_decoder_t *dec, char *space,
-        int spacelen, wandder_etsi_stack_t **stack);
-uint8_t *wandder_etsili_get_cc_contents(wandder_decoder_t *dec, uint32_t *len);
+    wandder_decoder_t dec;
+    wandder_etsi_stack_t *stack;
 
-void wandder_etsili_free_stack(wandder_etsi_stack_t *stack);
+    uint8_t decstate;
+} wandder_etsispec_t;
+
+wandder_etsispec_t *wandder_create_etsili_decoder(void);
+void wandder_free_etsili_decoder(wandder_etsispec_t *dec);
+void wandder_attach_etsili_buffer(wandder_etsispec_t *dec, uint8_t *buffer,
+        uint32_t len, bool copy);
+
+wandder_dumper_t *wandder_get_etsili_structure(wandder_etsispec_t *dec);
+
+wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec);
+struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *dec);
+uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *dec);
+char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *dec, char *space,
+        int spacelen);
+uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *dec, uint32_t *len);
+
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :
