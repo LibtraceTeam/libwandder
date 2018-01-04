@@ -35,6 +35,7 @@
         sizeof(struct wandder_dump_action) * x.membercount);
 
 
+/* Identifier classes */
 enum {
     WANDDER_CLASS_UNIVERSAL_PRIMITIVE = 0,
     WANDDER_CLASS_UNIVERSAL_CONSTRUCT = 1,
@@ -47,6 +48,8 @@ enum {
     WANDDER_CLASS_UNKNOWN = 255,
 };
 
+/* Known tag types, i.e. data types for encoded values */
+/* XXX Not all of these are fully implemented yet */
 enum {
     WANDDER_TAG_BOOLEAN = 0x01,
     WANDDER_TAG_INTEGER = 0x02,
@@ -71,6 +74,16 @@ enum {
     WANDDER_TAG_IPPACKET = 0x30,
 };
 
+/* Dumpers are used to describe hierarchy and data types for a particular
+ * schema expressed in ASN.1, especially schemas that are primarily context
+ * sensitive.
+ *
+ * By defining a dumper hierarchy, you can provide libwandder with
+ * instructions on how to interpret each decoded field, e.g. field 4 in
+ * a particular sequence should be treated as an integer. Container fields
+ * (e.g. sequences within sequences) are represented by setting 'descend' to
+ * point to a dumper that describes the strucutre of the child sequence.
+ */
 typedef struct wandder_dumper wandder_dumper_t;
 
 struct wandder_dump_action {
@@ -91,6 +104,13 @@ struct wandder_dumper {
 
 extern struct wandder_dump_action WANDDER_NOACTION;
 
+
+/* Items are decoded fields extracted from the input stream.
+ *
+ * The item value itself remains a generic pointer -- if the class is not
+ * universal, then a corresponding dumper will be required to interpret
+ * the contents of that pointer correctly.
+ */
 typedef struct wandder_item wandder_item_t;
 
 struct wandder_item {
@@ -105,7 +125,12 @@ struct wandder_item {
 
 };
 
-
+/* The decoder manages the overall decoding process. It maintains a pointer
+ * to the most recently decoded item and the location in the input stream
+ * that we have decoded up to.
+ *
+ * Almost all decoding operations will require a reference to a decoder.
+ */
 typedef struct wandder_decoder {
 
     wandder_item_t *toplevel;
@@ -121,18 +146,30 @@ typedef struct wandder_decoder {
 
 } wandder_decoder_t;
 
+
+/* A target describes a particular field that one wants to find in a decoded
+ * input stream. Fields are uniquely identified by their parent structure
+ * (represented by the dumper describing that structure) and the identifier
+ * for the requested item within the parent structure (e.g. set to 0 for
+ * item id 0, 1 for item id 1 etc.).
+ */
 typedef struct wandder_search_target {
     wandder_dumper_t *parent;
     uint32_t itemid;
-    bool found;
+    bool found;         /* Will be set to true if this target is found */
 } wandder_target_t;
 
+/* Describes a successfully found item from a decoded input stream. Also
+ * includes the interpretation instructions from the corresponding dumper,
+ * so you can correctly interpret the item value.
+ */
 typedef struct wandder_found_item {
     wandder_item_t *item;
-    int targetid;
+    int targetid;       /* Index in the search target array for this item */
     uint16_t interpretas;
 } wandder_found_item_t;
 
+/* A simple list of items extracted from a decoded input stream */
 typedef struct wandder_found_items {
     wandder_found_item_t *list;
     int itemcount;
@@ -140,6 +177,54 @@ typedef struct wandder_found_items {
 } wandder_found_t;
 
 
+/* Encoding is performed left to right, but the length values for each field
+ * are calculated from inside outwards. Therefore, fields to be encoded are
+ * staged as "pending" until all fields to be encoded have been pushed to the
+ * encoder. Once we have all fields, we can correctly calculate the lengths
+ * for each field and begin the encoding process proper.
+ */
+typedef struct wandder_pending wandder_pend_t;
+
+struct wandder_pending {
+    uint8_t identclass;
+    uint32_t identifier;
+    uint32_t vallen;
+    uint8_t *valspace;
+    uint8_t encodeas;
+
+    wandder_pend_t *children;
+    wandder_pend_t *lastchild;
+    wandder_pend_t *siblings;
+    wandder_pend_t *parent;
+};
+
+/* The encoder manages the overall encoder process. It simply maintains the
+ * full hierarchy of pending items and will encode them all once the user
+ * indicates that all fields have been pushed to the encoder.
+ *
+ * Almost all encoding operations will require a reference to a encoder.
+ */
+typedef struct wandder_encoder {
+    wandder_pend_t *pendlist;
+    wandder_pend_t *current;
+} wandder_encoder_t;
+
+
+/* Encoding API
+ * ----------------------------------------------------
+ */
+void init_wandder_encoder(wandder_encoder_t *enc);
+void reset_wandder_encoder(wandder_encoder_t *enc);
+void free_wandder_encoder(wandder_encoder_t *enc);
+
+void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
+        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen);
+void wandder_encode_endseq(wandder_encoder_t *enc);
+uint8_t *wandder_encode_finish(wandder_encoder_t *enc, uint32_t *len);
+
+/* Decoding API
+ * ----------------------------------------------------
+ */
 void init_wandder_decoder(wandder_decoder_t *dec, uint8_t *source, uint32_t len,
         bool copy);
 void wandder_reset_decoder(wandder_decoder_t *dec);
@@ -156,12 +241,13 @@ const char *wandder_get_tag_string(wandder_decoder_t *dec);
 
 struct timeval wandder_generalizedts_to_timeval(char *gts, int len);
 int64_t wandder_get_integer_value(wandder_item_t *c, uint32_t *intlen);
-
-
-
+int wandder_timeval_to_generalizedts(struct timeval tv, char *gts, int space);
 int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,
         wandder_dumper_t *actions, char *name);
 
+/* Decode-search API
+ * ----------------------------------------------------
+ */
 int wandder_search_items(wandder_decoder_t *dec, uint16_t level,
         wandder_dumper_t *actions, wandder_target_t *targets,
         int targetcount, wandder_found_t **found, int stopthresh);

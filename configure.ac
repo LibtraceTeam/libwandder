@@ -20,7 +20,14 @@ gcc_PACKED
 
 EXTRA_LIBS=""
 
+AC_CHECK_LIB([m], [ceil],,math_found = 0)
+
 AC_CONFIG_FILES([Makefile src/Makefile])
+
+if test "$math_found" = 0; then
+        AC_MSG_ERROR(Required library libm not found; use LDFLAGS to specify library location)
+fi
+
 
 AC_SUBST([ADD_LIBS])
 AC_SUBST([EXTRA_LIBS])

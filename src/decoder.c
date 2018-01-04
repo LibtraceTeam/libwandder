@@ -34,6 +34,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <time.h>
+#include <math.h>
 #include "src/libwandder.h"
 
 #define DIGIT(x)  (x - '0')
