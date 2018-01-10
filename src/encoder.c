@@ -243,6 +243,9 @@ static uint32_t encode_integer(wandder_pend_t *p, void *valptr, uint32_t len) {
     }
 
     lenocts = ceil(log(val) / log(256));
+    if (lenocts == 0) {
+        lenocts = 1;
+    }
 
     for (i = 0; i < lenocts; i++) {
         encarray[i] = (val & 0xff);
@@ -297,7 +300,6 @@ static uint32_t encode_value(wandder_pend_t *p, void *valptr, uint32_t vallen) {
 
     switch(p->encodeas) {
         case WANDDER_TAG_OCTETSTRING:
-        case WANDDER_TAG_IPPACKET:
         case WANDDER_TAG_UTF8STR:
         case WANDDER_TAG_NUMERIC:
         case WANDDER_TAG_PRINTABLE:
@@ -333,6 +335,10 @@ static uint32_t encode_value(wandder_pend_t *p, void *valptr, uint32_t vallen) {
         case WANDDER_TAG_SET:
             break;
 
+        case WANDDER_TAG_IPPACKET:
+            p->vallen = vallen;
+            p->valspace = NULL;
+            break;
 
         default:
             fprintf(stderr, "Encode error: unable to encode tag type %d\n",
@@ -459,7 +465,7 @@ uint8_t *wandder_encode_finish(wandder_encoder_t *enc, uint32_t *len) {
     uint8_t *result = NULL;
 
     *len = enc->pendlist->vallen + calc_preamblen(enc->pendlist);
-    result = (uint8_t *)malloc(*len);
+    result = (uint8_t *)calloc(1, *len);
 
     if (encode_r(enc->pendlist, result, *len) == 0) {
         fprintf(stderr, "Failed to encode wandder structure\n");
