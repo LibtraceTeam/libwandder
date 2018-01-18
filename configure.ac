@@ -3,7 +3,7 @@
 AC_INIT(libwandder, 1.0.0, salcock@waikato.ac.nz)
 
 AM_INIT_AUTOMAKE([subdir-objects])
-AC_CONFIG_SRCDIR(src/libwandder.c)
+AC_CONFIG_SRCDIR(src/decoder.c)
 AM_CONFIG_HEADER(config.h)
 AC_CONFIG_MACRO_DIR([m4])
 
