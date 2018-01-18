@@ -176,7 +176,7 @@ static uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
         return 1;
     }
 
-    lenocts = ceil(log(len) / log(256));
+    lenocts = floor((log(len) / log(256)) + 1);
     *buf = (uint8_t)(lenocts | 0x80);
 
     buf += 1;
@@ -242,7 +242,7 @@ static uint32_t encode_integer(wandder_pend_t *p, void *valptr, uint32_t len) {
         return 0;
     }
 
-    lenocts = ceil(log(val) / log(256));
+    lenocts = floor((log(val) / log(256)) + 1);
     if (lenocts == 0) {
         lenocts = 1;
     }
