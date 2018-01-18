@@ -30,9 +30,6 @@ using the ASN.1 format.
 This library also includes some routines that are specifically useful for
 capturing and processing records using the ETSI Lawful Intercept standards.
 
-Note: at this stage, only the code for decoding data structures has been
-written -- encoding will follow in the near future.
-
 
 Installation
 ============
