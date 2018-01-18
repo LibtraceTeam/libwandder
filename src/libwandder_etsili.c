@@ -54,77 +54,121 @@ wandder_dumper_t iripayloadseq;
 
 static int init_called = 0;
 
-static void init_dumpers(void);
-static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
-        char *valstr, int len);
+static void init_dumpers(wandder_etsispec_t *dec);
+static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
+        wandder_dumper_t *curr, char *valstr, int len);
 
-wandder_dumper_t *wandder_get_etsili_structure(void) {
-    if (!init_called) {
-        init_dumpers();
-        init_called = 1;
-    }
-
-    return &root;
+static void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
+    free(stack->stk);
+    free(stack->atthislevel);
+    free(stack);
 }
 
-struct timeval wandder_etsili_get_header_timestamp(wandder_decoder_t *dec) {
+wandder_etsispec_t *wandder_create_etsili_decoder(void) {
+    wandder_etsispec_t *etsidec = (wandder_etsispec_t *)malloc(
+            sizeof(wandder_etsispec_t));
+
+    init_dumpers(etsidec);
+
+    etsidec->stack = NULL;
+    etsidec->decstate = 0;
+
+    return etsidec;
+}
+
+void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
+
+    if (!etsidec) {
+        return;
+    }
+
+    if (etsidec->stack) {
+        wandder_etsili_free_stack(etsidec->stack);
+    }
+    if (etsidec->decstate) {
+        free_wandder_decoder(&(etsidec->dec));
+    }
+    free(etsidec);
+}
+
+void wandder_attach_etsili_buffer(wandder_etsispec_t *etsidec,
+        uint8_t *source, uint32_t len, bool copy) {
+
+    init_wandder_decoder(&(etsidec->dec), source, len, copy);
+    etsidec->decstate = 1;
+}
+
+wandder_dumper_t *wandder_get_etsili_structure(wandder_etsispec_t *etsidec) {
+    return &(etsidec->root);
+}
+
+struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec) 
+{
     struct timeval tv;
     uint16_t savedlevel = 0;
 
-    if (!init_called) {
-        init_dumpers();
-        init_called = 1;
-    }
-
-
-    /* Find PSHeader */
-    wandder_reset_decoder(dec);
-    wandder_found_t *found = NULL;
-    wandder_target_t pshdrtgt = {&pspdu, 1, false};
 
     tv.tv_sec = 0;
     tv.tv_usec = 0;
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return tv;
+    }
 
-    if (wandder_search_items(dec, 0, &root, &pshdrtgt, 1, &found, 1) == 0) {
+    /* Find PSHeader */
+    wandder_reset_decoder(&etsidec->dec);
+    wandder_found_t *found = NULL;
+    wandder_target_t pshdrtgt = {&(etsidec->pspdu), 1, false};
+
+    if (wandder_search_items(&etsidec->dec, 0, &(etsidec->root), &pshdrtgt, 1,
+                &found, 1) == 0) {
         return tv;
     }
 
     /* dec->current should be pointing right at PSHeader */
-    savedlevel = wandder_get_level(dec);
+    savedlevel = wandder_get_level(&etsidec->dec);
 
-    wandder_decode_next(dec);
-    while (wandder_get_level(dec) > savedlevel) {
-        if (wandder_get_identifier(dec) == 5) {
-            tv = wandder_generalizedts_to_timeval(wandder_get_itemptr(dec),
-                    wandder_get_itemlen(dec));
+    wandder_decode_next(&etsidec->dec);
+    while (wandder_get_level(&etsidec->dec) > savedlevel) {
+        if (wandder_get_identifier(&etsidec->dec) == 5) {
+            tv = wandder_generalizedts_to_timeval(
+                    wandder_get_itemptr(&etsidec->dec),
+                    wandder_get_itemlen(&etsidec->dec));
             break;
         }
-        if (wandder_get_identifier(dec) == 7) {
+        if (wandder_get_identifier(&etsidec->dec) == 7) {
             printf("got msts field, please write a parser for it!\n");
 
             /* TODO parse msts field */
             break;
         }
-        wandder_decode_next(dec);
+        wandder_decode_next(&etsidec->dec);
     }
     wandder_free_found(found);
     return tv;
 
 }
 
-uint32_t wandder_etsili_get_pdu_length(wandder_decoder_t *dec) {
+uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
 
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return 0;
+    }
     /* Easy, reset the decoder then grab the length of the first element */
-    wandder_reset_decoder(dec);
+    wandder_reset_decoder(&etsidec->dec);
 
-    if (wandder_decode_next(dec) <= 0) {
+    if (wandder_decode_next(&etsidec->dec) <= 0) {
         return 0;
     }
 
     /* Don't forget to include the preamble length so the caller can skip
      * over the entire PDU if desired.
      */
-    return wandder_get_itemlen(dec) + dec->current->preamblelen;
+    return wandder_get_itemlen(&etsidec->dec) +
+            etsidec->dec.current->preamblelen;
 }
 
 static inline void push_stack(wandder_etsi_stack_t *stack,
@@ -146,45 +190,48 @@ static inline void push_stack(wandder_etsi_stack_t *stack,
 
 }
 
-char *wandder_etsili_get_next_fieldstr(wandder_decoder_t *dec, char *space,
-        int spacelen, wandder_etsi_stack_t **stack) {
+char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
+        int spacelen) {
     uint32_t ident;
     wandder_dumper_t *curr = NULL;
     char valstr[2048];
 
-    if (!init_called) {
-        init_dumpers();
-        init_called = 1;
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return NULL;
     }
 
-    if (*stack == NULL) {
-        *stack = (wandder_etsi_stack_t *)malloc(sizeof(wandder_etsi_stack_t));
-        (*stack)->stk = (wandder_dumper_t **)malloc(sizeof(wandder_dumper_t *) * 10);
-        (*stack)->atthislevel = (int *)malloc(sizeof(int *) * 10);
+    if (etsidec->stack == NULL) {
+        etsidec->stack = (wandder_etsi_stack_t *)malloc(
+                sizeof(wandder_etsi_stack_t));
+        etsidec->stack->stk = (wandder_dumper_t **)malloc(
+                sizeof(wandder_dumper_t *) * 10);
+        etsidec->stack->atthislevel = (int *)malloc(sizeof(int *) * 10);
 
-        (*stack)->alloced = 10;
-        (*stack)->stk[0] = &root;
-        (*stack)->current = 0;
-        (*stack)->atthislevel[0] = 0;
+        etsidec->stack->alloced = 10;
+        etsidec->stack->stk[0] = &etsidec->root;
+        etsidec->stack->current = 0;
+        etsidec->stack->atthislevel[0] = 0;
     }
 
-    if (wandder_decode_next(dec) <= 0) {
+    if (wandder_decode_next(&etsidec->dec) <= 0) {
         return NULL;
     }
 
 
-    while (wandder_get_level(dec) < (*stack)->current) {
-        assert((*stack)->current > 0);
-        (*stack)->current --;
+    while (wandder_get_level(&etsidec->dec) < etsidec->stack->current) {
+        assert(etsidec->stack->current > 0);
+        etsidec->stack->current --;
     }
 
-    curr = (*stack)->stk[(*stack)->current];
+    curr = etsidec->stack->stk[etsidec->stack->current];
 
-    switch(wandder_get_class(dec)) {
+    switch(wandder_get_class(&etsidec->dec)) {
 
         case WANDDER_CLASS_CONTEXT_PRIMITIVE:
-            ident = wandder_get_identifier(dec);
-            ((*stack)->atthislevel[(*stack)->current])++;
+            ident = wandder_get_identifier(&etsidec->dec);
+            (etsidec->stack->atthislevel[etsidec->stack->current])++;
 
             if (curr->members[ident].interpretas == WANDDER_TAG_IPPACKET) {
                 /* Reached the actual IP contents  -- stop */
@@ -192,33 +239,36 @@ char *wandder_etsili_get_next_fieldstr(wandder_decoder_t *dec, char *space,
             }
 
             if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
-                if (interpret_enum(dec->current, curr, valstr, 2048) == NULL) {
+                if (interpret_enum(etsidec, etsidec->dec.current, curr,
+                            valstr, 2048) == NULL) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
-                            (*stack)->current, ident);
+                            etsidec->stack->current, ident);
                     return NULL;
                 }
             } else {
-                if (!wandder_get_valuestr(dec->current, valstr, 2048,
+                if (!wandder_get_valuestr(etsidec->dec.current, valstr, 2048,
                         curr->members[ident].interpretas)) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
-                            (*stack)->current, ident);
+                            etsidec->stack->current, ident);
                     return NULL;
                 }
             }
 
-            snprintf(space, spacelen, "%s: %s", curr->members[ident].name, valstr);
+            snprintf(space, spacelen, "%s: %s", curr->members[ident].name,
+                    valstr);
             break;
 
         case WANDDER_CLASS_UNIVERSAL_PRIMITIVE:
-            ident = (uint32_t)(*stack)->atthislevel[(*stack)->current];
-            ((*stack)->atthislevel[(*stack)->current])++;
-            if (!wandder_get_valuestr(dec->current, valstr, 2048,
-                    wandder_get_identifier(dec))) {
+            ident = (uint32_t)etsidec->stack->atthislevel[etsidec->stack->current];
+            (etsidec->stack->atthislevel[etsidec->stack->current])++;
+            if (!wandder_get_valuestr(etsidec->dec.current, valstr, 2048,
+                    wandder_get_identifier(&etsidec->dec))) {
                 fprintf(stderr, "Failed to interpret standard field %d:%d\n",
-                        (*stack)->current, ident);
+                        etsidec->stack->current, ident);
                 return NULL;
             }
-            snprintf(space, spacelen, "%s: %s", curr->members[ident].name, valstr);
+            snprintf(space, spacelen, "%s: %s", curr->members[ident].name,
+                    valstr);
             break;
 
         case WANDDER_CLASS_UNIVERSAL_CONSTRUCT:
@@ -226,18 +276,18 @@ char *wandder_etsili_get_next_fieldstr(wandder_decoder_t *dec, char *space,
                 return NULL;
             }
             snprintf(space, spacelen, "%s:", curr->sequence.name);
-            ((*stack)->atthislevel[(*stack)->current])++;
-            push_stack(*stack, curr->sequence.descend);
+            (etsidec->stack->atthislevel[etsidec->stack->current])++;
+            push_stack(etsidec->stack, curr->sequence.descend);
             break;
 
         case WANDDER_CLASS_CONTEXT_CONSTRUCT:
             if (curr == NULL) {
                 return NULL;
             }
-            ident = wandder_get_identifier(dec);
-            ((*stack)->atthislevel[(*stack)->current])++;
+            ident = wandder_get_identifier(&etsidec->dec);
+            (etsidec->stack->atthislevel[etsidec->stack->current])++;
             snprintf(space, spacelen, "%s:", curr->members[ident].name);
-            push_stack(*stack, curr->members[ident].descend);
+            push_stack(etsidec->stack, curr->members[ident].descend);
             break;
         default:
             return NULL;
@@ -247,19 +297,27 @@ char *wandder_etsili_get_next_fieldstr(wandder_decoder_t *dec, char *space,
     return space;
 }
 
-uint8_t *wandder_etsili_get_cc_contents(wandder_decoder_t *dec, uint32_t *len) {
+wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec) {
+    return &(dec->dec);
+}
+
+uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
+        uint32_t *len) {
     uint8_t *vp = NULL;
-    if (!init_called) {
-        init_dumpers();
-        init_called = 1;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return NULL;
     }
     /* Find IPCCContents */
-    wandder_reset_decoder(dec);
+    wandder_reset_decoder(&etsidec->dec);
     wandder_found_t *found = NULL;
-    wandder_target_t ipcctgt = {&ipcccontents, 0, false};
+    wandder_target_t ipcctgt = {&etsidec->ipcccontents, 0, false};
 
     *len = 0;
-    if (wandder_search_items(dec, 0, &root, &ipcctgt, 1, &found, 1) == 0) {
+    if (wandder_search_items(&etsidec->dec, 0, &(etsidec->root), &ipcctgt, 1,
+                &found, 1) == 0) {
         return NULL;
     }
     *len = found->list[0].item->length;
@@ -267,12 +325,6 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_decoder_t *dec, uint32_t *len) {
 
     wandder_free_found(found);
     return vp;
-}
-
-void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
-    free(stack->stk);
-    free(stack->atthislevel);
-    free(stack);
 }
 
 
@@ -285,8 +337,8 @@ void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
  */
 
 
-static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
-        char *valstr, int len) {
+static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
+        wandder_dumper_t *curr, char *valstr, int len) {
 
     uint32_t intlen = 0;
     int64_t enumval = 0;
@@ -300,7 +352,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         return NULL;
     }
 
-    if (item->identifier == 1 && curr == &ipaddress) {
+    if (item->identifier == 1 && curr == &(etsidec->ipaddress)) {
         /* iP-type */
         switch(enumval) {
             case 0:
@@ -312,7 +364,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if (item->identifier == 3 && curr == &ipaddress) {
+    if (item->identifier == 3 && curr == &(etsidec->ipaddress)) {
         /* iP-assignment */
         switch(enumval) {
             case 1:
@@ -327,7 +379,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if (item->identifier == 0 && curr == &ccpayload) {
+    if (item->identifier == 0 && curr == &(etsidec->ccpayload)) {
         /* payloadDirection */
         switch(enumval) {
             case 0:
@@ -348,9 +400,9 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if ((item->identifier == 4 && curr == &ccpayload) ||
-            (item->identifier == 4 && curr == &iripayload) ||
-            (item->identifier == 8 && curr == &psheader)) {
+    if ((item->identifier == 4 && curr == &(etsidec->ccpayload)) ||
+            (item->identifier == 4 && curr == &(etsidec->iripayload)) ||
+            (item->identifier == 8 && curr == &(etsidec->psheader))) {
         /* timeStampQualifier */
         switch(enumval) {
             case 0:
@@ -368,7 +420,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if (item->identifier == 0 && curr == &ipiricontents) {
+    if (item->identifier == 0 && curr == &(etsidec->ipiricontents)) {
         /* accessEventType */
         switch(enumval) {
             case 0:
@@ -407,7 +459,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if (item->identifier == 2 && curr == &ipiricontents) {
+    if (item->identifier == 2 && curr == &(etsidec->ipiricontents)) {
         /* internetAccessType */
         switch(enumval) {
             case 0:
@@ -443,7 +495,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if (item->identifier == 3 && curr == &ipiricontents) {
+    if (item->identifier == 3 && curr == &(etsidec->ipiricontents)) {
         /* iPVersion */
         switch(enumval) {
             case 1:
@@ -458,7 +510,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if (item->identifier == 12 && curr == &ipiricontents) {
+    if (item->identifier == 12 && curr == &(etsidec->ipiricontents)) {
         /* endReason */
         switch(enumval) {
             case 0:
@@ -479,7 +531,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if (item->identifier == 22 && curr == &ipiricontents) {
+    if (item->identifier == 22 && curr == &(etsidec->ipiricontents)) {
         /* authenticationType */
         switch(enumval) {
             case 0:
@@ -500,7 +552,7 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
         }
     }
 
-    if (item->identifier == 0 && curr == &iripayload) {
+    if (item->identifier == 0 && curr == &(etsidec->iripayload)) {
         /* iRIType */
         switch(enumval) {
             case 1:
@@ -527,599 +579,609 @@ static char *interpret_enum(wandder_item_t *item, wandder_dumper_t *curr,
     return NULL;
 }
 
-static void init_dumpers(void) {
+static void init_dumpers(wandder_etsispec_t *dec) {
 
-    ipvalue.membercount = 3;
-    ALLOC_MEMBERS(ipvalue);
-    ipvalue.members[0] = WANDDER_NOACTION;
-    ipvalue.members[1] =
+    dec->ipvalue.membercount = 3;
+    ALLOC_MEMBERS(dec->ipvalue);
+    dec->ipvalue.members[0] = WANDDER_NOACTION;
+    dec->ipvalue.members[1] =
         (struct wandder_dump_action) {
                 .name = "iPBinaryAddress",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    ipvalue.members[2] =
+    dec->ipvalue.members[2] =
         (struct wandder_dump_action) {
                 .name = "iPTextAddress",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_IA5
         };
+    dec->ipvalue.sequence = WANDDER_NOACTION;
 
-    ipaddress.membercount = 6;
-    ALLOC_MEMBERS(ipaddress);
-    ipaddress.members[0] = WANDDER_NOACTION;
-    ipaddress.members[1] =
+    dec->ipaddress.membercount = 6;
+    ALLOC_MEMBERS(dec->ipaddress);
+    dec->ipaddress.members[0] = WANDDER_NOACTION;
+    dec->ipaddress.members[1] =
         (struct wandder_dump_action) {
                 .name = "iP-type",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ipaddress.members[2] =
+    dec->ipaddress.members[2] =
         (struct wandder_dump_action) {
                 .name = "iP-value",
-                .descend = &ipvalue,
+                .descend = &dec->ipvalue,
                 .interpretas = WANDDER_TAG_NULL
         };
-    ipaddress.members[3] =
+    dec->ipaddress.members[3] =
         (struct wandder_dump_action) {
                 .name = "iP-assignment",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ipaddress.members[4] =
+    dec->ipaddress.members[4] =
         (struct wandder_dump_action) {
                 .name = "iPv6PrefixLength",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-    ipaddress.members[5] =
+    dec->ipaddress.members[5] =
         (struct wandder_dump_action) {
                 .name = "iPv4SubnetMask",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
+    dec->ipaddress.sequence = WANDDER_NOACTION;
 
-    ipcccontents.membercount = 1;
-    ALLOC_MEMBERS(ipcccontents);
-    ipcccontents.members[0] =
+    dec->ipcccontents.membercount = 1;
+    ALLOC_MEMBERS(dec->ipcccontents);
+    dec->ipcccontents.members[0] =
         (struct wandder_dump_action) {
                 .name = "iPPackets",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_IPPACKET
         };
+    dec->ipcccontents.sequence = WANDDER_NOACTION;
 
-    ipcc.membercount = 2;
-    ALLOC_MEMBERS(ipcc);
+    dec->ipcc.membercount = 2;
+    ALLOC_MEMBERS(dec->ipcc);
 
-    ipcc.members[0] =
+    dec->ipcc.members[0] =
         (struct wandder_dump_action) {
                 .name = "iPCCObjId",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_RELATIVEOID
         };
-    ipcc.members[1] =
+    dec->ipcc.members[1] =
         (struct wandder_dump_action) {
                 .name = "iPCCContents",
-                .descend = &ipcccontents,
+                .descend = &dec->ipcccontents,
                 .interpretas = WANDDER_TAG_NULL
         };
+    dec->ipcc.sequence = WANDDER_NOACTION;
 
-    netelid.membercount = 6;
-    ALLOC_MEMBERS(netelid);
+    dec->netelid.membercount = 6;
+    ALLOC_MEMBERS(dec->netelid);
 
-    netelid.members[0] = WANDDER_NOACTION;
-    netelid.members[1] =
+    dec->netelid.members[0] = WANDDER_NOACTION;
+    dec->netelid.members[1] =
         (struct wandder_dump_action) {
                 .name = "e164-Format",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    netelid.members[2] =
+    dec->netelid.members[2] =
         (struct wandder_dump_action) {
                 .name = "x25-Format",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    netelid.members[3] =
+    dec->netelid.members[3] =
         (struct wandder_dump_action) {
                 .name = "iP-Format",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    netelid.members[4] =
+    dec->netelid.members[4] =
         (struct wandder_dump_action) {
                 .name = "dNS-Format",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    netelid.members[5] =        // TODO
+    dec->netelid.members[5] =        // TODO
         (struct wandder_dump_action) {
                 .name = "iP-Address",
-                .descend = &ipaddress,
+                .descend = &dec->ipaddress,
                 .interpretas = WANDDER_TAG_NULL
         };
-    netelid.sequence = WANDDER_NOACTION;
+    dec->netelid.sequence = WANDDER_NOACTION;
 
-    root.membercount = 0;
-    root.members = NULL;
-    root.sequence =
+    dec->root.membercount = 0;
+    dec->root.members = NULL;
+    dec->root.sequence =
         (struct wandder_dump_action) {
                 .name = "pS-PDU",
-                .descend = &pspdu,
+                .descend = &dec->pspdu,
                 .interpretas = WANDDER_TAG_NULL
         };
 
-    netid.membercount = 3;
-    ALLOC_MEMBERS(netid);
-    netid.members[0] =
+    dec->netid.membercount = 3;
+    ALLOC_MEMBERS(dec->netid);
+    dec->netid.members[0] =
         (struct wandder_dump_action) {
                 .name = "operatorIdentifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    netid.members[1] =
+    dec->netid.members[1] =
         (struct wandder_dump_action) {
                 .name = "networkElementIdentifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    netid.members[2] =
+    dec->netid.members[2] =
         (struct wandder_dump_action) {
                 .name = "eTSI671NEID",
-                .descend = &netelid,
+                .descend = &dec->netelid,
                 .interpretas = WANDDER_TAG_NULL
         };
-    netid.sequence = WANDDER_NOACTION;
+    dec->netid.sequence = WANDDER_NOACTION;
 
-    cid.membercount = 3;
-    ALLOC_MEMBERS(cid);
-    cid.members[0] =
+    dec->cid.membercount = 3;
+    ALLOC_MEMBERS(dec->cid);
+    dec->cid.members[0] =
         (struct wandder_dump_action) {
                 .name = "networkIdentifier",
-                .descend = &netid,
+                .descend = &dec->netid,
                 .interpretas = WANDDER_TAG_NULL
         };
-    cid.members[1] =
+    dec->cid.members[1] =
         (struct wandder_dump_action) {
                 .name = "communicationIdentifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-    cid.members[2] =
+    dec->cid.members[2] =
         (struct wandder_dump_action) {
                 .name = "deliveryCountryCode",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_PRINTABLE
         };
-    cid.sequence = WANDDER_NOACTION;
+    dec->cid.sequence = WANDDER_NOACTION;
 
-    msts.membercount = 2;
-    ALLOC_MEMBERS(msts);
-    msts.members[0] =
+    dec->msts.membercount = 2;
+    ALLOC_MEMBERS(dec->msts);
+    dec->msts.members[0] =
         (struct wandder_dump_action) {
                 .name = "seconds",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-    msts.members[1] =
+    dec->msts.members[1] =
         (struct wandder_dump_action) {
                 .name = "microSeconds",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-    msts.sequence = WANDDER_NOACTION;
+    dec->msts.sequence = WANDDER_NOACTION;
 
-    cccontents.membercount = 19;
-    ALLOC_MEMBERS(cccontents);
-    cccontents.members[0] = WANDDER_NOACTION;
-    cccontents.members[1] =     // TODO
+    dec->cccontents.membercount = 19;
+    ALLOC_MEMBERS(dec->cccontents);
+    dec->cccontents.members[0] = WANDDER_NOACTION;
+    dec->cccontents.members[1] =     // TODO
         (struct wandder_dump_action) {
                 .name = "emailCC",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
-    cccontents.members[2] =
+    dec->cccontents.members[2] =
         (struct wandder_dump_action) {
                 .name = "iPCC",
-                .descend = &ipcc,
+                .descend = &dec->ipcc,
                 .interpretas = WANDDER_TAG_NULL
         };
-    cccontents.members[3] = WANDDER_NOACTION;
-    cccontents.members[4] = WANDDER_NOACTION;
-    cccontents.members[5] = WANDDER_NOACTION;
-    cccontents.members[6] = WANDDER_NOACTION;
-    cccontents.members[7] = WANDDER_NOACTION;
-    cccontents.members[8] = WANDDER_NOACTION;
-    cccontents.members[9] = WANDDER_NOACTION;
-    cccontents.members[10] = WANDDER_NOACTION;
-    cccontents.members[11] = WANDDER_NOACTION;
-    cccontents.members[12] = WANDDER_NOACTION;
-    cccontents.members[13] = WANDDER_NOACTION;
-    cccontents.members[14] = WANDDER_NOACTION;
-    cccontents.members[15] = WANDDER_NOACTION;
-    cccontents.members[16] = WANDDER_NOACTION;
-    cccontents.members[17] = WANDDER_NOACTION;
-    cccontents.members[18] = WANDDER_NOACTION;
+    dec->cccontents.members[3] = WANDDER_NOACTION;
+    dec->cccontents.members[4] = WANDDER_NOACTION;
+    dec->cccontents.members[5] = WANDDER_NOACTION;
+    dec->cccontents.members[6] = WANDDER_NOACTION;
+    dec->cccontents.members[7] = WANDDER_NOACTION;
+    dec->cccontents.members[8] = WANDDER_NOACTION;
+    dec->cccontents.members[9] = WANDDER_NOACTION;
+    dec->cccontents.members[10] = WANDDER_NOACTION;
+    dec->cccontents.members[11] = WANDDER_NOACTION;
+    dec->cccontents.members[12] = WANDDER_NOACTION;
+    dec->cccontents.members[13] = WANDDER_NOACTION;
+    dec->cccontents.members[14] = WANDDER_NOACTION;
+    dec->cccontents.members[15] = WANDDER_NOACTION;
+    dec->cccontents.members[16] = WANDDER_NOACTION;
+    dec->cccontents.members[17] = WANDDER_NOACTION;
+    dec->cccontents.members[18] = WANDDER_NOACTION;
+    dec->cccontents.sequence = WANDDER_NOACTION;
 
-    ccpayload.membercount = 5;
-    ALLOC_MEMBERS(ccpayload);
-    ccpayload.members[0] =
+    dec->ccpayload.membercount = 5;
+    ALLOC_MEMBERS(dec->ccpayload);
+    dec->ccpayload.members[0] =
         (struct wandder_dump_action) {
                 .name = "payloadDirection",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ccpayload.members[1] =
+    dec->ccpayload.members[1] =
         (struct wandder_dump_action) {
                 .name = "timeStamp",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_GENERALTIME
         };
-    ccpayload.members[2] =
+    dec->ccpayload.members[2] =
         (struct wandder_dump_action) {
                 .name = "cCContents",
-                .descend = &cccontents,
+                .descend = &dec->cccontents,
                 .interpretas = WANDDER_TAG_NULL
         };
-    ccpayload.members[3] =
+    dec->ccpayload.members[3] =
         (struct wandder_dump_action) {
                 .name = "microSecondTimestamp",
-                .descend = &msts,
+                .descend = &dec->msts,
                 .interpretas = WANDDER_TAG_NULL
         };
-    ccpayload.members[4] =
+    dec->ccpayload.members[4] =
         (struct wandder_dump_action) {
                 .name = "timeStampQualifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ccpayload.sequence = WANDDER_NOACTION;
+    dec->ccpayload.sequence = WANDDER_NOACTION;
 
-    ccpayloadseq.membercount = 0;
-    ccpayloadseq.members = NULL;
-    ccpayloadseq.sequence =
+    dec->ccpayloadseq.membercount = 0;
+    dec->ccpayloadseq.members = NULL;
+    dec->ccpayloadseq.sequence =
         (struct wandder_dump_action) {
                 .name = "CCPayload",
-                .descend = &ccpayload,
+                .descend = &dec->ccpayload,
                 .interpretas = WANDDER_TAG_NULL
         };
 
-    ipiriid.membercount = 3;
-    ALLOC_MEMBERS(ipiriid);
-    ipiriid.members[0] =
+    dec->ipiriid.membercount = 3;
+    ALLOC_MEMBERS(dec->ipiriid);
+    dec->ipiriid.members[0] =
         (struct wandder_dump_action) {
                 .name = "printableIDType",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_UTF8STR
         };
-    ipiriid.members[1] =
+    dec->ipiriid.members[1] =
         (struct wandder_dump_action) {
                 .name = "macAddressType",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    ipiriid.members[2] =
+    dec->ipiriid.members[2] =
         (struct wandder_dump_action) {
                 .name = "ipAddressType",
-                .descend = &ipaddress,
+                .descend = &dec->ipaddress,
                 .interpretas = WANDDER_TAG_NULL
         };
+    dec->ipiriid.sequence = WANDDER_NOACTION;
 
-    ipiricontents.membercount = 24;
-    ALLOC_MEMBERS(ipiricontents);
-    ipiricontents.members[0] =
+    dec->ipiricontents.membercount = 24;
+    ALLOC_MEMBERS(dec->ipiricontents);
+    dec->ipiricontents.members[0] =
         (struct wandder_dump_action) {
                 .name = "accessEventType",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ipiricontents.members[1] =
+    dec->ipiricontents.members[1] =
         (struct wandder_dump_action) {
                 .name = "targetUsername",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    ipiricontents.members[2] =
+    dec->ipiricontents.members[2] =
         (struct wandder_dump_action) {
                 .name = "internetAccessType",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ipiricontents.members[3] =
+    dec->ipiricontents.members[3] =
         (struct wandder_dump_action) {
                 .name = "iPVersion",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ipiricontents.members[4] =
+    dec->ipiricontents.members[4] =
         (struct wandder_dump_action) {
                 .name = "targetIPAddress",
-                .descend = &ipaddress,
+                .descend = &dec->ipaddress,
                 .interpretas = WANDDER_TAG_NULL
         };
-    ipiricontents.members[5] =
+    dec->ipiricontents.members[5] =
         (struct wandder_dump_action) {
                 .name = "targetNetworkID",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_UTF8STR
         };
-    ipiricontents.members[6] =
+    dec->ipiricontents.members[6] =
         (struct wandder_dump_action) {
                 .name = "targetCPEID",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_UTF8STR
         };
-    ipiricontents.members[7] =
+    dec->ipiricontents.members[7] =
         (struct wandder_dump_action) {
                 .name = "targetLocation",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_UTF8STR
         };
-    ipiricontents.members[8] =
+    dec->ipiricontents.members[8] =
         (struct wandder_dump_action) {
                 .name = "pOPPortNumber",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-    ipiricontents.members[9] =
+    dec->ipiricontents.members[9] =
         (struct wandder_dump_action) {
                 .name = "callBackNumber",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_UTF8STR
         };
-    ipiricontents.members[10] =
+    dec->ipiricontents.members[10] =
         (struct wandder_dump_action) {
                 .name = "startTime",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_GENERALTIME
         };
-    ipiricontents.members[11] =
+    dec->ipiricontents.members[11] =
         (struct wandder_dump_action) {
                 .name = "endTime",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_GENERALTIME
         };
-    ipiricontents.members[12] =
+    dec->ipiricontents.members[12] =
         (struct wandder_dump_action) {
                 .name = "endReason",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ipiricontents.members[13] =
+    dec->ipiricontents.members[13] =
         (struct wandder_dump_action) {
                 .name = "octetsReceived",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-    ipiricontents.members[14] =
+    dec->ipiricontents.members[14] =
         (struct wandder_dump_action) {
                 .name = "octetsTransmitted",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-    ipiricontents.members[15] =
+    dec->ipiricontents.members[15] =
         (struct wandder_dump_action) {
                 .name = "rawAAAData",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    ipiricontents.members[16] =
+    dec->ipiricontents.members[16] =
         (struct wandder_dump_action) {
                 .name = "expectedEndTime",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_GENERALTIME
         };
-    ipiricontents.members[17] =
+    dec->ipiricontents.members[17] =
         (struct wandder_dump_action) {
                 .name = "pOPPhoneNumber",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_UTF8STR
         };
-    ipiricontents.members[18] =
+    dec->ipiricontents.members[18] =
         (struct wandder_dump_action) {
                 .name = "pOPIdentifier",
-                .descend = &ipiriid,
+                .descend = &dec->ipiriid,
                 .interpretas = WANDDER_TAG_NULL
         };
-    ipiricontents.members[19] =
+    dec->ipiricontents.members[19] =
         (struct wandder_dump_action) {
                 .name = "pOPIPAddress",
-                .descend = &ipaddress,
+                .descend = &dec->ipaddress,
                 .interpretas = WANDDER_TAG_NULL
         };
-    ipiricontents.members[20] = WANDDER_NOACTION;   // TODO
-    ipiricontents.members[21] =
+    dec->ipiricontents.members[20] = WANDDER_NOACTION;   // TODO
+    dec->ipiricontents.members[21] =
         (struct wandder_dump_action) {
                 .name = "additionalIPAddress",
-                .descend = &ipaddress,
+                .descend = &dec->ipaddress,
                 .interpretas = WANDDER_TAG_NULL
         };
-    ipiricontents.members[22] =
+    dec->ipiricontents.members[22] =
         (struct wandder_dump_action) {
                 .name = "authenticationType",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    ipiricontents.members[23] = WANDDER_NOACTION;   // TODO
+    dec->ipiricontents.members[23] = WANDDER_NOACTION;   // TODO
+    dec->ipiricontents.sequence = WANDDER_NOACTION;
 
-    ipiri.membercount = 2;
-    ALLOC_MEMBERS(ipiri);
-    ipiri.members[0] =
+    dec->ipiri.membercount = 2;
+    ALLOC_MEMBERS(dec->ipiri);
+    dec->ipiri.members[0] =
         (struct wandder_dump_action) {
                 .name = "iPIRIObjId",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_RELATIVEOID
         };
-    ipiri.members[1] =
+    dec->ipiri.members[1] =
         (struct wandder_dump_action) {
                 .name = "iPIRIContents",
-                .descend = &ipiricontents,
+                .descend = &dec->ipiricontents,
                 .interpretas = WANDDER_TAG_NULL
         };
+    dec->ipiri.sequence = WANDDER_NOACTION;
 
-    iricontents.membercount = 16;
-    ALLOC_MEMBERS(iricontents);
-    iricontents.members[0] = WANDDER_NOACTION;
-    iricontents.members[1] =     // TODO
+    dec->iricontents.membercount = 16;
+    ALLOC_MEMBERS(dec->iricontents);
+    dec->iricontents.members[0] = WANDDER_NOACTION;
+    dec->iricontents.members[1] =     // TODO
         (struct wandder_dump_action) {
                 .name = "emailIRI",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
-    iricontents.members[2] =
+    dec->iricontents.members[2] =
         (struct wandder_dump_action) {
                 .name = "iPIRI",
-                .descend = &ipiri,
+                .descend = &dec->ipiri,
                 .interpretas = WANDDER_TAG_NULL
         };
-    iricontents.members[3] = WANDDER_NOACTION;
-    iricontents.members[4] = WANDDER_NOACTION;
-    iricontents.members[5] = WANDDER_NOACTION;
-    iricontents.members[6] = WANDDER_NOACTION;
-    iricontents.members[7] = WANDDER_NOACTION;
-    iricontents.members[8] = WANDDER_NOACTION;
-    iricontents.members[9] = WANDDER_NOACTION;
-    iricontents.members[10] = WANDDER_NOACTION;
-    iricontents.members[11] =   // TODO
+    dec->iricontents.members[3] = WANDDER_NOACTION;
+    dec->iricontents.members[4] = WANDDER_NOACTION;
+    dec->iricontents.members[5] = WANDDER_NOACTION;
+    dec->iricontents.members[6] = WANDDER_NOACTION;
+    dec->iricontents.members[7] = WANDDER_NOACTION;
+    dec->iricontents.members[8] = WANDDER_NOACTION;
+    dec->iricontents.members[9] = WANDDER_NOACTION;
+    dec->iricontents.members[10] = WANDDER_NOACTION;
+    dec->iricontents.members[11] =   // TODO
         (struct wandder_dump_action) {
                 .name = "iPMMIRI",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
-    iricontents.members[12] = WANDDER_NOACTION;
-    iricontents.members[13] = WANDDER_NOACTION;
-    iricontents.members[14] = WANDDER_NOACTION;
-    iricontents.members[15] = WANDDER_NOACTION;
+    dec->iricontents.members[12] = WANDDER_NOACTION;
+    dec->iricontents.members[13] = WANDDER_NOACTION;
+    dec->iricontents.members[14] = WANDDER_NOACTION;
+    dec->iricontents.members[15] = WANDDER_NOACTION;
+    dec->iricontents.sequence = WANDDER_NOACTION;
 
 
-    iripayload.membercount = 5;
-    ALLOC_MEMBERS(iripayload);
-    iripayload.members[0] =
+    dec->iripayload.membercount = 5;
+    ALLOC_MEMBERS(dec->iripayload);
+    dec->iripayload.members[0] =
         (struct wandder_dump_action) {
                 .name = "iRIType",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-    iripayload.members[1] =
+    dec->iripayload.members[1] =
         (struct wandder_dump_action) {
                 .name = "timeStamp",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_GENERALTIME
         };
-    iripayload.members[2] =
+    dec->iripayload.members[2] =
         (struct wandder_dump_action) {
                 .name = "iRIContents",
-                .descend = &iricontents,
+                .descend = &dec->iricontents,
                 .interpretas = WANDDER_TAG_NULL
         };
-    iripayload.members[3] =
+    dec->iripayload.members[3] =
         (struct wandder_dump_action) {
                 .name = "microSecondTimestamp",
-                .descend = &msts,
+                .descend = &dec->msts,
                 .interpretas = WANDDER_TAG_NULL
         };
-    iripayload.members[4] =
+    dec->iripayload.members[4] =
         (struct wandder_dump_action) {
                 .name = "timeStampQualifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
+    dec->iripayload.sequence = WANDDER_NOACTION;
 
-    iripayloadseq.membercount = 0;
-    iripayloadseq.members = NULL;
-    iripayloadseq.sequence =
+    dec->iripayloadseq.membercount = 0;
+    dec->iripayloadseq.members = NULL;
+    dec->iripayloadseq.sequence =
         (struct wandder_dump_action) {
                 .name = "IRIPayload",
-                .descend = &iripayload,
+                .descend = &dec->iripayload,
                 .interpretas = WANDDER_TAG_NULL
         };
 
-    payload.membercount = 5;
-    ALLOC_MEMBERS(payload);
-    payload.sequence = WANDDER_NOACTION;
-    payload.members[0] =        // TODO
+    dec->payload.membercount = 5;
+    ALLOC_MEMBERS(dec->payload);
+    dec->payload.sequence = WANDDER_NOACTION;
+    dec->payload.members[0] =        // TODO
         (struct wandder_dump_action) {
                 .name = "iRIPayloadSequence",
-                .descend = &iripayloadseq,
+                .descend = &dec->iripayloadseq,
                 .interpretas = WANDDER_TAG_NULL
         };
-    payload.members[1] =
+    dec->payload.members[1] =
         (struct wandder_dump_action) {
                 .name = "cCPayloadSequence",
-                .descend = &ccpayloadseq,
+                .descend = &dec->ccpayloadseq,
                 .interpretas = WANDDER_TAG_NULL
         };
-    payload.members[2] =        // Not required
+    dec->payload.members[2] =        // Not required
         (struct wandder_dump_action) {
                 .name = "tRIPayload",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
-    payload.members[3] =        // Not required
+    dec->payload.members[3] =        // Not required
         (struct wandder_dump_action) {
                 .name = "hI1-Operation",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
-    payload.members[4] =        // TODO?
+    dec->payload.members[4] =        // TODO?
         (struct wandder_dump_action) {
                 .name = "encryptionContainer",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
 
-    psheader.membercount = 9;
-    ALLOC_MEMBERS(psheader);
-    psheader.sequence = WANDDER_NOACTION;
-    psheader.members[0] =
+    dec->psheader.membercount = 9;
+    ALLOC_MEMBERS(dec->psheader);
+    dec->psheader.sequence = WANDDER_NOACTION;
+    dec->psheader.members[0] =
         (struct wandder_dump_action) {
                 .name = "li-psDomainId",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OID
         };
-    psheader.members[1] =
+    dec->psheader.members[1] =
         (struct wandder_dump_action) {
                 .name = "lawfulInterceptionIdentifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    psheader.members[2] =
+    dec->psheader.members[2] =
         (struct wandder_dump_action) {
                 .name = "authorizationCountryCode",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_PRINTABLE
         };
-    psheader.members[3] =
+    dec->psheader.members[3] =
         (struct wandder_dump_action) {
                 .name = "communicationIdentifier",
-                .descend = &cid,
+                .descend = &dec->cid,
                 .interpretas = WANDDER_TAG_NULL
         };
-    psheader.members[4] =
+    dec->psheader.members[4] =
         (struct wandder_dump_action) {
                 .name = "sequenceNumber",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-    psheader.members[5] =
+    dec->psheader.members[5] =
         (struct wandder_dump_action) {
                 .name = "timeStamp",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_GENERALTIME
         };
-    psheader.members[6] =
+    dec->psheader.members[6] =
         (struct wandder_dump_action) {
                 .name = "interceptionPointID",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_PRINTABLE
         };
-    psheader.members[7] =
+    dec->psheader.members[7] =
         (struct wandder_dump_action) {
                 .name = "microSecondTimeStamp",
-                .descend = &msts,
+                .descend = &dec->msts,
                 .interpretas = WANDDER_TAG_NULL
         };
-    psheader.members[8] =
+    dec->psheader.members[8] =
         (struct wandder_dump_action) {
                 .name = "timeStampQualifier",
                 .descend = NULL,
@@ -1127,20 +1189,20 @@ static void init_dumpers(void) {
         };
 
 
-    pspdu.membercount = 3;
-    ALLOC_MEMBERS(pspdu);
-    pspdu.sequence = WANDDER_NOACTION;
-    pspdu.members[0] = WANDDER_NOACTION;
-    pspdu.members[1] =
+    dec->pspdu.membercount = 3;
+    ALLOC_MEMBERS(dec->pspdu);
+    dec->pspdu.sequence = WANDDER_NOACTION;
+    dec->pspdu.members[0] = WANDDER_NOACTION;
+    dec->pspdu.members[1] =
         (struct wandder_dump_action) {
                 .name = "PSHeader",
-                .descend = &psheader,
+                .descend = &dec->psheader,
                 .interpretas = WANDDER_TAG_NULL
         };
-    pspdu.members[2] =
+    dec->pspdu.members[2] =
         (struct wandder_dump_action) {
                 .name = "Payload",
-                .descend = &payload,
+                .descend = &dec->payload,
                 .interpretas = WANDDER_TAG_NULL
         };
 }

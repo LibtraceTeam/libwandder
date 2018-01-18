@@ -34,6 +34,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <time.h>
+#include <math.h>
 #include "src/libwandder.h"
 
 #define DIGIT(x)  (x - '0')
@@ -186,8 +187,10 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t **item,
         ptr ++;
         (*item)->length = 0;
         for (i = 0; i < (int)lenoctets; i++) {
-            (*item)->length |= ((*ptr) << (i * 8));
+            (*item)->length = (*item)->length << 8;
+            (*item)->length |= (*ptr);
             ptr ++;
+
         }
         prelen += (lenoctets + 1);
     }
