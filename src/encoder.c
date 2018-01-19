@@ -95,14 +95,14 @@ static uint32_t calc_preamblen(wandder_pend_t *p) {
         plen += 1;
     } else {
         double log128 = log(p->identifier) / log(128);
-        plen += (1 + ceil(log128));
+        plen += (1 + floor(log128 + 1));
     }
 
     if (p->vallen < 128) {
         plen += 1;
     } else {
         double log256 = log(p->vallen) / log(256);
-        plen += (1 + ceil(log256));
+        plen += (1 + floor(log256 + 1));
     }
     return plen;
 }
