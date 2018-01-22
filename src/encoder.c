@@ -34,7 +34,10 @@
 #include <math.h>
 #include "src/libwandder.h"
 
-void init_wandder_encoder(wandder_encoder_t *enc) {
+wandder_encoder_t *init_wandder_encoder(void) {
+
+    wandder_encoder_t *enc = (wandder_encoder_t *)malloc(
+            sizeof(wandder_encoder_t));
 
     enc->pendlist = NULL;
     enc->current = NULL;
@@ -69,6 +72,7 @@ void reset_wandder_encoder(wandder_encoder_t *enc) {
 
 void free_wandder_encoder(wandder_encoder_t *enc) {
     reset_wandder_encoder(enc);
+    free(enc);
 }
 
 static inline wandder_pend_t *new_pending(wandder_pend_t *parent) {

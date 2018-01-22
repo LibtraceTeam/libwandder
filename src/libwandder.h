@@ -213,7 +213,7 @@ typedef struct wandder_encoder {
 /* Encoding API
  * ----------------------------------------------------
  */
-void init_wandder_encoder(wandder_encoder_t *enc);
+wandder_encoder_t *init_wandder_encoder();
 void reset_wandder_encoder(wandder_encoder_t *enc);
 void free_wandder_encoder(wandder_encoder_t *enc);
 
@@ -225,8 +225,8 @@ uint8_t *wandder_encode_finish(wandder_encoder_t *enc, uint32_t *len);
 /* Decoding API
  * ----------------------------------------------------
  */
-void init_wandder_decoder(wandder_decoder_t *dec, uint8_t *source, uint32_t len,
-        bool copy);
+wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
+        uint8_t *source, uint32_t len, bool copy);
 void wandder_reset_decoder(wandder_decoder_t *dec);
 void free_wandder_decoder(wandder_decoder_t *dec);
 int wandder_decode_next(wandder_decoder_t *dec);

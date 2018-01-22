@@ -60,7 +60,7 @@ typedef struct wandder_etsispec {
     wandder_dumper_t ipcccontents;
     wandder_dumper_t iripayloadseq;
 
-    wandder_decoder_t dec;
+    wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;
 
     uint8_t decstate;

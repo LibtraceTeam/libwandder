@@ -50,13 +50,19 @@ struct wandder_dump_action WANDDER_NOACTION =
         .interpretas = WANDDER_TAG_NULL
     };
 
-void init_wandder_decoder(wandder_decoder_t *dec, uint8_t *source, uint32_t len,
-        bool copy) {
+wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
+        uint8_t *source, uint32_t len, bool copy) {
 
-    dec->toplevel = NULL;
-    dec->current = NULL;
-    dec->topptr = NULL;
-    dec->nextitem = NULL;
+
+    if (dec != NULL) {
+        wandder_reset_decoder(dec);
+    } else {
+        dec = (wandder_decoder_t *)malloc(sizeof(wandder_decoder_t));
+        dec->toplevel = NULL;
+        dec->current = NULL;
+        dec->topptr = NULL;
+        dec->nextitem = NULL;
+    }
 
     if (copy) {
         dec->source = (char *)malloc(len);
@@ -67,15 +73,17 @@ void init_wandder_decoder(wandder_decoder_t *dec, uint8_t *source, uint32_t len,
         dec->ownsource = false;
     }
     dec->sourcelen = len;
+    return dec;
 }
 
 void wandder_reset_decoder(wandder_decoder_t *dec) {
-    if (dec->toplevel && dec->toplevel != dec->current) {
-        free(dec->toplevel);
-    }
 
-    if (dec->current) {
-        free(dec->current);
+    wandder_item_t *it = dec->current;
+
+    while (it) {
+        wandder_item_t *tmp = it;
+        it = it->parent;
+        free(tmp);
     }
 
     dec->toplevel = NULL;
@@ -87,17 +95,12 @@ void wandder_reset_decoder(wandder_decoder_t *dec) {
 
 void free_wandder_decoder(wandder_decoder_t *dec) {
 
+    wandder_reset_decoder(dec);
     if (dec->ownsource) {
         free(dec->source);
     }
+    free(dec);
 
-    if (dec->toplevel && dec->toplevel != dec->current) {
-        free(dec->toplevel);
-    }
-
-    if (dec->current) {
-        free(dec->current);
-    }
 }
 
 static inline wandder_item_t *create_new_item(wandder_decoder_t *dec) {
@@ -115,6 +118,11 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t **item,
     uint8_t shortlen;
     uint32_t prelen = 0;
     int i;
+
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return -1;
+    }
 
     if (*item == NULL || *item == parent) {
         *item = create_new_item(dec);
@@ -228,6 +236,11 @@ static int first_decode(wandder_decoder_t *dec) {
 int wandder_decode_next(wandder_decoder_t *dec) {
     int ret;
 
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return -1;
+    }
+
     /* If toplevel is NULL, this is the first run */
     if (dec->toplevel == NULL) {
         return first_decode(dec);
@@ -263,6 +276,11 @@ const char *wandder_get_tag_string(wandder_decoder_t *dec) {
 	uint8_t class;
 	uint32_t ident;
     static char tmp[2048];
+
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return "NULL decoder";
+    }
 
 	if (dec->current == NULL) {
 		return "No current tag";
@@ -328,6 +346,11 @@ const char *wandder_get_tag_string(wandder_decoder_t *dec) {
 
 uint8_t wandder_get_class(wandder_decoder_t *dec) {
 
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return WANDDER_CLASS_UNKNOWN;
+    }
+
     if (!dec->current) {
         return WANDDER_CLASS_UNKNOWN;
     }
@@ -337,6 +360,11 @@ uint8_t wandder_get_class(wandder_decoder_t *dec) {
 
 uint32_t wandder_get_identifier(wandder_decoder_t *dec) {
 
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return 0xffffffff;
+    }
+
     if (dec->current) {
         return dec->current->identifier;
     }
@@ -344,6 +372,11 @@ uint32_t wandder_get_identifier(wandder_decoder_t *dec) {
 }
 
 uint16_t wandder_get_level(wandder_decoder_t *dec) {
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return 0xffff;
+    }
+
     if (dec->current) {
         return dec->current->level;
     }
@@ -352,6 +385,11 @@ uint16_t wandder_get_level(wandder_decoder_t *dec) {
 
 uint32_t wandder_get_itemlen(wandder_decoder_t *dec) {
 
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return 0;
+    }
+
     if (dec->current) {
         return dec->current->length;
     }
@@ -359,6 +397,11 @@ uint32_t wandder_get_itemlen(wandder_decoder_t *dec) {
 }
 
 uint8_t *wandder_get_itemptr(wandder_decoder_t *dec) {
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return NULL;
+    }
+
     if (dec->current) {
         return dec->current->valptr;
     }
@@ -851,6 +894,11 @@ int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,
     int ret;
     uint32_t ident;
     struct wandder_dump_action *act;
+
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return -1;
+    }
 
     /*
     if (level != 0) {

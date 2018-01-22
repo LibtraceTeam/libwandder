@@ -55,6 +55,7 @@ wandder_dumper_t iripayloadseq;
 static int init_called = 0;
 
 static void init_dumpers(wandder_etsispec_t *dec);
+static void free_dumpers(wandder_etsispec_t *dec);
 static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         wandder_dumper_t *curr, char *valstr, int len);
 
@@ -72,6 +73,7 @@ wandder_etsispec_t *wandder_create_etsili_decoder(void) {
 
     etsidec->stack = NULL;
     etsidec->decstate = 0;
+    etsidec->dec = NULL;
 
     return etsidec;
 }
@@ -82,11 +84,13 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
         return;
     }
 
+    free_dumpers(etsidec);
+
     if (etsidec->stack) {
         wandder_etsili_free_stack(etsidec->stack);
     }
     if (etsidec->decstate) {
-        free_wandder_decoder(&(etsidec->dec));
+        free_wandder_decoder(etsidec->dec);
     }
     free(etsidec);
 }
@@ -94,7 +98,7 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
 void wandder_attach_etsili_buffer(wandder_etsispec_t *etsidec,
         uint8_t *source, uint32_t len, bool copy) {
 
-    init_wandder_decoder(&(etsidec->dec), source, len, copy);
+    etsidec->dec = init_wandder_decoder(etsidec->dec, source, len, copy);
     etsidec->decstate = 1;
 }
 
@@ -117,33 +121,33 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
     }
 
     /* Find PSHeader */
-    wandder_reset_decoder(&etsidec->dec);
+    wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
     wandder_target_t pshdrtgt = {&(etsidec->pspdu), 1, false};
 
-    if (wandder_search_items(&etsidec->dec, 0, &(etsidec->root), &pshdrtgt, 1,
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &pshdrtgt, 1,
                 &found, 1) == 0) {
         return tv;
     }
 
     /* dec->current should be pointing right at PSHeader */
-    savedlevel = wandder_get_level(&etsidec->dec);
+    savedlevel = wandder_get_level(etsidec->dec);
 
-    wandder_decode_next(&etsidec->dec);
-    while (wandder_get_level(&etsidec->dec) > savedlevel) {
-        if (wandder_get_identifier(&etsidec->dec) == 5) {
+    wandder_decode_next(etsidec->dec);
+    while (wandder_get_level(etsidec->dec) > savedlevel) {
+        if (wandder_get_identifier(etsidec->dec) == 5) {
             tv = wandder_generalizedts_to_timeval(
-                    wandder_get_itemptr(&etsidec->dec),
-                    wandder_get_itemlen(&etsidec->dec));
+                    wandder_get_itemptr(etsidec->dec),
+                    wandder_get_itemlen(etsidec->dec));
             break;
         }
-        if (wandder_get_identifier(&etsidec->dec) == 7) {
+        if (wandder_get_identifier(etsidec->dec) == 7) {
             printf("got msts field, please write a parser for it!\n");
 
             /* TODO parse msts field */
             break;
         }
-        wandder_decode_next(&etsidec->dec);
+        wandder_decode_next(etsidec->dec);
     }
     wandder_free_found(found);
     return tv;
@@ -158,17 +162,17 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
         return 0;
     }
     /* Easy, reset the decoder then grab the length of the first element */
-    wandder_reset_decoder(&etsidec->dec);
+    wandder_reset_decoder(etsidec->dec);
 
-    if (wandder_decode_next(&etsidec->dec) <= 0) {
+    if (wandder_decode_next(etsidec->dec) <= 0) {
         return 0;
     }
 
     /* Don't forget to include the preamble length so the caller can skip
      * over the entire PDU if desired.
      */
-    return wandder_get_itemlen(&etsidec->dec) +
-            etsidec->dec.current->preamblelen;
+    return wandder_get_itemlen(etsidec->dec) +
+            etsidec->dec->current->preamblelen;
 }
 
 static inline void push_stack(wandder_etsi_stack_t *stack,
@@ -215,22 +219,22 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
         etsidec->stack->atthislevel[0] = 0;
     }
 
-    if (wandder_decode_next(&etsidec->dec) <= 0) {
+    if (wandder_decode_next(etsidec->dec) <= 0) {
         return NULL;
     }
 
 
-    while (wandder_get_level(&etsidec->dec) < etsidec->stack->current) {
+    while (wandder_get_level(etsidec->dec) < etsidec->stack->current) {
         assert(etsidec->stack->current > 0);
         etsidec->stack->current --;
     }
 
     curr = etsidec->stack->stk[etsidec->stack->current];
 
-    switch(wandder_get_class(&etsidec->dec)) {
+    switch(wandder_get_class(etsidec->dec)) {
 
         case WANDDER_CLASS_CONTEXT_PRIMITIVE:
-            ident = wandder_get_identifier(&etsidec->dec);
+            ident = wandder_get_identifier(etsidec->dec);
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
 
             if (curr->members[ident].interpretas == WANDDER_TAG_IPPACKET) {
@@ -239,14 +243,14 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             }
 
             if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
-                if (interpret_enum(etsidec, etsidec->dec.current, curr,
+                if (interpret_enum(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
             } else {
-                if (!wandder_get_valuestr(etsidec->dec.current, valstr, 2048,
+                if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
                         curr->members[ident].interpretas)) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
                             etsidec->stack->current, ident);
@@ -261,8 +265,8 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
         case WANDDER_CLASS_UNIVERSAL_PRIMITIVE:
             ident = (uint32_t)etsidec->stack->atthislevel[etsidec->stack->current];
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
-            if (!wandder_get_valuestr(etsidec->dec.current, valstr, 2048,
-                    wandder_get_identifier(&etsidec->dec))) {
+            if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
+                    wandder_get_identifier(etsidec->dec))) {
                 fprintf(stderr, "Failed to interpret standard field %d:%d\n",
                         etsidec->stack->current, ident);
                 return NULL;
@@ -284,7 +288,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             if (curr == NULL) {
                 return NULL;
             }
-            ident = wandder_get_identifier(&etsidec->dec);
+            ident = wandder_get_identifier(etsidec->dec);
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
             snprintf(space, spacelen, "%s:", curr->members[ident].name);
             push_stack(etsidec->stack, curr->members[ident].descend);
@@ -298,7 +302,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
 }
 
 wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec) {
-    return &(dec->dec);
+    return (dec->dec);
 }
 
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
@@ -311,12 +315,12 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
         return NULL;
     }
     /* Find IPCCContents */
-    wandder_reset_decoder(&etsidec->dec);
+    wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
     wandder_target_t ipcctgt = {&etsidec->ipcccontents, 0, false};
 
     *len = 0;
-    if (wandder_search_items(&etsidec->dec, 0, &(etsidec->root), &ipcctgt, 1,
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &ipcctgt, 1,
                 &found, 1) == 0) {
         return NULL;
     }
@@ -577,6 +581,28 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
     }
 
     return NULL;
+}
+
+static void free_dumpers(wandder_etsispec_t *dec) {
+    free(dec->ipvalue.members);
+    free(dec->ipaddress.members);
+    free(dec->ipcccontents.members);
+    free(dec->ipcc.members);
+    free(dec->netelid.members);
+    free(dec->netid.members);
+    free(dec->cid.members);
+    free(dec->msts.members);
+    free(dec->cccontents.members);
+    free(dec->ccpayload.members);
+    free(dec->ipiriid.members);
+    free(dec->ipiricontents.members);
+    free(dec->ipiri.members);
+    free(dec->iricontents.members);
+    free(dec->iripayload.members);
+    free(dec->payload.members);
+    free(dec->psheader.members);
+    free(dec->pspdu.members);
+
 }
 
 static void init_dumpers(wandder_etsispec_t *dec) {
