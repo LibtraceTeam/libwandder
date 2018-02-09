@@ -42,6 +42,7 @@ wandder_encoder_t *init_wandder_encoder(void) {
     enc->pendlist = NULL;
     enc->current = NULL;
 
+    return enc;
 }
 
 static void free_pending_r(wandder_pend_t *p) {
