@@ -111,22 +111,25 @@ static inline wandder_item_t *create_new_item(wandder_decoder_t *dec) {
     return item;
 }
 
-static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t **item,
-        wandder_item_t *parent) {
+static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) {
 
     uint8_t tagbyte = *ptr;
     uint8_t shortlen;
     uint32_t prelen = 0;
     int i;
+    wandder_item_t *item = NULL;
 
     if (dec == NULL) {
         fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
         return -1;
     }
 
-    if (*item == NULL || *item == parent) {
-        *item = create_new_item(dec);
+    if (dec->current == NULL || dec->current == parent) {
+        item = create_new_item(dec);
+    } else {
+        item = dec->current;
     }
+
     while (parent != NULL && ptr >= parent->valptr + parent->length) {
         /* Reached end of preceding sequence */
         wandder_item_t *tmp = parent;
@@ -142,17 +145,19 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t **item,
 
         if (parent == NULL) {
             /* Reached end of the top level sequence */
+            free(item);
+            dec->current = NULL;
             return 0;
         }
     }
 
     if (parent == NULL) {
-        (*item)->level = 0;
+        item->level = 0;
     } else {
-        (*item)->level = parent->level + 1;
+        item->level = parent->level + 1;
     }
 
-    (*item)->parent = parent;
+    item->parent = parent;
 
     /* First, let's try to figure out the tag type */
 
@@ -161,50 +166,57 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t **item,
         i = 0;
         prelen += 1;
 
-        (*item)->identifier = (*ptr) & 0x7f;
+        item->identifier = (*ptr) & 0x7f;
         while ((*ptr) & 0x80) {
             ptr ++;
             prelen += 1;
-            (*item)->identifier = ((*item)->identifier << 7);
-            (*item)->identifier |= ((*ptr) & 0x7f);
+            item->identifier = (item->identifier << 7);
+            item->identifier |= ((*ptr) & 0x7f);
 
             if (prelen >= 5) {
                 fprintf(stderr, "libwandder does not support type fields longer than 4 bytes right now\n");
+                if (item != dec->current) {
+                    free(item);
+                }
                 return -1;
             }
         }
     } else {
-        (*item)->identifier = (tagbyte & 0x1f);
+        item->identifier = (tagbyte & 0x1f);
         prelen += 1;
         ptr ++;
     }
-    (*item)->identclass = ((tagbyte & 0xe0) >> 5);
+    item->identclass = ((tagbyte & 0xe0) >> 5);
 
     shortlen = *ptr;
     if ((shortlen & 0x80) == 0) {
-        (*item)->length = (shortlen & 0x7f);
+        item->length = (shortlen & 0x7f);
         prelen += 1;
         ptr ++;
     } else {
         uint8_t lenoctets = (shortlen & 0x7f);
-        if (lenoctets > sizeof((*item)->length)) {
-            fprintf(stderr, "libwandder does not support length fields longer than %zd bytes right now\n", sizeof((*item)->length));
+        if (lenoctets > sizeof(item->length)) {
+            fprintf(stderr, "libwandder does not support length fields longer than %zd bytes right now\n", sizeof(item->length));
             fprintf(stderr, "Tried to decode an item with a length field of %u bytes.\n", lenoctets);
+            if (item != dec->current) {
+                free(item);
+            }
             return -1;
         }
         ptr ++;
-        (*item)->length = 0;
+        item->length = 0;
         for (i = 0; i < (int)lenoctets; i++) {
-            (*item)->length = (*item)->length << 8;
-            (*item)->length |= (*ptr);
+            item->length = item->length << 8;
+            item->length |= (*ptr);
             ptr ++;
 
         }
         prelen += (lenoctets + 1);
     }
 
-    (*item)->preamblelen = prelen;
-    (*item)->valptr = ptr;
+    item->preamblelen = prelen;
+    item->valptr = ptr;
+    dec->current = item;
 
     return 1;
 
@@ -212,25 +224,24 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t **item,
 
 static int first_decode(wandder_decoder_t *dec) {
 
-    wandder_item_t *it = NULL;
     int ret;
 
-    ret = decode(dec, dec->source, &it, NULL);
+    ret = decode(dec, dec->source, NULL);
     if (ret <= 0) {
         return ret;
     }
 
-    dec->toplevel = it;
-    dec->current = it;
+    dec->toplevel = dec->current;
 
     dec->topptr = dec->source;
     if (IS_CONSTRUCTED(dec->current)) {
-        dec->nextitem = dec->source + it->preamblelen;
-        return it->preamblelen;
+        dec->nextitem = dec->source + dec->current->preamblelen;
+        return dec->current->preamblelen;
     }
-    dec->nextitem = dec->source + it->length + it->preamblelen;
+    dec->nextitem = dec->source + dec->current->length +
+            dec->current->preamblelen;
 
-    return it->length + it->preamblelen;
+    return dec->current->length + dec->current->preamblelen;
 }
 
 int wandder_decode_next(wandder_decoder_t *dec) {
@@ -249,11 +260,10 @@ int wandder_decode_next(wandder_decoder_t *dec) {
     /* if current is a constructed type, the next item is the first child
      * of current */
     if ((IS_CONSTRUCTED(dec->current))) {
-        ret = decode(dec, dec->nextitem, &(dec->current), dec->current);
+        ret = decode(dec, dec->nextitem, dec->current);
     } else {
         /* if current is not a constructed type, use current's parent */
-        ret = decode(dec, dec->nextitem, &(dec->current),
-                dec->current->parent);
+        ret = decode(dec, dec->nextitem, dec->current->parent);
     }
 
     if (ret <= 0) {
