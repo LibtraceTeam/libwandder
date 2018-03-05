@@ -646,6 +646,7 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
     switch (datatype) {
         case WANDDER_TAG_SEQUENCE:
         case WANDDER_TAG_SET:
+        case WANDDER_TAG_NULL:
             space[0] = '\0';
             break;
         case WANDDER_TAG_OCTETSTRING:
@@ -680,7 +681,6 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
 
         case WANDDER_TAG_BOOLEAN:
         case WANDDER_TAG_BITSTRING:
-        case WANDDER_TAG_NULL:
         case WANDDER_TAG_OBJDESC:
         case WANDDER_TAG_REAL:
         case WANDDER_TAG_UTF8STR:
