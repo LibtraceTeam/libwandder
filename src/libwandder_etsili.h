@@ -53,6 +53,14 @@ typedef struct wandder_etsispec {
     wandder_dumper_t cccontents;
     wandder_dumper_t ccpayloadseq;
     wandder_dumper_t ccpayload;
+    wandder_dumper_t operatorleamessage;
+    wandder_dumper_t option;
+    wandder_dumper_t optionseq;
+    wandder_dumper_t optionreq;
+    wandder_dumper_t optionresp;
+    wandder_dumper_t inclseqnos;
+    wandder_dumper_t integritycheck;
+    wandder_dumper_t tripayload;
     wandder_dumper_t payload;
     wandder_dumper_t psheader;
     wandder_dumper_t pspdu;

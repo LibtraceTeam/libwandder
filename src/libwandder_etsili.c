@@ -45,6 +45,14 @@ wandder_dumper_t msts;
 wandder_dumper_t cccontents;
 wandder_dumper_t ccpayloadseq;
 wandder_dumper_t ccpayload;
+wandder_dumper_t integritycheck;
+wandder_dumper_t inclseqnos;
+wandder_dumper_t option;
+wandder_dumper_t optionseq;
+wandder_dumper_t optionreq;
+wandder_dumper_t optionresp;
+wandder_dumper_t operatorleamessage;
+wandder_dumper_t tripayload;
 wandder_dumper_t payload;
 wandder_dumper_t psheader;
 wandder_dumper_t pspdu;
@@ -390,7 +398,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 3 && curr == &(etsidec->ipaddress)) {
+    else if (item->identifier == 3 && curr == &(etsidec->ipaddress)) {
         /* iP-assignment */
         switch(enumval) {
             case 1:
@@ -405,7 +413,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 0 && curr == &(etsidec->ccpayload)) {
+    else if (item->identifier == 0 && curr == &(etsidec->ccpayload)) {
         /* payloadDirection */
         switch(enumval) {
             case 0:
@@ -426,7 +434,31 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if ((item->identifier == 4 && curr == &(etsidec->ccpayload)) ||
+    else if (item->identifier == 1 && curr == &(etsidec->integritycheck)) {
+        /* checkType */
+        switch (enumval) {
+            case 1:
+                name = "SHA-1 Hash";
+                break;
+            case 2:
+                name = "DSS/DSA signature";
+                break;
+        }
+    }
+
+    else if (item->identifier == 2 && curr == &(etsidec->integritycheck)) {
+        /* dataType */
+        switch (enumval) {
+            case 1:
+                name = "IRI";
+                break;
+            case 2:
+                name = "CC";
+                break;
+        }
+    }
+
+    else if ((item->identifier == 4 && curr == &(etsidec->ccpayload)) ||
             (item->identifier == 4 && curr == &(etsidec->iripayload)) ||
             (item->identifier == 8 && curr == &(etsidec->psheader))) {
         /* timeStampQualifier */
@@ -446,7 +478,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 0 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 0 && curr == &(etsidec->ipiricontents)) {
         /* accessEventType */
         switch(enumval) {
             case 0:
@@ -485,7 +517,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 2 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 2 && curr == &(etsidec->ipiricontents)) {
         /* internetAccessType */
         switch(enumval) {
             case 0:
@@ -521,7 +553,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 3 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 3 && curr == &(etsidec->ipiricontents)) {
         /* iPVersion */
         switch(enumval) {
             case 1:
@@ -536,7 +568,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 12 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 12 && curr == &(etsidec->ipiricontents)) {
         /* endReason */
         switch(enumval) {
             case 0:
@@ -557,7 +589,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 22 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 22 && curr == &(etsidec->ipiricontents)) {
         /* authenticationType */
         switch(enumval) {
             case 0:
@@ -578,7 +610,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 0 && curr == &(etsidec->iripayload)) {
+    else if (item->identifier == 0 && curr == &(etsidec->iripayload)) {
         /* iRIType */
         switch(enumval) {
             case 1:
@@ -594,6 +626,18 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 name = "IRI-Report";
                 break;
 
+        }
+    }
+
+    else if (item->identifier == 0 && curr == &(etsidec->operatorleamessage)) {
+        /* messagePriority for operatorLeaMessage */
+        switch(enumval) {
+            case 1:
+                name = "Error";
+                break;
+            case 2:
+                name = "Informational";
+                break;
         }
     }
 
@@ -616,6 +660,12 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->msts.members);
     free(dec->cccontents.members);
     free(dec->ccpayload.members);
+    free(dec->operatorleamessage.members);
+    free(dec->option.members);
+    free(dec->optionreq.members);
+    free(dec->optionresp.members);
+    free(dec->integritycheck.members);
+    free(dec->tripayload.members);
     free(dec->ipiriid.members);
     free(dec->ipiricontents.members);
     free(dec->ipiri.members);
@@ -886,6 +936,187 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "CCPayload",
                 .descend = &dec->ccpayload,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->operatorleamessage.membercount = 2;
+    ALLOC_MEMBERS(dec->operatorleamessage);
+    dec->operatorleamessage.members[0] =
+        (struct wandder_dump_action) {
+                .name = "messagePriority",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->operatorleamessage.members[1] =
+        (struct wandder_dump_action) {
+                .name = "message",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+    dec->inclseqnos.membercount = 0;
+    dec->inclseqnos.members = NULL;
+    dec->inclseqnos.sequence =
+        (struct wandder_dump_action) {
+                .name = "sequenceNumber",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+
+    dec->integritycheck.membercount = 4;
+    ALLOC_MEMBERS(dec->integritycheck);
+    dec->integritycheck.members[0] =
+        (struct wandder_dump_action) {
+                .name = "includedSequenceNumbers",
+                .descend = &(dec->inclseqnos),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->integritycheck.members[1] =
+        (struct wandder_dump_action) {
+                .name = "checkType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->integritycheck.members[2] =
+        (struct wandder_dump_action) {
+                .name = "dataType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->integritycheck.members[3] =
+        (struct wandder_dump_action) {
+                .name = "checkValue",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+    dec->option.membercount = 1;
+    ALLOC_MEMBERS(dec->option);
+    dec->option.members[0] =
+        (struct wandder_dump_action) {
+                .name = "pDUAcknowledgement",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
+    dec->optionseq.membercount = 0;
+    dec->optionseq.members = NULL;
+    dec->optionseq.sequence =
+        (struct wandder_dump_action) {
+                .name = "Option",
+                .descend = &(dec->option),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->optionreq.membercount = 1;
+    ALLOC_MEMBERS(dec->optionreq);
+    dec->optionreq.members[0] =
+        (struct wandder_dump_action) {
+                .name = "requestedOptions",
+                .descend = &(dec->optionseq),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->optionresp.membercount = 2;
+    ALLOC_MEMBERS(dec->optionresp);
+    dec->optionresp.members[0] =
+        (struct wandder_dump_action) {
+                .name = "acceptedOptions",
+                .descend = &(dec->optionseq),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->optionresp.members[1] =
+        (struct wandder_dump_action) {
+                .name = "declinedOptions",
+                .descend = &(dec->optionseq),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->tripayload.membercount = 14;
+    ALLOC_MEMBERS(dec->tripayload);
+    dec->tripayload.members[0] =
+        (struct wandder_dump_action) {
+                .name = "integrityCheck",
+                .descend = &(dec->integritycheck),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[1] =
+        (struct wandder_dump_action) {
+                .name = "testPDU",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[2] =
+        (struct wandder_dump_action) {
+                .name = "paddingPDU",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->tripayload.members[3] =
+        (struct wandder_dump_action) {
+                .name = "keep-alive",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[4] =
+        (struct wandder_dump_action) {
+                .name = "keep-aliveResponse",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[5] =
+        (struct wandder_dump_action) {
+                .name = "firstSegmentFlag",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[6] =
+        (struct wandder_dump_action) {
+                .name = "lastSegmentFlag",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[7] =
+        (struct wandder_dump_action) {
+                .name = "cINReset",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[8] =
+        (struct wandder_dump_action) {
+                .name = "operatorLeaMessage",
+                .descend = &(dec->operatorleamessage),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[9] =
+        (struct wandder_dump_action) {
+                .name = "optionRequest",
+                .descend = &(dec->optionreq),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[10] =
+        (struct wandder_dump_action) {
+                .name = "optionResponse",
+                .descend = &(dec->optionresp),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[11] =
+        (struct wandder_dump_action) {
+                .name = "optionComplete",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[12] =
+        (struct wandder_dump_action) {
+                .name = "pDUAcknowledgementRequest",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[13] =
+        (struct wandder_dump_action) {
+                .name = "pDUAcknowledgementResponse",
+                .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
 
