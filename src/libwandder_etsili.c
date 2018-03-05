@@ -238,6 +238,9 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
     }
 
     curr = etsidec->stack->stk[etsidec->stack->current];
+    if (curr == NULL) {
+        return NULL;
+    }
 
     switch(wandder_get_class(etsidec->dec)) {
 
@@ -1393,7 +1396,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->payload.members[2] =        // Not required
         (struct wandder_dump_action) {
                 .name = "tRIPayload",
-                .descend = NULL,
+                .descend = &(dec->tripayload),
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->payload.members[3] =        // Not required
