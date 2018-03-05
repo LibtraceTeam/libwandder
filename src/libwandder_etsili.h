@@ -79,7 +79,8 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *dec);
 char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *dec, char *space,
         int spacelen);
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *dec, uint32_t *len);
-
+char *wandder_etsili_get_liid(wandder_etsispec_t *dec, char *space,
+        int spacelen);
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

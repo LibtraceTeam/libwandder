@@ -331,7 +331,29 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
     return vp;
 }
 
+char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
+        int spacelen) {
 
+    char *liidptr;
+
+    wandder_found_t *found = NULL;
+    wandder_target_t liidtgt = {&(etsidec->psheader), 1, false};
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return NULL;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &liidtgt, 1,
+            &found, 1) == 0) {
+        return NULL;
+    }
+
+    return wandder_get_valuestr(found->list[0].item, space, (uint16_t)spacelen,
+            WANDDER_TAG_OCTETSTRING);
+}
 
 
 /* These functions are hideous, but act as a C-compatible version of the
