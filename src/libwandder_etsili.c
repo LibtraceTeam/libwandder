@@ -362,17 +362,24 @@ char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
     wandder_reset_decoder(etsidec->dec);
     if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &liidtgt, 1,
             &found, 1) == 0) {
+        wandder_free_found(found);
         return NULL;
     }
 
-    return wandder_get_valuestr(found->list[0].item, space, (uint16_t)spacelen,
-            WANDDER_TAG_OCTETSTRING);
+    if (wandder_get_valuestr(found->list[0].item, space, (uint16_t)spacelen,
+            WANDDER_TAG_OCTETSTRING) == NULL) {
+        wandder_free_found(found);
+        return NULL;
+    }
+    wandder_free_found(found);
+    return space;
 }
 
 int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
 
     wandder_found_t *found = NULL;
     wandder_target_t katgt = {&(etsidec->tripayload), 3, false};
+    int ret = -1;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -383,16 +390,19 @@ int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
     wandder_reset_decoder(etsidec->dec);
     if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
             &found, 1) == 0) {
-        return 0;
+        ret = 0;
+    } else {
+        ret = 1;
     }
-
-    return 1;
+    wandder_free_found(found);
+    return ret;
 }
 
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec) {
 
     wandder_found_t *found = NULL;
     wandder_target_t katgt = {&(etsidec->tripayload), 4, false};
+    int ret = -1;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -403,15 +413,19 @@ int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec) {
     wandder_reset_decoder(etsidec->dec);
     if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
             &found, 1) == 0) {
-        return 0;
+        ret = 0;
+    } else {
+        ret = 1;
     }
 
-    return 1;
+    wandder_free_found(found);
+    return ret;
 }
 
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
     wandder_found_t *found = NULL;
     wandder_target_t seqtgt = {&(etsidec->psheader), 4, false};
+    int64_t res;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -425,7 +439,9 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
         return -1;
     }
 
-    return wandder_get_integer_value(found->list[0].item, NULL);
+    res = wandder_get_integer_value(found->list[0].item, NULL);
+    wandder_free_found(found);
+    return res;
 }
 
 
