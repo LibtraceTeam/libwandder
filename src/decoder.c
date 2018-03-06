@@ -466,7 +466,9 @@ int64_t wandder_get_integer_value(wandder_item_t *c, uint32_t *intlen) {
     uint32_t len = c->length;
 
     intval = decode_integer(c->valptr, &len);
-    *intlen = len;
+    if (intlen) {
+        *intlen = len;
+    }
 
     return intval;
 }
