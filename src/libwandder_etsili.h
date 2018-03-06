@@ -29,6 +29,10 @@
 
 #include <libwandder.h>
 
+#define WANDDER_ETSILI_PSDOMAINID (etsi_lipsdomainid)
+
+extern const uint8_t etsi_lipsdomainid[9];
+
 typedef struct wandder_etsistack {
 
     int alloced;
@@ -89,6 +93,9 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *dec, char *space,
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *dec, uint32_t *len);
 char *wandder_etsili_get_liid(wandder_etsispec_t *dec, char *space,
         int spacelen);
+int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
+int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec);
+int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

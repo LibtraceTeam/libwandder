@@ -30,6 +30,9 @@
 #include <assert.h>
 #include "libwandder_etsili.h"
 
+const uint8_t etsi_lipsdomainid[9] = {
+        0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11};
+
 wandder_dumper_t ipaddress;
 wandder_dumper_t ipvalue;
 wandder_dumper_t ipiriid;
@@ -364,6 +367,65 @@ char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
 
     return wandder_get_valuestr(found->list[0].item, space, (uint16_t)spacelen,
             WANDDER_TAG_OCTETSTRING);
+}
+
+int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
+
+    wandder_found_t *found = NULL;
+    wandder_target_t katgt = {&(etsidec->tripayload), 3, false};
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return -1;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
+            &found, 1) == 0) {
+        return 0;
+    }
+
+    return 1;
+}
+
+int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec) {
+
+    wandder_found_t *found = NULL;
+    wandder_target_t katgt = {&(etsidec->tripayload), 4, false};
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return -1;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
+            &found, 1) == 0) {
+        return 0;
+    }
+
+    return 1;
+}
+
+int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
+    wandder_found_t *found = NULL;
+    wandder_target_t seqtgt = {&(etsidec->psheader), 4, false};
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return -1;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &seqtgt, 1,
+            &found, 1) == 0) {
+        return -1;
+    }
+
+    return wandder_get_integer_value(found->list[0].item, NULL);
 }
 
 
