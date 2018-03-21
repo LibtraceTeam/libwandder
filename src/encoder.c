@@ -322,6 +322,7 @@ static uint32_t encode_value(wandder_pend_t *p, void *valptr, uint32_t vallen) {
             }
             break;
         case WANDDER_TAG_INTEGER:
+        case WANDDER_TAG_ENUM:
             /* Signed int to Integer */
             if (encode_integer(p, valptr, vallen) == 0) {
                 return 0;
