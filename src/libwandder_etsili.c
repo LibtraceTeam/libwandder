@@ -33,36 +33,6 @@
 const uint8_t etsi_lipsdomainid[9] = {
         0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11};
 
-wandder_dumper_t ipaddress;
-wandder_dumper_t ipvalue;
-wandder_dumper_t ipiriid;
-wandder_dumper_t ipiricontents;
-wandder_dumper_t ipiri;
-wandder_dumper_t iricontents;
-wandder_dumper_t iripayload;
-wandder_dumper_t netelid;
-wandder_dumper_t root;
-wandder_dumper_t netid;
-wandder_dumper_t cid;
-wandder_dumper_t msts;
-wandder_dumper_t cccontents;
-wandder_dumper_t ccpayloadseq;
-wandder_dumper_t ccpayload;
-wandder_dumper_t integritycheck;
-wandder_dumper_t inclseqnos;
-wandder_dumper_t option;
-wandder_dumper_t optionseq;
-wandder_dumper_t optionreq;
-wandder_dumper_t optionresp;
-wandder_dumper_t operatorleamessage;
-wandder_dumper_t tripayload;
-wandder_dumper_t payload;
-wandder_dumper_t psheader;
-wandder_dumper_t pspdu;
-wandder_dumper_t ipcc;
-wandder_dumper_t ipcccontents;
-wandder_dumper_t iripayloadseq;
-
 static int init_called = 0;
 
 static void init_dumpers(wandder_etsispec_t *dec);
@@ -252,8 +222,14 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
 
             if (curr->members[ident].interpretas == WANDDER_TAG_IPPACKET) {
-                /* Reached the actual IP contents  -- stop */
-                return NULL;
+                /* If we are an IP CC we can stop, but IPMM CCs have to
+                 * keep going in case the optional fields are present :(
+                 */
+                if (strcmp(curr->members[ident].name, "iPPackets") == 0) {
+                    return NULL;
+                }
+                return wandder_etsili_get_next_fieldstr(etsidec, space,
+                        spacelen);
             }
 
             if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
@@ -328,21 +304,30 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
                 "wandder_attach_etsili_buffer() first!\n");
         return NULL;
     }
-    /* Find IPCCContents */
+    /* Find IPCCContents or IPMMCCContents*/
     wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
-    wandder_target_t ipcctgt = {&etsidec->ipcccontents, 0, false};
+    wandder_target_t cctgts[2];
+
+    cctgts[0].parent = &etsidec->ipcccontents;
+    cctgts[0].itemid = 0;
+    cctgts[0].found = false;
+
+    cctgts[1].parent = &etsidec->ipmmcc;
+    cctgts[1].itemid = 1;
+    cctgts[1].found = false;
 
     *len = 0;
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &ipcctgt, 1,
-                &found, 1) == 0) {
-        return NULL;
-    }
-    *len = found->list[0].item->length;
-    vp = found->list[0].item->valptr;
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 2,
+                &found, 1) > 0) {
+        *len = found->list[0].item->length;
+        vp = found->list[0].item->valptr;
 
-    wandder_free_found(found);
+        wandder_free_found(found);
+    }
+
     return vp;
+
 }
 
 char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
@@ -722,6 +707,48 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
+    else if (item->identifier == 2 && curr == &(etsidec->ipmmcc)) {
+        /* frameType for iPMMCC */
+        switch(enumval) {
+            case 0:
+                name = "ipFrame";
+                break;
+            case 1:
+                name = "udpFrame";
+                break;
+            case 2:
+                name = "rtpFrame";
+                break;
+            case 3:
+                name = "audioFrame";
+                break;
+            case 4:
+                name = "tcpFrame";
+                break;
+            case 5:
+                name = "artificialRtpFrame";
+                break;
+            case 6:
+                name = "udptlFrame";
+                break;
+        }
+    }
+
+    else if (item->identifier == 4 && curr == &(etsidec->ipmmcc)) {
+        /* mMCCprotocol for iPMMCC */
+        switch(enumval) {
+            case 0:
+                name = "rTP";
+                break;
+            case 1:
+                name = "mSRP";
+                break;
+            case 2:
+                name = "uDPTL";
+                break;
+        }
+    }
+
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
         return name;
@@ -734,6 +761,7 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipvalue.members);
     free(dec->ipaddress.members);
     free(dec->ipcccontents.members);
+    free(dec->ipmmcc.members);
     free(dec->ipcc.members);
     free(dec->netelid.members);
     free(dec->netid.members);
@@ -838,6 +866,42 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->ipcc.sequence = WANDDER_NOACTION;
+
+    dec->ipmmcc.membercount = 5;
+    ALLOC_MEMBERS(dec->ipmmcc);
+
+    dec->ipmmcc.members[0] =
+        (struct wandder_dump_action) {
+                .name = "iPMMCCObjId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_RELATIVEOID
+        };
+    dec->ipmmcc.members[1] =
+        (struct wandder_dump_action) {
+                .name = "mMCCContents",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_IPPACKET
+        };
+    dec->ipmmcc.members[2] =
+        (struct wandder_dump_action) {
+                .name = "frameType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->ipmmcc.members[3] =
+        (struct wandder_dump_action) {
+                .name = "streamIdentifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->ipmmcc.members[4] =
+        (struct wandder_dump_action) {
+                .name = "mMCCprotocol",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+
+
 
     dec->netelid.membercount = 6;
     ALLOC_MEMBERS(dec->netelid);
@@ -968,7 +1032,12 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->cccontents.members[9] = WANDDER_NOACTION;
     dec->cccontents.members[10] = WANDDER_NOACTION;
     dec->cccontents.members[11] = WANDDER_NOACTION;
-    dec->cccontents.members[12] = WANDDER_NOACTION;
+    dec->cccontents.members[12] =
+        (struct wandder_dump_action) {
+                .name = "iPMMCC",
+                .descend = &dec->ipmmcc,
+                .interpretas = WANDDER_TAG_NULL
+        };
     dec->cccontents.members[13] = WANDDER_NOACTION;
     dec->cccontents.members[14] = WANDDER_NOACTION;
     dec->cccontents.members[15] = WANDDER_NOACTION;
