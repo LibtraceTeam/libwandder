@@ -435,7 +435,7 @@ uint16_t stringify_octet_string(uint8_t *start, uint32_t length, char *space,
 }
 
 static inline int64_t decode_integer(uint8_t *start, uint32_t *length) {
-    int64_t intval = 0;
+    uint64_t intval = 0;
     uint32_t i = 0;
 
     for (i = 0; i < *length; i++) {
@@ -444,11 +444,17 @@ static inline int64_t decode_integer(uint8_t *start, uint32_t *length) {
             *length = 0;
             return 0;
         }
-
-        intval |= (*(start + i)) << (8 * (*length - 1 - i));
+        /* The uint64_t cast here is VERY important, otherwise the
+         * right side of this expression ends up having a signed type.
+         * That can lead to intval becoming a negative number just because
+         * the MSB of the byte at length=0 happened to be set.
+         * Instead, I use this cast to try and keep everything as unsigned
+         * for as long as possible.
+         */
+        intval |= ((uint64_t)(*(start + i))) << (8 * (*length - 1 - i));
     }
     *length = i;
-    return intval;
+    return (int64_t)intval;
 }
 
 
