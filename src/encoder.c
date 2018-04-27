@@ -139,22 +139,34 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
     return newp;
 }
 
+static inline uint32_t WANDDER_LOG128_SIZE(uint32_t x) {
+    if (x < 128) return 1;
+    if (x < 16383) return 2;
+    return floor((log(x) / log(128)) + 1);
+}
+
+static inline uint32_t WANDDER_LOG256_SIZE(uint32_t x) {
+    if (x < 256) return 1;
+    if (x < 65536) return 2;
+    return floor((log(x) / log(256)) + 1);
+}
+
 static uint32_t calc_preamblen(wandder_pend_t *p) {
     uint32_t plen = 0;
-
+    uint32_t loglen = 0;
 
     if (p->identifier <= 30) {
         plen += 1;
     } else {
-        double log128 = log(p->identifier) / log(128);
-        plen += (1 + floor(log128 + 1));
+        loglen = WANDDER_LOG128_SIZE(p->identifier);
+        plen += (1 + loglen);
     }
 
     if (p->vallen < 128) {
         plen += 1;
     } else {
-        double log256 = log(p->vallen) / log(256);
-        plen += (1 + floor(log256 + 1));
+        loglen = WANDDER_LOG256_SIZE(p->vallen);
+        plen += (1 + loglen);
     }
     return plen;
 }
@@ -228,8 +240,7 @@ static uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
         return 1;
     }
 
-    lenocts = floor((log(len) / log(256)) + 1);
-    *buf = (uint8_t)(lenocts | 0x80);
+    *buf = ((uint8_t)(WANDDER_LOG256_SIZE(len))) | 0x80;
 
     buf += 1;
     rem -= 1;
@@ -293,7 +304,7 @@ static uint32_t encode_integer(wandder_pend_t *p, void *valptr, uint32_t len) {
         return 0;
     }
 
-    lenocts = floor((log(val) / log(256)) + 1);
+    lenocts = WANDDER_LOG256_SIZE(val);
     if (lenocts == 0) {
         lenocts = 1;
     }
