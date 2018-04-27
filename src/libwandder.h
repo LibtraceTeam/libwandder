@@ -188,6 +188,7 @@ typedef struct wandder_pending wandder_pend_t;
 struct wandder_pending {
     uint8_t identclass;
     uint32_t identifier;
+    uint32_t valalloced;
     uint32_t vallen;
     uint8_t *valspace;
     uint8_t encodeas;
@@ -196,6 +197,15 @@ struct wandder_pending {
     wandder_pend_t *lastchild;
     wandder_pend_t *siblings;
     wandder_pend_t *parent;
+};
+
+typedef struct wandder_encoded_result wandder_encoded_result_t;
+
+struct wandder_encoded_result {
+    uint8_t *encoded;
+    uint32_t len;
+    uint32_t alloced;
+    wandder_encoded_result_t *next;
 };
 
 /* The encoder manages the overall encoder process. It simply maintains the
@@ -207,6 +217,8 @@ struct wandder_pending {
 typedef struct wandder_encoder {
     wandder_pend_t *pendlist;
     wandder_pend_t *current;
+    wandder_pend_t *freelist;
+    wandder_encoded_result_t *freeresults;
 } wandder_encoder_t;
 
 
@@ -220,7 +232,9 @@ void free_wandder_encoder(wandder_encoder_t *enc);
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen);
 void wandder_encode_endseq(wandder_encoder_t *enc);
-uint8_t *wandder_encode_finish(wandder_encoder_t *enc, uint32_t *len);
+wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc);
+void wandder_release_encoded_result(wandder_encoder_t *enc,
+        wandder_encoded_result_t *res);
 
 /* Decoding API
  * ----------------------------------------------------
