@@ -29,6 +29,10 @@
 
 #include <libwandder.h>
 
+#define WANDDER_ETSILI_PSDOMAINID (etsi_lipsdomainid)
+
+extern const uint8_t etsi_lipsdomainid[9];
+
 typedef struct wandder_etsistack {
 
     int alloced;
@@ -53,14 +57,23 @@ typedef struct wandder_etsispec {
     wandder_dumper_t cccontents;
     wandder_dumper_t ccpayloadseq;
     wandder_dumper_t ccpayload;
+    wandder_dumper_t operatorleamessage;
+    wandder_dumper_t option;
+    wandder_dumper_t optionseq;
+    wandder_dumper_t optionreq;
+    wandder_dumper_t optionresp;
+    wandder_dumper_t inclseqnos;
+    wandder_dumper_t integritycheck;
+    wandder_dumper_t tripayload;
     wandder_dumper_t payload;
     wandder_dumper_t psheader;
     wandder_dumper_t pspdu;
+    wandder_dumper_t ipmmcc;
     wandder_dumper_t ipcc;
     wandder_dumper_t ipcccontents;
     wandder_dumper_t iripayloadseq;
 
-    wandder_decoder_t dec;
+    wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;
 
     uint8_t decstate;
@@ -79,7 +92,11 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *dec);
 char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *dec, char *space,
         int spacelen);
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *dec, uint32_t *len);
-
+char *wandder_etsili_get_liid(wandder_etsispec_t *dec, char *space,
+        int spacelen);
+int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
+int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec);
+int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

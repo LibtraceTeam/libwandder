@@ -26,35 +26,18 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <assert.h>
 #include "libwandder_etsili.h"
 
-wandder_dumper_t ipaddress;
-wandder_dumper_t ipvalue;
-wandder_dumper_t ipiriid;
-wandder_dumper_t ipiricontents;
-wandder_dumper_t ipiri;
-wandder_dumper_t iricontents;
-wandder_dumper_t iripayload;
-wandder_dumper_t netelid;
-wandder_dumper_t root;
-wandder_dumper_t netid;
-wandder_dumper_t cid;
-wandder_dumper_t msts;
-wandder_dumper_t cccontents;
-wandder_dumper_t ccpayloadseq;
-wandder_dumper_t ccpayload;
-wandder_dumper_t payload;
-wandder_dumper_t psheader;
-wandder_dumper_t pspdu;
-wandder_dumper_t ipcc;
-wandder_dumper_t ipcccontents;
-wandder_dumper_t iripayloadseq;
+const uint8_t etsi_lipsdomainid[9] = {
+        0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11};
 
 static int init_called = 0;
 
 static void init_dumpers(wandder_etsispec_t *dec);
+static void free_dumpers(wandder_etsispec_t *dec);
 static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         wandder_dumper_t *curr, char *valstr, int len);
 
@@ -72,6 +55,7 @@ wandder_etsispec_t *wandder_create_etsili_decoder(void) {
 
     etsidec->stack = NULL;
     etsidec->decstate = 0;
+    etsidec->dec = NULL;
 
     return etsidec;
 }
@@ -82,11 +66,13 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
         return;
     }
 
+    free_dumpers(etsidec);
+
     if (etsidec->stack) {
         wandder_etsili_free_stack(etsidec->stack);
     }
     if (etsidec->decstate) {
-        free_wandder_decoder(&(etsidec->dec));
+        free_wandder_decoder(etsidec->dec);
     }
     free(etsidec);
 }
@@ -94,7 +80,7 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
 void wandder_attach_etsili_buffer(wandder_etsispec_t *etsidec,
         uint8_t *source, uint32_t len, bool copy) {
 
-    init_wandder_decoder(&(etsidec->dec), source, len, copy);
+    etsidec->dec = init_wandder_decoder(etsidec->dec, source, len, copy);
     etsidec->decstate = 1;
 }
 
@@ -117,33 +103,33 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
     }
 
     /* Find PSHeader */
-    wandder_reset_decoder(&etsidec->dec);
+    wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
     wandder_target_t pshdrtgt = {&(etsidec->pspdu), 1, false};
 
-    if (wandder_search_items(&etsidec->dec, 0, &(etsidec->root), &pshdrtgt, 1,
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &pshdrtgt, 1,
                 &found, 1) == 0) {
         return tv;
     }
 
     /* dec->current should be pointing right at PSHeader */
-    savedlevel = wandder_get_level(&etsidec->dec);
+    savedlevel = wandder_get_level(etsidec->dec);
 
-    wandder_decode_next(&etsidec->dec);
-    while (wandder_get_level(&etsidec->dec) > savedlevel) {
-        if (wandder_get_identifier(&etsidec->dec) == 5) {
+    wandder_decode_next(etsidec->dec);
+    while (wandder_get_level(etsidec->dec) > savedlevel) {
+        if (wandder_get_identifier(etsidec->dec) == 5) {
             tv = wandder_generalizedts_to_timeval(
-                    wandder_get_itemptr(&etsidec->dec),
-                    wandder_get_itemlen(&etsidec->dec));
+                    wandder_get_itemptr(etsidec->dec),
+                    wandder_get_itemlen(etsidec->dec));
             break;
         }
-        if (wandder_get_identifier(&etsidec->dec) == 7) {
+        if (wandder_get_identifier(etsidec->dec) == 7) {
             printf("got msts field, please write a parser for it!\n");
 
             /* TODO parse msts field */
             break;
         }
-        wandder_decode_next(&etsidec->dec);
+        wandder_decode_next(etsidec->dec);
     }
     wandder_free_found(found);
     return tv;
@@ -158,17 +144,17 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
         return 0;
     }
     /* Easy, reset the decoder then grab the length of the first element */
-    wandder_reset_decoder(&etsidec->dec);
+    wandder_reset_decoder(etsidec->dec);
 
-    if (wandder_decode_next(&etsidec->dec) <= 0) {
+    if (wandder_decode_next(etsidec->dec) <= 0) {
         return 0;
     }
 
     /* Don't forget to include the preamble length so the caller can skip
      * over the entire PDU if desired.
      */
-    return wandder_get_itemlen(&etsidec->dec) +
-            etsidec->dec.current->preamblelen;
+    return wandder_get_itemlen(etsidec->dec) +
+            etsidec->dec->current->preamblelen;
 }
 
 static inline void push_stack(wandder_etsi_stack_t *stack,
@@ -215,38 +201,47 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
         etsidec->stack->atthislevel[0] = 0;
     }
 
-    if (wandder_decode_next(&etsidec->dec) <= 0) {
+    if (wandder_decode_next(etsidec->dec) <= 0) {
         return NULL;
     }
 
 
-    while (wandder_get_level(&etsidec->dec) < etsidec->stack->current) {
+    while (wandder_get_level(etsidec->dec) < etsidec->stack->current) {
         assert(etsidec->stack->current > 0);
         etsidec->stack->current --;
     }
 
     curr = etsidec->stack->stk[etsidec->stack->current];
+    if (curr == NULL) {
+        return NULL;
+    }
 
-    switch(wandder_get_class(&etsidec->dec)) {
+    switch(wandder_get_class(etsidec->dec)) {
 
         case WANDDER_CLASS_CONTEXT_PRIMITIVE:
-            ident = wandder_get_identifier(&etsidec->dec);
+            ident = wandder_get_identifier(etsidec->dec);
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
 
             if (curr->members[ident].interpretas == WANDDER_TAG_IPPACKET) {
-                /* Reached the actual IP contents  -- stop */
-                return NULL;
+                /* If we are an IP CC we can stop, but IPMM CCs have to
+                 * keep going in case the optional fields are present :(
+                 */
+                if (strcmp(curr->members[ident].name, "iPPackets") == 0) {
+                    return NULL;
+                }
+                return wandder_etsili_get_next_fieldstr(etsidec, space,
+                        spacelen);
             }
 
             if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
-                if (interpret_enum(etsidec, etsidec->dec.current, curr,
+                if (interpret_enum(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
             } else {
-                if (!wandder_get_valuestr(etsidec->dec.current, valstr, 2048,
+                if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
                         curr->members[ident].interpretas)) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
                             etsidec->stack->current, ident);
@@ -261,8 +256,8 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
         case WANDDER_CLASS_UNIVERSAL_PRIMITIVE:
             ident = (uint32_t)etsidec->stack->atthislevel[etsidec->stack->current];
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
-            if (!wandder_get_valuestr(etsidec->dec.current, valstr, 2048,
-                    wandder_get_identifier(&etsidec->dec))) {
+            if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
+                    wandder_get_identifier(etsidec->dec))) {
                 fprintf(stderr, "Failed to interpret standard field %d:%d\n",
                         etsidec->stack->current, ident);
                 return NULL;
@@ -284,7 +279,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             if (curr == NULL) {
                 return NULL;
             }
-            ident = wandder_get_identifier(&etsidec->dec);
+            ident = wandder_get_identifier(etsidec->dec);
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
             snprintf(space, spacelen, "%s:", curr->members[ident].name);
             push_stack(etsidec->stack, curr->members[ident].descend);
@@ -298,7 +293,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
 }
 
 wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec) {
-    return &(dec->dec);
+    return (dec->dec);
 }
 
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
@@ -310,24 +305,130 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
                 "wandder_attach_etsili_buffer() first!\n");
         return NULL;
     }
-    /* Find IPCCContents */
-    wandder_reset_decoder(&etsidec->dec);
+    /* Find IPCCContents or IPMMCCContents*/
+    wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
-    wandder_target_t ipcctgt = {&etsidec->ipcccontents, 0, false};
+    wandder_target_t cctgts[2];
+
+    cctgts[0].parent = &etsidec->ipcccontents;
+    cctgts[0].itemid = 0;
+    cctgts[0].found = false;
+
+    cctgts[1].parent = &etsidec->ipmmcc;
+    cctgts[1].itemid = 1;
+    cctgts[1].found = false;
 
     *len = 0;
-    if (wandder_search_items(&etsidec->dec, 0, &(etsidec->root), &ipcctgt, 1,
-                &found, 1) == 0) {
-        return NULL;
-    }
-    *len = found->list[0].item->length;
-    vp = found->list[0].item->valptr;
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 2,
+                &found, 1) > 0) {
+        *len = found->list[0].item->length;
+        vp = found->list[0].item->valptr;
 
-    wandder_free_found(found);
+        wandder_free_found(found);
+    }
+
     return vp;
+
 }
 
+char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
+        int spacelen) {
 
+    char *liidptr;
+
+    wandder_found_t *found = NULL;
+    wandder_target_t liidtgt = {&(etsidec->psheader), 1, false};
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return NULL;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &liidtgt, 1,
+            &found, 1) == 0) {
+        wandder_free_found(found);
+        return NULL;
+    }
+
+    if (wandder_get_valuestr(found->list[0].item, space, (uint16_t)spacelen,
+            WANDDER_TAG_OCTETSTRING) == NULL) {
+        wandder_free_found(found);
+        return NULL;
+    }
+    wandder_free_found(found);
+    return space;
+}
+
+int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
+
+    wandder_found_t *found = NULL;
+    wandder_target_t katgt = {&(etsidec->tripayload), 3, false};
+    int ret = -1;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return -1;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
+            &found, 1) == 0) {
+        ret = 0;
+    } else {
+        ret = 1;
+    }
+    wandder_free_found(found);
+    return ret;
+}
+
+int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec) {
+
+    wandder_found_t *found = NULL;
+    wandder_target_t katgt = {&(etsidec->tripayload), 4, false};
+    int ret = -1;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return -1;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
+            &found, 1) == 0) {
+        ret = 0;
+    } else {
+        ret = 1;
+    }
+
+    wandder_free_found(found);
+    return ret;
+}
+
+int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
+    wandder_found_t *found = NULL;
+    wandder_target_t seqtgt = {&(etsidec->psheader), 4, false};
+    int64_t res;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return -1;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &seqtgt, 1,
+            &found, 1) == 0) {
+        return -1;
+    }
+
+    res = wandder_get_integer_value(found->list[0].item, NULL);
+    wandder_free_found(found);
+    return res;
+}
 
 
 /* These functions are hideous, but act as a C-compatible version of the
@@ -364,7 +465,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 3 && curr == &(etsidec->ipaddress)) {
+    else if (item->identifier == 3 && curr == &(etsidec->ipaddress)) {
         /* iP-assignment */
         switch(enumval) {
             case 1:
@@ -379,7 +480,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 0 && curr == &(etsidec->ccpayload)) {
+    else if (item->identifier == 0 && curr == &(etsidec->ccpayload)) {
         /* payloadDirection */
         switch(enumval) {
             case 0:
@@ -400,7 +501,31 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if ((item->identifier == 4 && curr == &(etsidec->ccpayload)) ||
+    else if (item->identifier == 1 && curr == &(etsidec->integritycheck)) {
+        /* checkType */
+        switch (enumval) {
+            case 1:
+                name = "SHA-1 Hash";
+                break;
+            case 2:
+                name = "DSS/DSA signature";
+                break;
+        }
+    }
+
+    else if (item->identifier == 2 && curr == &(etsidec->integritycheck)) {
+        /* dataType */
+        switch (enumval) {
+            case 1:
+                name = "IRI";
+                break;
+            case 2:
+                name = "CC";
+                break;
+        }
+    }
+
+    else if ((item->identifier == 4 && curr == &(etsidec->ccpayload)) ||
             (item->identifier == 4 && curr == &(etsidec->iripayload)) ||
             (item->identifier == 8 && curr == &(etsidec->psheader))) {
         /* timeStampQualifier */
@@ -420,7 +545,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 0 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 0 && curr == &(etsidec->ipiricontents)) {
         /* accessEventType */
         switch(enumval) {
             case 0:
@@ -459,7 +584,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 2 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 2 && curr == &(etsidec->ipiricontents)) {
         /* internetAccessType */
         switch(enumval) {
             case 0:
@@ -495,7 +620,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 3 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 3 && curr == &(etsidec->ipiricontents)) {
         /* iPVersion */
         switch(enumval) {
             case 1:
@@ -510,7 +635,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 12 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 12 && curr == &(etsidec->ipiricontents)) {
         /* endReason */
         switch(enumval) {
             case 0:
@@ -531,7 +656,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 22 && curr == &(etsidec->ipiricontents)) {
+    else if (item->identifier == 22 && curr == &(etsidec->ipiricontents)) {
         /* authenticationType */
         switch(enumval) {
             case 0:
@@ -552,7 +677,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    if (item->identifier == 0 && curr == &(etsidec->iripayload)) {
+    else if (item->identifier == 0 && curr == &(etsidec->iripayload)) {
         /* iRIType */
         switch(enumval) {
             case 1:
@@ -571,12 +696,95 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
+    else if (item->identifier == 0 && curr == &(etsidec->operatorleamessage)) {
+        /* messagePriority for operatorLeaMessage */
+        switch(enumval) {
+            case 1:
+                name = "Error";
+                break;
+            case 2:
+                name = "Informational";
+                break;
+        }
+    }
+
+    else if (item->identifier == 2 && curr == &(etsidec->ipmmcc)) {
+        /* frameType for iPMMCC */
+        switch(enumval) {
+            case 0:
+                name = "ipFrame";
+                break;
+            case 1:
+                name = "udpFrame";
+                break;
+            case 2:
+                name = "rtpFrame";
+                break;
+            case 3:
+                name = "audioFrame";
+                break;
+            case 4:
+                name = "tcpFrame";
+                break;
+            case 5:
+                name = "artificialRtpFrame";
+                break;
+            case 6:
+                name = "udptlFrame";
+                break;
+        }
+    }
+
+    else if (item->identifier == 4 && curr == &(etsidec->ipmmcc)) {
+        /* mMCCprotocol for iPMMCC */
+        switch(enumval) {
+            case 0:
+                name = "rTP";
+                break;
+            case 1:
+                name = "mSRP";
+                break;
+            case 2:
+                name = "uDPTL";
+                break;
+        }
+    }
+
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
         return name;
     }
 
     return NULL;
+}
+
+static void free_dumpers(wandder_etsispec_t *dec) {
+    free(dec->ipvalue.members);
+    free(dec->ipaddress.members);
+    free(dec->ipcccontents.members);
+    free(dec->ipmmcc.members);
+    free(dec->ipcc.members);
+    free(dec->netelid.members);
+    free(dec->netid.members);
+    free(dec->cid.members);
+    free(dec->msts.members);
+    free(dec->cccontents.members);
+    free(dec->ccpayload.members);
+    free(dec->operatorleamessage.members);
+    free(dec->option.members);
+    free(dec->optionreq.members);
+    free(dec->optionresp.members);
+    free(dec->integritycheck.members);
+    free(dec->tripayload.members);
+    free(dec->ipiriid.members);
+    free(dec->ipiricontents.members);
+    free(dec->ipiri.members);
+    free(dec->iricontents.members);
+    free(dec->iripayload.members);
+    free(dec->payload.members);
+    free(dec->psheader.members);
+    free(dec->pspdu.members);
+
 }
 
 static void init_dumpers(wandder_etsispec_t *dec) {
@@ -659,6 +867,42 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->ipcc.sequence = WANDDER_NOACTION;
+
+    dec->ipmmcc.membercount = 5;
+    ALLOC_MEMBERS(dec->ipmmcc);
+
+    dec->ipmmcc.members[0] =
+        (struct wandder_dump_action) {
+                .name = "iPMMCCObjId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_RELATIVEOID
+        };
+    dec->ipmmcc.members[1] =
+        (struct wandder_dump_action) {
+                .name = "mMCCContents",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_IPPACKET
+        };
+    dec->ipmmcc.members[2] =
+        (struct wandder_dump_action) {
+                .name = "frameType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->ipmmcc.members[3] =
+        (struct wandder_dump_action) {
+                .name = "streamIdentifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->ipmmcc.members[4] =
+        (struct wandder_dump_action) {
+                .name = "mMCCprotocol",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+
+
 
     dec->netelid.membercount = 6;
     ALLOC_MEMBERS(dec->netelid);
@@ -789,7 +1033,12 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->cccontents.members[9] = WANDDER_NOACTION;
     dec->cccontents.members[10] = WANDDER_NOACTION;
     dec->cccontents.members[11] = WANDDER_NOACTION;
-    dec->cccontents.members[12] = WANDDER_NOACTION;
+    dec->cccontents.members[12] =
+        (struct wandder_dump_action) {
+                .name = "iPMMCC",
+                .descend = &dec->ipmmcc,
+                .interpretas = WANDDER_TAG_NULL
+        };
     dec->cccontents.members[13] = WANDDER_NOACTION;
     dec->cccontents.members[14] = WANDDER_NOACTION;
     dec->cccontents.members[15] = WANDDER_NOACTION;
@@ -838,6 +1087,187 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "CCPayload",
                 .descend = &dec->ccpayload,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->operatorleamessage.membercount = 2;
+    ALLOC_MEMBERS(dec->operatorleamessage);
+    dec->operatorleamessage.members[0] =
+        (struct wandder_dump_action) {
+                .name = "messagePriority",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->operatorleamessage.members[1] =
+        (struct wandder_dump_action) {
+                .name = "message",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+    dec->inclseqnos.membercount = 0;
+    dec->inclseqnos.members = NULL;
+    dec->inclseqnos.sequence =
+        (struct wandder_dump_action) {
+                .name = "sequenceNumber",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+
+    dec->integritycheck.membercount = 4;
+    ALLOC_MEMBERS(dec->integritycheck);
+    dec->integritycheck.members[0] =
+        (struct wandder_dump_action) {
+                .name = "includedSequenceNumbers",
+                .descend = &(dec->inclseqnos),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->integritycheck.members[1] =
+        (struct wandder_dump_action) {
+                .name = "checkType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->integritycheck.members[2] =
+        (struct wandder_dump_action) {
+                .name = "dataType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->integritycheck.members[3] =
+        (struct wandder_dump_action) {
+                .name = "checkValue",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+    dec->option.membercount = 1;
+    ALLOC_MEMBERS(dec->option);
+    dec->option.members[0] =
+        (struct wandder_dump_action) {
+                .name = "pDUAcknowledgement",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
+    dec->optionseq.membercount = 0;
+    dec->optionseq.members = NULL;
+    dec->optionseq.sequence =
+        (struct wandder_dump_action) {
+                .name = "Option",
+                .descend = &(dec->option),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->optionreq.membercount = 1;
+    ALLOC_MEMBERS(dec->optionreq);
+    dec->optionreq.members[0] =
+        (struct wandder_dump_action) {
+                .name = "requestedOptions",
+                .descend = &(dec->optionseq),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->optionresp.membercount = 2;
+    ALLOC_MEMBERS(dec->optionresp);
+    dec->optionresp.members[0] =
+        (struct wandder_dump_action) {
+                .name = "acceptedOptions",
+                .descend = &(dec->optionseq),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->optionresp.members[1] =
+        (struct wandder_dump_action) {
+                .name = "declinedOptions",
+                .descend = &(dec->optionseq),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->tripayload.membercount = 14;
+    ALLOC_MEMBERS(dec->tripayload);
+    dec->tripayload.members[0] =
+        (struct wandder_dump_action) {
+                .name = "integrityCheck",
+                .descend = &(dec->integritycheck),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[1] =
+        (struct wandder_dump_action) {
+                .name = "testPDU",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[2] =
+        (struct wandder_dump_action) {
+                .name = "paddingPDU",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->tripayload.members[3] =
+        (struct wandder_dump_action) {
+                .name = "keep-alive",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[4] =
+        (struct wandder_dump_action) {
+                .name = "keep-aliveResponse",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[5] =
+        (struct wandder_dump_action) {
+                .name = "firstSegmentFlag",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[6] =
+        (struct wandder_dump_action) {
+                .name = "lastSegmentFlag",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[7] =
+        (struct wandder_dump_action) {
+                .name = "cINReset",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[8] =
+        (struct wandder_dump_action) {
+                .name = "operatorLeaMessage",
+                .descend = &(dec->operatorleamessage),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[9] =
+        (struct wandder_dump_action) {
+                .name = "optionRequest",
+                .descend = &(dec->optionreq),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[10] =
+        (struct wandder_dump_action) {
+                .name = "optionResponse",
+                .descend = &(dec->optionresp),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[11] =
+        (struct wandder_dump_action) {
+                .name = "optionComplete",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[12] =
+        (struct wandder_dump_action) {
+                .name = "pDUAcknowledgementRequest",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->tripayload.members[13] =
+        (struct wandder_dump_action) {
+                .name = "pDUAcknowledgementResponse",
+                .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
 
@@ -1114,7 +1544,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->payload.members[2] =        // Not required
         (struct wandder_dump_action) {
                 .name = "tRIPayload",
-                .descend = NULL,
+                .descend = &(dec->tripayload),
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->payload.members[3] =        // Not required
