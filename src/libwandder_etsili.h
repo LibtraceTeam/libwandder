@@ -44,6 +44,12 @@ typedef struct wandder_etsistack {
 typedef struct wandder_etsispec {
     wandder_dumper_t ipaddress;
     wandder_dumper_t ipvalue;
+    wandder_dumper_t nationalipmmiri;
+    wandder_dumper_t h323content;
+    wandder_dumper_t h323message;
+    wandder_dumper_t sipmessage;
+    wandder_dumper_t ipmmiricontents;
+    wandder_dumper_t ipmmiri;
     wandder_dumper_t ipiriid;
     wandder_dumper_t ipiricontents;
     wandder_dumper_t ipiri;
@@ -79,6 +85,11 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
 } wandder_etsispec_t;
 
+enum {
+    WANDDER_IRI_CONTENT_IP,
+    WANDDER_IRI_CONTENT_SIP,
+};
+
 wandder_etsispec_t *wandder_create_etsili_decoder(void);
 void wandder_free_etsili_decoder(wandder_etsispec_t *dec);
 void wandder_attach_etsili_buffer(wandder_etsispec_t *dec, uint8_t *buffer,
@@ -91,7 +102,10 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *dec);
 uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *dec);
 char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *dec, char *space,
         int spacelen);
-uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *dec, uint32_t *len);
+uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *dec, uint32_t *len,
+        char *name, int namelen);
+uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *dec,
+        uint32_t *len, uint8_t *ident, char *name, int namelen);
 char *wandder_etsili_get_liid(wandder_etsispec_t *dec, char *space,
         int spacelen);
 int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
