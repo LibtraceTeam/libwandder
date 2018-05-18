@@ -297,8 +297,9 @@ wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec) {
 }
 
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
-        uint32_t *len) {
+        uint32_t *len, char *name, int namelen) {
     uint8_t *vp = NULL;
+    char *foundname;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -324,10 +325,71 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
         *len = found->list[0].item->length;
         vp = found->list[0].item->valptr;
 
+        if (found->list[0].targetid == 0) {
+            strncpy(name, etsidec->ipcccontents.members[0].name, namelen);
+        } else if (found->list[0].targetid == 1) {
+            strncpy(name, etsidec->ipmmcc.members[1].name, namelen);
+        }
         wandder_free_found(found);
     }
 
     return vp;
+
+}
+
+uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
+        uint32_t *len, uint8_t *ident, char *name, int namelen) {
+
+    uint8_t *vp = NULL;
+    char *foundname;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return NULL;
+    }
+    wandder_reset_decoder(etsidec->dec);
+    wandder_found_t *found = NULL;
+    wandder_target_t iritgts[3];
+
+    /* originalIPMMMessage */
+    iritgts[0].parent = &etsidec->ipmmiricontents;
+    iritgts[0].itemid = 0;
+    iritgts[0].found = false;
+
+    /* sIPContents */
+    iritgts[1].parent = &etsidec->sipmessage;
+    iritgts[1].itemid = 2;
+    iritgts[1].found = false;
+
+    /* rawAAAData */
+    iritgts[2].parent = &etsidec->ipiricontents;
+    iritgts[2].itemid = 15;
+    iritgts[2].found = false;
+
+    /* TODO H323 contents... */
+
+    *len = 0;
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), iritgts, 2,
+                &found, 1) > 0) {
+        *len = found->list[0].item->length;
+        vp = found->list[0].item->valptr;
+
+        if (found->list[0].targetid == 0) {
+            strncpy(name, etsidec->ipmmiricontents.members[0].name, namelen);
+            *ident = WANDDER_IRI_CONTENT_IP;
+        } else if (found->list[0].targetid == 1) {
+            strncpy(name, etsidec->sipmessage.members[2].name, namelen);
+            *ident = WANDDER_IRI_CONTENT_SIP;
+        } else if (found->list[0].targetid == 2) {
+            strncpy(name, etsidec->ipiricontents.members[15].name, namelen);
+            *ident = WANDDER_IRI_CONTENT_IP;   // right?
+        }
+        wandder_free_found(found);
+    }
+
+    return vp;
+
 
 }
 
@@ -840,6 +902,133 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
     dec->ipaddress.sequence = WANDDER_NOACTION;
+
+    dec->nationalipmmiri.membercount = 1;
+    ALLOC_MEMBERS(dec->nationalipmmiri);
+    dec->nationalipmmiri.members[0] =
+        (struct wandder_dump_action) {
+                .name = "countryCode",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_PRINTABLE
+        };
+    dec->nationalipmmiri.sequence = WANDDER_NOACTION;
+
+    dec->h323content.membercount = 4;
+    ALLOC_MEMBERS(dec->h323content);
+    dec->h323content.members[0] =
+        (struct wandder_dump_action) {
+                .name = "h225CSMessageContent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->h323content.members[1] =
+        (struct wandder_dump_action) {
+                .name = "h225RASMessageContent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->h323content.members[2] =
+        (struct wandder_dump_action) {
+                .name = "h245MessageContent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->h323content.members[3] =
+        (struct wandder_dump_action) {
+                .name = "genericMessageContent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->h323content.sequence = WANDDER_NOACTION;
+
+    dec->h323message.membercount = 3;
+    ALLOC_MEMBERS(dec->h323message);
+    dec->h323message.members[0] =
+        (struct wandder_dump_action) {
+                .name = "ipSourceAddress",
+                .descend = &dec->ipaddress,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->h323message.members[1] =
+        (struct wandder_dump_action) {
+                .name = "ipDestinationAddress",
+                .descend = &dec->ipaddress,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->h323message.members[2] =
+        (struct wandder_dump_action) {
+                .name = "h323Content",
+                .descend = &dec->h323content,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->h323message.sequence = WANDDER_NOACTION;
+
+    dec->sipmessage.membercount = 3;
+    ALLOC_MEMBERS(dec->sipmessage);
+    dec->sipmessage.members[0] =
+        (struct wandder_dump_action) {
+                .name = "ipSourceAddress",
+                .descend = &dec->ipaddress,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->sipmessage.members[1] =
+        (struct wandder_dump_action) {
+                .name = "ipDestinationAddress",
+                .descend = &dec->ipaddress,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->sipmessage.members[2] =
+        (struct wandder_dump_action) {
+                .name = "sIPContent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->sipmessage.sequence = WANDDER_NOACTION;
+
+    dec->ipmmiricontents.membercount = 4;
+    ALLOC_MEMBERS(dec->ipmmiricontents);
+    dec->ipmmiricontents.members[0] =
+        (struct wandder_dump_action) {
+                .name = "originalIPMMMessage",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_IPPACKET
+        };
+    dec->ipmmiricontents.members[1] =
+        (struct wandder_dump_action) {
+                .name = "sIPMessage",
+                .descend = &dec->sipmessage,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->ipmmiricontents.members[2] =
+        (struct wandder_dump_action) {
+                .name = "h323Message",
+                .descend = &dec->h323message,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->ipmmiricontents.members[3] =
+        (struct wandder_dump_action) {
+                .name = "nationalIPMMIRIParameters",
+                .descend = &dec->nationalipmmiri,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->ipmmiricontents.sequence = WANDDER_NOACTION;
+
+    dec->ipmmiri.membercount = 2;
+    ALLOC_MEMBERS(dec->ipmmiri);
+    dec->ipmmiri.members[0] =
+        (struct wandder_dump_action) {
+                .name = "iPMMIRIObjId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_RELATIVEOID
+        };
+    dec->ipmmiri.members[1] =
+        (struct wandder_dump_action) {
+                .name = "iPMMIRIContents",
+                .descend = &dec->ipmmiricontents,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->ipmmiri.sequence = WANDDER_NOACTION;
+
 
     dec->ipcccontents.membercount = 1;
     ALLOC_MEMBERS(dec->ipcccontents);
@@ -1473,7 +1662,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->iricontents.members[11] =   // TODO
         (struct wandder_dump_action) {
                 .name = "iPMMIRI",
-                .descend = NULL,
+                .descend = &dec->ipmmiri,
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->iricontents.members[12] = WANDDER_NOACTION;
