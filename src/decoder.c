@@ -437,6 +437,11 @@ uint16_t stringify_octet_string(uint8_t *start, uint32_t length, char *space,
 static inline int64_t decode_integer(uint8_t *start, uint32_t *length) {
     uint64_t intval = 0;
     uint32_t i = 0;
+    int isneg = 0;
+
+    if (*start & 0x80) {
+        isneg = 1;
+    }
 
     for (i = 0; i < *length; i++) {
         if ( i == 8 ) {
@@ -454,6 +459,12 @@ static inline int64_t decode_integer(uint8_t *start, uint32_t *length) {
         intval |= ((uint64_t)(*(start + i))) << (8 * (*length - 1 - i));
     }
     *length = i;
+
+    if (isneg) {
+        uint64_t mask = ~((uint64_t)(pow(2ULL, (*length * 8)) - 1));
+        intval |= mask;
+        intval -= 1;
+    }
     return (int64_t)intval;
 }
 
