@@ -440,6 +440,7 @@ static inline int64_t decode_integer(uint8_t *start, uint32_t *length) {
     int isneg = 0;
 
     if (*start & 0x80) {
+        /* MSB is set, so this should be treated as a negative number */
         isneg = 1;
     }
 
@@ -461,9 +462,22 @@ static inline int64_t decode_integer(uint8_t *start, uint32_t *length) {
     *length = i;
 
     if (isneg) {
+        /* We're going to return a 64 bit signed int, so we need to
+         * make sure that the extra bits beyond those that we just
+         * decoded are properly set to 1 (as per 2's complement rules).
+         *
+         * Example: if we just received a 1 byte integer (-44), our
+         * intval currently looks like 0x00000000000000d4. If we
+         * just return that, the result is going to be interpreted as an
+         * int64_t with the value of 212.
+         * To get the "right" answer, we have to flip all of the bits in
+         * the 7 other bytes that we didn't receive to get 0xffffffffffffffd4.
+         * Callers will then see that number as -44.
+         */
+
         uint64_t mask = ~((uint64_t)(pow(2ULL, (*length * 8)) - 1));
         intval |= mask;
-        intval -= 1;
+
     }
     return (int64_t)intval;
 }
