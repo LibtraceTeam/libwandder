@@ -684,6 +684,8 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
             break;
         case WANDDER_TAG_OCTETSTRING:
         case WANDDER_TAG_PRINTABLE:
+        case WANDDER_TAG_UTF8STR:
+        case WANDDER_TAG_IA5:
             stringify_octet_string(c->valptr, c->length, space, len);
             break;
 
@@ -716,9 +718,7 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
         case WANDDER_TAG_BITSTRING:
         case WANDDER_TAG_OBJDESC:
         case WANDDER_TAG_REAL:
-        case WANDDER_TAG_UTF8STR:
         case WANDDER_TAG_NUMERIC:
-        case WANDDER_TAG_IA5:
         case WANDDER_TAG_UTCTIME:
         default:
             fprintf(stderr, "No stringify support for type %u just yet...\n",

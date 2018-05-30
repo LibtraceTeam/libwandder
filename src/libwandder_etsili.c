@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <arpa/inet.h>
 #include <string.h>
 #include <time.h>
 #include <assert.h>
@@ -40,6 +41,8 @@ static void init_dumpers(wandder_etsispec_t *dec);
 static void free_dumpers(wandder_etsispec_t *dec);
 static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         wandder_dumper_t *curr, char *valstr, int len);
+static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 
 static void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
     free(stack->stk);
@@ -232,8 +235,17 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 return wandder_etsili_get_next_fieldstr(etsidec, space,
                         spacelen);
             }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_BINARY_IP)
+            {
+                if (stringify_ipaddress(etsidec, etsidec->dec->current, curr,
+                        valstr, 2048) == NULL) {
+                    fprintf(stderr, "Failed to interpret field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
 
-            if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
+            else if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
                 if (interpret_enum(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
@@ -492,6 +504,31 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
     return res;
 }
 
+static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    int family;
+    void *addr;
+    struct in_addr in;
+    struct in6_addr in6;
+
+    if (item->length == 4) {
+        memcpy(&(in.s_addr), item->valptr, item->length);
+        family = AF_INET;
+        addr = &in;
+
+    } else if (item->length == 16) {
+        memcpy(&(in6.s6_addr), item->valptr, item->length);
+        family = AF_INET6;
+        addr = &in6;
+    } else {
+        fprintf(stderr, "Unexpected IP address length: %u\n", item->length);
+        return NULL;
+    }
+
+    return inet_ntop(family, addr, valstr, len);
+
+}
 
 /* These functions are hideous, but act as a C-compatible version of the
  * ASN.1 specification of the ETSI LI standard.
@@ -858,7 +895,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "iPBinaryAddress",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_OCTETSTRING
+                .interpretas = WANDDER_TAG_BINARY_IP
         };
     dec->ipvalue.members[2] =
         (struct wandder_dump_action) {
@@ -899,7 +936,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "iPv4SubnetMask",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_OCTETSTRING
+                .interpretas = WANDDER_TAG_BINARY_IP
         };
     dec->ipaddress.sequence = WANDDER_NOACTION;
 
