@@ -859,6 +859,12 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
 
 static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipvalue.members);
+    free(dec->h323content.members);
+    free(dec->h323message.members);
+    free(dec->nationalipmmiri.members);
+    free(dec->sipmessage.members);
+    free(dec->ipmmiricontents.members);
+    free(dec->ipmmiri.members);
     free(dec->ipaddress.members);
     free(dec->ipcccontents.members);
     free(dec->ipmmcc.members);
