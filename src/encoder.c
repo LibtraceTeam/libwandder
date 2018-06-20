@@ -313,7 +313,7 @@ static uint32_t encode_integer(wandder_pend_t *p, void *valptr, uint32_t len) {
             lenocts = 1;
         }
 
-        if (lenocts < len && val > pow(2, (lenocts * 8) - 1)) {
+        if (lenocts < len && val >= pow(2, (lenocts * 8) - 1)) {
             lenocts ++;
         }
     }
