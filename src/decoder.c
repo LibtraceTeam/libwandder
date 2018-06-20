@@ -611,8 +611,7 @@ struct timeval wandder_generalizedts_to_timeval(char *gts, int len) {
         fprintf(stderr, "strptime failed to parse generalized time: %s\n", gts);
         return tv;
     }
-
-
+    tm.tm_isdst = -1;
     current = time(NULL);
     switch(*skipto) {
         /* The time is going to be interpreted as UTC, so we'll need to
