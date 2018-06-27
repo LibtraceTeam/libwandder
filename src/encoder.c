@@ -348,7 +348,7 @@ static uint32_t encode_gtime(wandder_pend_t *p, void *valptr, uint32_t len) {
     }
 
     strftime(timebuf, 768, "%Y%m%d%H%M%S", &tm);
-    snprintf(gtimebuf, 1024, "%s.%03dZ", timebuf, tv->tv_usec / 1000);
+    snprintf(gtimebuf, 1024, "%s.%03ldZ", timebuf, tv->tv_usec / 1000);
     towrite = strlen(gtimebuf);
 
     VALALLOC(towrite, p);
