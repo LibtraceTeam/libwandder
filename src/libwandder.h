@@ -72,6 +72,7 @@ enum {
 
     /* Custom tag types, use only for "interpret as" values. */
     WANDDER_TAG_IPPACKET = 0x30,
+    WANDDER_TAG_BINARY_IP = 0x31,
 };
 
 /* Dumpers are used to describe hierarchy and data types for a particular

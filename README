@@ -1,9 +1,9 @@
 libwandder -- C library for DER encoding and decoding.
 
-Current Stable Version: 1.0.0-beta
+Current Stable Version: 1.0.0.
 
 ---------------------------------------------------------------------------
-Copyright (c) 2017, 2018 The University of Waikato, Hamilton, New Zealand.
+Copyright (c) 2018 The University of Waikato, Hamilton, New Zealand.
 All rights reserved.
 
 This code has been developed by the University of Waikato WAND
@@ -67,8 +67,7 @@ producing human-readable strings describing each field or encapsulating
 structure.
 
 Please note that the ETSI specification implemented within the libwandder API
-is not yet complete -- standard IP and IP Multimedia Communication Contents and
-Intercept Related Information records are supported but other interception
-types are still on the TODO list (e.g. Email).
-
+is not yet complete -- standard IP and IP Multimedia Communication Contents
+and Intercept Related Information records are supported, but other
+interception types are still on the TODO list (e.g. Email, etc).
 

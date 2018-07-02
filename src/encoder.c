@@ -139,13 +139,13 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
     return newp;
 }
 
-static inline uint32_t WANDDER_LOG128_SIZE(uint32_t x) {
+static inline uint32_t WANDDER_LOG128_SIZE(uint64_t x) {
     if (x < 128) return 1;
     if (x < 16383) return 2;
     return floor((log(x) / log(128)) + 1);
 }
 
-static inline uint32_t WANDDER_LOG256_SIZE(uint32_t x) {
+static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
     if (x < 256) return 1;
     if (x < 65536) return 2;
     return floor((log(x) / log(256)) + 1);
@@ -304,9 +304,18 @@ static uint32_t encode_integer(wandder_pend_t *p, void *valptr, uint32_t len) {
         return 0;
     }
 
-    lenocts = WANDDER_LOG256_SIZE(val);
-    if (lenocts == 0) {
-        lenocts = 1;
+    if (val < 0) {
+        /* Play it safe with negative numbers (or seemingly negative ones) */
+        lenocts = len;
+    } else {
+        lenocts = WANDDER_LOG256_SIZE(val);
+        if (lenocts == 0) {
+            lenocts = 1;
+        }
+
+        if (lenocts < len && val >= pow(2, (lenocts * 8) - 1)) {
+            lenocts ++;
+        }
     }
 
     for (i = 0; i < lenocts; i++) {
@@ -348,7 +357,8 @@ static uint32_t encode_gtime(wandder_pend_t *p, void *valptr, uint32_t len) {
     }
 
     strftime(timebuf, 768, "%Y%m%d%H%M%S", &tm);
-    snprintf(gtimebuf, 1024, "%s.%03ldZ", timebuf, tv->tv_usec / 1000);
+    snprintf(gtimebuf, 1024, "%s.%03ldZ", timebuf,
+            (int64_t)(tv->tv_usec / 1000));
     towrite = strlen(gtimebuf);
 
     VALALLOC(towrite, p);

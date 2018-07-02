@@ -437,6 +437,12 @@ uint16_t stringify_octet_string(uint8_t *start, uint32_t length, char *space,
 static inline int64_t decode_integer(uint8_t *start, uint32_t *length) {
     uint64_t intval = 0;
     uint32_t i = 0;
+    int isneg = 0;
+
+    if (*start & 0x80) {
+        /* MSB is set, so this should be treated as a negative number */
+        isneg = 1;
+    }
 
     for (i = 0; i < *length; i++) {
         if ( i == 8 ) {
@@ -454,6 +460,25 @@ static inline int64_t decode_integer(uint8_t *start, uint32_t *length) {
         intval |= ((uint64_t)(*(start + i))) << (8 * (*length - 1 - i));
     }
     *length = i;
+
+    if (isneg) {
+        /* We're going to return a 64 bit signed int, so we need to
+         * make sure that the extra bits beyond those that we just
+         * decoded are properly set to 1 (as per 2's complement rules).
+         *
+         * Example: if we just received a 1 byte integer (-44), our
+         * intval currently looks like 0x00000000000000d4. If we
+         * just return that, the result is going to be interpreted as an
+         * int64_t with the value of 212.
+         * To get the "right" answer, we have to flip all of the bits in
+         * the 7 other bytes that we didn't receive to get 0xffffffffffffffd4.
+         * Callers will then see that number as -44.
+         */
+
+        uint64_t mask = ~((uint64_t)(pow(2ULL, (*length * 8)) - 1));
+        intval |= mask;
+
+    }
     return (int64_t)intval;
 }
 
@@ -586,8 +611,7 @@ struct timeval wandder_generalizedts_to_timeval(char *gts, int len) {
         fprintf(stderr, "strptime failed to parse generalized time: %s\n", gts);
         return tv;
     }
-
-
+    tm.tm_isdst = -1;
     current = time(NULL);
     switch(*skipto) {
         /* The time is going to be interpreted as UTC, so we'll need to
@@ -659,6 +683,8 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
             break;
         case WANDDER_TAG_OCTETSTRING:
         case WANDDER_TAG_PRINTABLE:
+        case WANDDER_TAG_UTF8STR:
+        case WANDDER_TAG_IA5:
             stringify_octet_string(c->valptr, c->length, space, len);
             break;
 
@@ -691,9 +717,7 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
         case WANDDER_TAG_BITSTRING:
         case WANDDER_TAG_OBJDESC:
         case WANDDER_TAG_REAL:
-        case WANDDER_TAG_UTF8STR:
         case WANDDER_TAG_NUMERIC:
-        case WANDDER_TAG_IA5:
         case WANDDER_TAG_UTCTIME:
         default:
             fprintf(stderr, "No stringify support for type %u just yet...\n",
