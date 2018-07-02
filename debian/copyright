@@ -3,7 +3,7 @@ Upstream-Name: Libwandder
 Source: https://github.com/wanduow/libwandder
 
 Files: *
-Copyright: 018 The University of Waikato, Hamilton, New Zealand.
+Copyright: 2018 The University of Waikato, Hamilton, New Zealand.
 License: LGPL-2+
  This library is free software; you can redistribute it and/or
  modify it under the terms of the GNU Library General Public
