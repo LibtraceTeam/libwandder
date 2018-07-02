@@ -1,0 +1,42 @@
+Source: libwandder1
+Priority: optional
+Maintainer: Brad Cowie <brad@wand.net.nz>
+Build-Depends: debhelper (>= 9), dh-autoreconf
+Standards-Version: 4.1.3
+Section: libs
+Homepage: https://github.com/wanduow/libwandder
+
+Package: libwandder1
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: C library for DER encoding and decoding.
+ Libwandder is a helper library that can be used to perform some typical
+ tasks related to the encoding and decoding of data structures defined
+ using the ASN.1 format.
+ .
+ This library also includes some routines that are specifically useful for
+ capturing and processing records using the ETSI Lawful Intercept standards.
+ .
+ libwandder is developed by the WAND Network Research Group at Waikato
+ University, New Zealand.
+
+Package: libwandder1-dev
+Section: libdevel
+Architecture: any
+Depends: libwandder1 (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
+Provides: libwandder-dev
+Conflicts: libwandder-dev
+Description: development headers for the libwandder library
+ This package contains development headers and other ancillary files for
+ the libwandder library.
+ .
+ Libwandder is a helper library that can be used to perform some typical
+ tasks related to the encoding and decoding of data structures defined
+ using the ASN.1 format.
+ .
+ This library also includes some routines that are specifically useful for
+ capturing and processing records using the ETSI Lawful Intercept standards.
+ .
+ libwandder is developed by the WAND Network Research Group at Waikato
+ University, New Zealand.
