@@ -105,6 +105,29 @@ struct wandder_dumper {
 
 extern struct wandder_dump_action WANDDER_NOACTION;
 
+typedef struct wandder_itemblob wandder_itemblob_t;
+
+struct wandder_itemblob {
+    uint8_t *blob;
+    size_t blobsize;
+    size_t itemsize;
+    uint32_t alloceditems;
+    uint32_t nextavail;
+    uint32_t released;
+
+    wandder_itemblob_t *nextfree;
+};
+
+typedef struct wandder_itemhandler {
+    uint32_t items_per_blob;
+    size_t itemsize;
+    int freelistavail;
+    wandder_itemblob_t *current;
+    wandder_itemblob_t *freelist;
+    uint32_t unreleased;
+    size_t pagesize;
+} wandder_itemhandler_t;
+
 
 /* Items are decoded fields extracted from the input stream.
  *
@@ -123,8 +146,10 @@ struct wandder_item {
     uint16_t level;
     uint8_t identclass;
     uint8_t *valptr;
-
+    wandder_itemblob_t *memsrc;
+    wandder_itemhandler_t *handler;
 };
+
 
 /* The decoder manages the overall decoding process. It maintains a pointer
  * to the most recently decoded item and the location in the input stream
@@ -134,6 +159,9 @@ struct wandder_item {
  */
 typedef struct wandder_decoder {
 
+    wandder_itemhandler_t *item_handler;
+    wandder_itemhandler_t *found_handler;
+    wandder_itemhandler_t *foundlist_handler;
     wandder_item_t *toplevel;
     wandder_item_t *current;
 
@@ -175,6 +203,10 @@ typedef struct wandder_found_items {
     wandder_found_item_t *list;
     int itemcount;
     int alloced;
+    wandder_itemhandler_t *handler;
+    wandder_itemblob_t *memsrc;
+    wandder_itemhandler_t *list_handler;
+    wandder_itemblob_t *list_memsrc;
 } wandder_found_t;
 
 
