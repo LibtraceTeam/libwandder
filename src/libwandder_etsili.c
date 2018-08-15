@@ -405,6 +405,29 @@ uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
 
 }
 
+uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
+
+    wandder_found_t *found = NULL;
+    wandder_target_t cintgt = {&(etsidec->cid), 1, false};
+    uint32_t unused;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return 0;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &cintgt, 1,
+            &found, 1) == 0) {
+        wandder_free_found(found);
+        return 0;
+    }
+
+    return (uint32_t)(wandder_get_integer_value(found->list[0].item, &unused));
+
+}
+
 char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
         int spacelen) {
 
