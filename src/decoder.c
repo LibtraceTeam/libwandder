@@ -319,6 +319,23 @@ int wandder_decode_next(wandder_decoder_t *dec) {
 
 }
 
+int wandder_decode_skip(wandder_decoder_t *dec) {
+
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return -1;
+    }
+
+    /* If toplevel is NULL, this is the first run */
+    if (dec->toplevel == NULL) {
+        fprintf(stderr, "cannot call wandder_decode_skip() without at least one call to wandder_decode_next()");
+        return -1;
+    }
+
+    dec->nextitem = dec->current->valptr + dec->current->length;
+    return dec->current->length;
+}
+
 const char *wandder_get_tag_string(wandder_decoder_t *dec) {
 
 	uint8_t class;

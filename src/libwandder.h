@@ -277,6 +277,7 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
 void wandder_reset_decoder(wandder_decoder_t *dec);
 void free_wandder_decoder(wandder_decoder_t *dec);
 int wandder_decode_next(wandder_decoder_t *dec);
+int wandder_decode_skip(wandder_decoder_t *dec);
 uint8_t wandder_get_class(wandder_decoder_t *dec);
 uint32_t wandder_get_identifier(wandder_decoder_t *dec);
 uint16_t wandder_get_level(wandder_decoder_t *dec);
