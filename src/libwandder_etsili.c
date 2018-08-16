@@ -44,6 +44,14 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
 static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 
+#define QUICK_DECODE(fail) \
+    ret = wandder_decode_next(etsidec->dec); \
+    if (ret <= 0) { \
+        return fail; \
+    } \
+    ident = wandder_get_identifier(etsidec->dec);
+
+
 static void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
     free(stack->stk);
     free(stack->atthislevel);
@@ -95,6 +103,8 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
 {
     struct timeval tv;
     uint16_t savedlevel = 0;
+    uint32_t ident;
+    int ret;
 
 
     tv.tv_sec = 0;
@@ -107,34 +117,38 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
 
     /* Find PSHeader */
     wandder_reset_decoder(etsidec->dec);
-    wandder_found_t *found = NULL;
-    wandder_target_t pshdrtgt = {&(etsidec->pspdu), 1, false};
-
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &pshdrtgt, 1,
-                &found, 1) == 0) {
-        return tv;
-    }
+    QUICK_DECODE(tv);
+    QUICK_DECODE(tv);
 
     /* dec->current should be pointing right at PSHeader */
     savedlevel = wandder_get_level(etsidec->dec);
-
-    wandder_decode_next(etsidec->dec);
-    while (wandder_get_level(etsidec->dec) > savedlevel) {
-        if (wandder_get_identifier(etsidec->dec) == 5) {
-            tv = wandder_generalizedts_to_timeval(
-                    wandder_get_itemptr(etsidec->dec),
-                    wandder_get_itemlen(etsidec->dec));
-            break;
-        }
-        if (wandder_get_identifier(etsidec->dec) == 7) {
-            printf("got msts field, please write a parser for it!\n");
-
-            /* TODO parse msts field */
-            break;
-        }
-        wandder_decode_next(etsidec->dec);
+    if (ident != 1) {
+        return tv;
     }
-    wandder_free_found(found);
+
+    do {
+        QUICK_DECODE(tv);
+        if (ident == 5 || ident == 7) {
+            break;
+        }
+        if (wandder_get_class(etsidec->dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT
+                || wandder_get_class(etsidec->dec) ==
+                        WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
+            wandder_decode_skip(etsidec->dec);
+        }
+    } while (ident < 8);
+
+    if (ident == 5) {
+        tv = wandder_generalizedts_to_timeval(etsidec->dec,
+                wandder_get_itemptr(etsidec->dec),
+                wandder_get_itemlen(etsidec->dec));
+        return tv;
+    }
+
+    if (ident == 7) {
+        printf("got msts field, please write a parser for it!\n");
+        return tv;
+    }
     return tv;
 
 }
@@ -307,13 +321,6 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
 wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec) {
     return (dec->dec);
 }
-
-#define QUICK_DECODE(fail) \
-    ret = wandder_decode_next(etsidec->dec); \
-    if (ret <= 0) { \
-        return fail; \
-    } \
-    ident = wandder_get_identifier(etsidec->dec);
 
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
         uint32_t *len, char *name, int namelen) {
@@ -559,6 +566,11 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
 
     do {
         QUICK_DECODE(-1);
+        if (wandder_get_class(etsidec->dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT
+                || wandder_get_class(etsidec->dec) ==
+                        WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
+            wandder_decode_skip(etsidec->dec);
+        }
     } while (ident < 4);
 
     if (ident != 4) {
