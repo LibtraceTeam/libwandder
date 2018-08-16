@@ -308,6 +308,13 @@ wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec) {
     return (dec->dec);
 }
 
+#define QUICK_DECODE(fail) \
+    ret = wandder_decode_next(etsidec->dec); \
+    if (ret <= 0) { \
+        return fail; \
+    } \
+    ident = wandder_get_identifier(etsidec->dec);
+
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
         uint32_t *len, char *name, int namelen) {
     uint8_t *vp = NULL;
@@ -407,9 +414,9 @@ uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
 
 uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
 
-    wandder_found_t *found = NULL;
     wandder_target_t cintgt = {&(etsidec->cid), 1, false};
-    uint32_t unused;
+    uint32_t ident;
+    int ret;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -418,23 +425,37 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
     }
 
     wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &cintgt, 1,
-            &found, 1) == 0) {
-        wandder_free_found(found);
+    QUICK_DECODE(0);
+    QUICK_DECODE(0);
+    if (ident != 1) {
         return 0;
     }
 
-    return (uint32_t)(wandder_get_integer_value(found->list[0].item, &unused));
+    do {
+        QUICK_DECODE(0);
+    } while (ident < 3);
+
+    if (ident != 3) {
+        return 0;
+    }
+
+    do {
+        QUICK_DECODE(0);
+    } while (ident < 1);
+
+    if (ident != 1) {
+        return 0;
+    }
+
+    return (uint32_t)(wandder_get_integer_value(etsidec->dec->current, NULL));
 
 }
 
 char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
         int spacelen) {
 
-    char *liidptr;
-
-    wandder_found_t *found = NULL;
-    wandder_target_t liidtgt = {&(etsidec->psheader), 1, false};
+    uint32_t ident;
+    int ret;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -443,26 +464,32 @@ char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
     }
 
     wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &liidtgt, 1,
-            &found, 1) == 0) {
-        wandder_free_found(found);
+    QUICK_DECODE(NULL);
+    QUICK_DECODE(NULL);
+    if (ident != 1) {
         return NULL;
     }
 
-    if (wandder_get_valuestr(found->list[0].item, space, (uint16_t)spacelen,
-            WANDDER_TAG_OCTETSTRING) == NULL) {
-        wandder_free_found(found);
+    do {
+        QUICK_DECODE(NULL);
+    } while (ident < 1);
+
+    if (ident != 1) {
         return NULL;
     }
-    wandder_free_found(found);
+
+    if (wandder_get_valuestr(etsidec->dec->current, space, (uint16_t)spacelen,
+            WANDDER_TAG_OCTETSTRING) == NULL) {
+        return NULL;
+    }
     return space;
 }
 
-int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
+static inline int _wandder_etsili_is_ka(wandder_etsispec_t *etsidec,
+        uint8_t isresp) {
 
-    wandder_found_t *found = NULL;
-    wandder_target_t katgt = {&(etsidec->tripayload), 3, false};
     int ret = -1;
+    uint32_t ident;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -470,45 +497,52 @@ int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
         return -1;
     }
 
+    /* Manual decode tends to be a lot faster than using the search
+     * method, especially when we know exactly what we're searching for
+     * and what we can skip entirely.
+     */
+
     wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
-            &found, 1) == 0) {
-        ret = 0;
-    } else {
-        ret = 1;
+    QUICK_DECODE(-1);
+    QUICK_DECODE(-1);
+    if (ident == 1) {
+        /* Skip pSHeader */
+        wandder_decode_skip(etsidec->dec);
+        QUICK_DECODE(-1);
     }
-    wandder_free_found(found);
-    return ret;
+
+    if (ident != 2) {
+        return 0;
+    }
+
+    QUICK_DECODE(-1);
+    if (ident != 2) {
+        return 0;
+    }
+
+    QUICK_DECODE(-1);
+    if (!isresp && ident != 3) {
+        return 0;
+    }
+    if (isresp && ident != 4) {
+        return 0;
+    }
+    return 1;
+}
+
+int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
+    return _wandder_etsili_is_ka(etsidec, 0);
 }
 
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec) {
 
-    wandder_found_t *found = NULL;
-    wandder_target_t katgt = {&(etsidec->tripayload), 4, false};
-    int ret = -1;
-
-    if (etsidec->decstate == 0) {
-        fprintf(stderr, "No buffer attached to this decoder -- please call"
-                "wandder_attach_etsili_buffer() first!\n");
-        return -1;
-    }
-
-    wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
-            &found, 1) == 0) {
-        ret = 0;
-    } else {
-        ret = 1;
-    }
-
-    wandder_free_found(found);
-    return ret;
+    return _wandder_etsili_is_ka(etsidec, 1);
 }
 
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
-    wandder_found_t *found = NULL;
-    wandder_target_t seqtgt = {&(etsidec->psheader), 4, false};
+    uint32_t ident;
     int64_t res;
+    int ret;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -517,13 +551,21 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
     }
 
     wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &seqtgt, 1,
-            &found, 1) == 0) {
+    QUICK_DECODE(-1);
+    QUICK_DECODE(-1);
+    if (ident != 1) {
         return -1;
     }
 
-    res = wandder_get_integer_value(found->list[0].item, NULL);
-    wandder_free_found(found);
+    do {
+        QUICK_DECODE(-1);
+    } while (ident < 4);
+
+    if (ident != 4) {
+        return -1;
+    }
+
+    res = wandder_get_integer_value(etsidec->dec->current, NULL);
     return res;
 }
 
