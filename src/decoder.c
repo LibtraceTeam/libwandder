@@ -35,6 +35,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <math.h>
+#include <errno.h>
 
 #include "src/itemhandler.h"
 #include "src/libwandder.h"
@@ -55,7 +56,6 @@ struct wandder_dump_action WANDDER_NOACTION =
 wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
         uint8_t *source, uint32_t len, bool copy) {
 
-
     if (dec != NULL) {
         wandder_reset_decoder(dec);
     } else {
@@ -70,6 +70,9 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
                 sizeof(wandder_found_item_t) * 10, 10000);
         dec->found_handler = init_wandder_itemhandler(
                 sizeof(wandder_found_t), 10000);
+
+        dec->cachedts = 0;
+        memset(dec->prevgts, 0, 16);
     }
 
     if (copy) {
@@ -623,13 +626,14 @@ uint32_t stringify_roid(uint8_t *start, uint32_t length, char *space,
     return oid_to_string(start, length, space, spacerem, 0);
 }
 
-struct timeval wandder_generalizedts_to_timeval(char *gts, int len) {
+struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len) {
     struct timeval tv;
-    struct tm tm;
+    struct tm tm, localres;
     char *nxt = NULL;
     char *skipto = NULL;
-    int ms = 0;
-    int tzcorrect = 0;
+    uint32_t ms = 0;
+    int tzcorrect = 0, gmtoffset = 0;
     time_t current;
 
     tv.tv_sec = 0;
@@ -653,41 +657,56 @@ struct timeval wandder_generalizedts_to_timeval(char *gts, int len) {
             skipto ++;
         }
 
-        /* Assuming 3 digits here -- more (or less) are technically possible
-         * though :( */
-        if (sscanf(nxt, ".%d", &ms) != 1) {
+        errno = 0;
+        ms = strtoul(nxt + 1, NULL, 10);
+        if (errno != 0) {
             fprintf(stderr, "%s\n", nxt);
             fprintf(stderr, "Failed to parse milliseconds in generalized time.\n");
             return tv;
         }
     }
 
+    if (strncmp(gts, dec->prevgts, 14) == 0) {
+        tv.tv_sec = dec->cachedts;
+        tv.tv_usec = ms * 1000;
+        return tv;
+    }
+
     if (strptime(gts, "%Y%m%d%H%M%S", &tm) == NULL) {
         fprintf(stderr, "strptime failed to parse generalized time: %s\n", gts);
         return tv;
     }
-    tm.tm_isdst = -1;
+    /* The time is going to be interpreted as UTC, so we'll need to
+     * remove any timezone differences using TZ_TO_OFFSET. However, mktime
+     * assumes local time so we'll need to also add the time difference
+     * between us and UTC to get a sensible unix timestamp.
+     *
+     * TODO maybe only do the localtime() call if the TZ is different
+     * to previously?
+     */
     current = time(NULL);
+    gmtoffset = (localtime_r(&current, &localres))->tm_gmtoff;
+
     switch(*skipto) {
-        /* The time is going to be interpreted as UTC, so we'll need to
-         * remove any timezone differences using TZ_TO_OFFSET. However, mktime
-         * assumes local time so we'll need to also add the time difference
-         * between us and UTC to get a sensible unix timestamp.
-         */
         case 'Z':
-            tzcorrect = localtime(&current)->tm_gmtoff;
+            tzcorrect = gmtoffset;
             break;
         case '+':
-            tzcorrect = localtime(&current)->tm_gmtoff - TZ_TO_OFFSET(skipto + 1);
+            tzcorrect = gmtoffset - TZ_TO_OFFSET(skipto + 1);
             break;
         case '-':
-            tzcorrect = localtime(&current)->tm_gmtoff + TZ_TO_OFFSET(skipto + 1);
+            tzcorrect = gmtoffset + TZ_TO_OFFSET(skipto + 1);
             break;
     }
 
+    tm.tm_isdst = -1;       // important! required to do DST calc automatically
     tm.tm_gmtoff = 0;
     tv.tv_sec = mktime(&tm) + tzcorrect;
     tv.tv_usec = ms * 1000;
+
+    dec->cachedts = tv.tv_sec;
+    memcpy(dec->prevgts, gts, 14);
+    dec->prevgts[14] = '\0';
     return tv;
 }
 
