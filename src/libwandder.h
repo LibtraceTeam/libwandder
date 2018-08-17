@@ -151,6 +151,7 @@ struct wandder_item {
 
     wandder_item_t *cachednext;
     wandder_item_t *cachedchildren;
+    uint8_t descend;
 };
 
 
@@ -284,6 +285,7 @@ void wandder_reset_decoder(wandder_decoder_t *dec);
 void free_wandder_decoder(wandder_decoder_t *dec);
 int wandder_decode_next(wandder_decoder_t *dec);
 int wandder_decode_skip(wandder_decoder_t *dec);
+int wandder_decode_sequence_until(wandder_decoder_t *dec, uint32_t ident);
 uint8_t wandder_get_class(wandder_decoder_t *dec);
 uint32_t wandder_get_identifier(wandder_decoder_t *dec);
 uint16_t wandder_get_level(wandder_decoder_t *dec);

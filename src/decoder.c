@@ -194,9 +194,14 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
         } else {
             incache = 0;
         }
-    } else if (dec->current == parent && parent->cachedchildren) {
+    } else if (dec->current == parent && parent->cachedchildren &&
+            dec->current->descend == 1) {
         incache = 1;
         item = parent->cachedchildren;
+    } else if (dec->current == parent && dec->current->descend == 0 &&
+            dec->current->cachednext) {
+        incache = 1;
+        item = dec->current->cachednext;
     } else if (dec->current != parent && dec->current->cachednext) {
         incache = 1;
         item = dec->current->cachednext;
@@ -206,6 +211,11 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
 
     if (incache) {
         dec->current = item;
+        if (IS_CONSTRUCTED(dec->current)) {
+            dec->current->descend = 1;
+        } else {
+            dec->current->descend = 0;
+        }
         return 1;
     }
 
@@ -326,6 +336,7 @@ static int first_decode(wandder_decoder_t *dec) {
     dec->topptr = dec->source;
 
     if (IS_CONSTRUCTED(dec->current)) {
+        dec->current->descend = 1;
         dec->nextitem = dec->source + dec->current->preamblelen;
         ret = dec->current->preamblelen;
     } else {
@@ -337,7 +348,7 @@ static int first_decode(wandder_decoder_t *dec) {
     return ret;
 }
 
-int wandder_decode_next(wandder_decoder_t *dec) {
+static inline int _decode_next(wandder_decoder_t *dec) {
     int ret;
 
     if (dec == NULL) {
@@ -363,15 +374,55 @@ int wandder_decode_next(wandder_decoder_t *dec) {
         return ret;
     }
     if (IS_CONSTRUCTED(dec->current)) {
+        dec->current->descend = 1;
         dec->nextitem = dec->nextitem + dec->current->preamblelen;
         return dec->current->preamblelen;
+    } else {
+        dec->current->descend = 0;
     }
 
     dec->nextitem = dec->nextitem + dec->current->length +
             dec->current->preamblelen;
 
     return dec->current->length + dec->current->preamblelen;
+}
 
+int wandder_decode_next(wandder_decoder_t *dec) {
+    return _decode_next(dec);
+}
+
+int wandder_decode_sequence_until(wandder_decoder_t *dec, uint32_t ident) {
+
+    uint32_t thisident = 0;
+    uint16_t baselevel = dec->current->level;
+    wandder_item_t *orig = dec->current;
+    uint8_t *savednext = dec->nextitem;
+
+    do {
+        if (_decode_next(dec) < 0) {
+            return -1;
+        }
+
+        if (dec->current->level <= baselevel) {
+            return 0;
+        }
+
+        thisident = dec->current->identifier;
+
+        if (IS_CONSTRUCTED(dec->current) && thisident != ident) {
+            wandder_decode_skip(dec);
+            continue;
+        }
+
+    } while (thisident < ident);
+
+    if (thisident == ident) {
+        return 1;
+    }
+
+    dec->current = orig;
+    dec->nextitem = savednext;
+    return 0;
 }
 
 int wandder_decode_skip(wandder_decoder_t *dec) {
@@ -387,6 +438,7 @@ int wandder_decode_skip(wandder_decoder_t *dec) {
         return -1;
     }
 
+    dec->current->descend = 0;
     dec->nextitem = dec->current->valptr + dec->current->length;
     return dec->current->length;
 }
@@ -699,26 +751,23 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
     nxt = gts + 14;     /* YYYYmmddHHMMSS */
 
     if (*nxt == '.') {
-        skipto = nxt;
+        skipto = nxt + 1;
 
-        while (*skipto != 'Z' && *skipto != '-' && *skipto != '+') {
-            if (skipto - gts > len) {
-                fprintf(stderr, "Timezone missing from generalized time.\n");
+        while (*skipto) {
+            if (*skipto == 'Z' || *skipto == '+' || *skipto == '-') {
+                break;
+            }
+
+            if (*skipto < '0' || *skipto > '9') {
+                fprintf(stderr, "Unexpected character in generalized time string %s (%c)\n", gts, *skipto);
                 return tv;
             }
+            ms = ms * 10 + ((*skipto) - '0');
             skipto ++;
-        }
-
-        errno = 0;
-        ms = strtoul(nxt + 1, NULL, 10);
-        if (errno != 0) {
-            fprintf(stderr, "%s\n", nxt);
-            fprintf(stderr, "Failed to parse milliseconds in generalized time.\n");
-            return tv;
         }
     }
 
-    if (strncmp(gts, dec->prevgts, 14) == 0) {
+    if (memcmp(gts, dec->prevgts, 14) == 0) {
         tv.tv_sec = dec->cachedts;
         tv.tv_usec = ms * 1000;
         return tv;

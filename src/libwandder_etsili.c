@@ -105,6 +105,7 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
     uint16_t savedlevel = 0;
     uint32_t ident;
     int ret;
+    uint8_t class;
 
 
     tv.tv_sec = 0;
@@ -126,14 +127,32 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
         return tv;
     }
 
+    if ((ret = wandder_decode_sequence_until(etsidec->dec, 5)) < 0) {
+        return tv;
+    }
+
+    if (ret == 1) {
+        tv = wandder_generalizedts_to_timeval(etsidec->dec,
+                wandder_get_itemptr(etsidec->dec),
+                wandder_get_itemlen(etsidec->dec));
+        return tv;
+    } else if ((ret = wandder_decode_sequence_until(etsidec->dec, 7)) < 0) {
+        return tv;
+    }
+
+    if (ret == 1) {
+        printf("got msts field, please write a parser for it!\n");
+        return tv;
+    }
+#if 0
     do {
         QUICK_DECODE(tv);
         if (ident == 5 || ident == 7) {
             break;
         }
-        if (wandder_get_class(etsidec->dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT
-                || wandder_get_class(etsidec->dec) ==
-                        WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
+        class = wandder_get_class(etsidec->dec);
+        if (class == WANDDER_CLASS_CONTEXT_CONSTRUCT
+                || class == WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
             wandder_decode_skip(etsidec->dec);
         }
     } while (ident < 8);
@@ -149,6 +168,7 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
         printf("got msts field, please write a parser for it!\n");
         return tv;
     }
+#endif
     return tv;
 
 }
