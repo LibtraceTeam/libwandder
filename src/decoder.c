@@ -326,12 +326,17 @@ static int first_decode(wandder_decoder_t *dec) {
 
     int ret;
 
-    ret = decode(dec, dec->source, NULL);
-    if (ret <= 0) {
-        return ret;
+    if (dec->cacheditems) {
+        dec->current = dec->cacheditems;
+    } else {
+        ret = decode(dec, dec->source, NULL);
+        if (ret <= 0) {
+            return ret;
+        }
+
+        dec->cacheditems = dec->current;
     }
 
-    dec->cacheditems = dec->current;
     dec->toplevel = dec->current;
     dec->topptr = dec->source;
 
