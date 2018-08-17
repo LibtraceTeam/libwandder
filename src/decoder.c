@@ -53,11 +53,39 @@ struct wandder_dump_action WANDDER_NOACTION =
         .interpretas = WANDDER_TAG_NULL
     };
 
+static inline void free_item(wandder_item_t *item) {
+
+    if (item->handler) {
+        release_wandder_handled_item(item->handler, item->memsrc);
+    } else {
+        free(item);
+    }
+}
+
+void free_cached_items(wandder_item_t *it, wandder_itemhandler_t *handler) {
+
+    if (it == NULL) {
+        return;
+    }
+
+    if (it->cachedchildren) {
+        free_cached_items(it->cachedchildren, handler);
+    }
+
+    if (it->cachednext) {
+        free_cached_items(it->cachednext, handler);
+    }
+
+    release_wandder_handled_item(handler, it->memsrc);
+}
+
 wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
         uint8_t *source, uint32_t len, bool copy) {
 
     if (dec != NULL) {
         wandder_reset_decoder(dec);
+        free_cached_items(dec->cacheditems, dec->item_handler);
+        dec->cacheditems = NULL;
     } else {
         dec = (wandder_decoder_t *)malloc(sizeof(wandder_decoder_t));
         dec->toplevel = NULL;
@@ -71,6 +99,7 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
         dec->found_handler = init_wandder_itemhandler(
                 sizeof(wandder_found_t), 10000);
 
+        dec->cacheditems = NULL;
         dec->cachedts = 0;
         memset(dec->prevgts, 0, 16);
     }
@@ -87,17 +116,9 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
     return dec;
 }
 
-static inline void free_item(wandder_item_t *item) {
-
-    if (item->handler) {
-        release_wandder_handled_item(item->handler, item->memsrc);
-    } else {
-        free(item);
-    }
-}
-
 void wandder_reset_decoder(wandder_decoder_t *dec) {
 
+/*
     wandder_item_t *it = dec->current;
 
     while (it) {
@@ -105,6 +126,7 @@ void wandder_reset_decoder(wandder_decoder_t *dec) {
         it = it->parent;
         free_item(tmp);
     }
+*/
 
     dec->toplevel = NULL;
     dec->current = NULL;
@@ -112,10 +134,10 @@ void wandder_reset_decoder(wandder_decoder_t *dec) {
     dec->nextitem = NULL;
 }
 
-
 void free_wandder_decoder(wandder_decoder_t *dec) {
 
-    wandder_reset_decoder(dec);
+    free_cached_items(dec->cacheditems, dec->item_handler);
+
     if (dec->ownsource) {
         free(dec->source);
     }
@@ -158,17 +180,35 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
     uint32_t prelen = 0;
     int i;
     wandder_item_t *item = NULL;
+    uint8_t incache = 0;
 
     if (dec == NULL) {
         fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
         return -1;
     }
 
-    if (dec->current == NULL || dec->current == parent) {
-        item = create_new_item(dec);
+    if (dec->current == NULL) {
+        if (dec->cacheditems) {
+            item = dec->cacheditems;
+            incache = 1;
+        } else {
+            incache = 0;
+        }
+    } else if (dec->current == parent && parent->cachedchildren) {
+        incache = 1;
+        item = parent->cachedchildren;
+    } else if (dec->current != parent && dec->current->cachednext) {
+        incache = 1;
+        item = dec->current->cachednext;
     } else {
-        item = dec->current;
+        incache = 0;
     }
+
+    if (incache) {
+        dec->current = item;
+        return 1;
+    }
+
 
     while (parent != NULL && ptr >= parent->valptr + parent->length) {
         /* Reached end of preceding sequence */
@@ -182,16 +222,14 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
             dec->current = NULL;
         }
 
-        free_item(tmp);
-
         if (parent == NULL) {
             /* Reached end of the top level sequence */
-            free_item(item);
             dec->current = NULL;
             return 0;
         }
     }
 
+    item = create_new_item(dec);
     if (parent == NULL) {
         item->level = 0;
     } else {
@@ -257,6 +295,17 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
 
     item->preamblelen = prelen;
     item->valptr = ptr;
+    item->cachednext = NULL;
+    item->cachedchildren = NULL;
+
+    if (dec->current == parent && parent != NULL) {
+        assert(parent->cachedchildren == NULL);
+        parent->cachedchildren = item;
+    } else if (dec->current) {
+        assert(dec->current->cachednext == NULL);
+        dec->current->cachednext = item;
+    }
+
     dec->current = item;
 
     return 1;
@@ -272,17 +321,20 @@ static int first_decode(wandder_decoder_t *dec) {
         return ret;
     }
 
+    dec->cacheditems = dec->current;
     dec->toplevel = dec->current;
-
     dec->topptr = dec->source;
+
     if (IS_CONSTRUCTED(dec->current)) {
         dec->nextitem = dec->source + dec->current->preamblelen;
-        return dec->current->preamblelen;
+        ret = dec->current->preamblelen;
+    } else {
+        dec->nextitem = dec->source + dec->current->length +
+                dec->current->preamblelen;
+        ret = dec->current->length + dec->current->preamblelen;
     }
-    dec->nextitem = dec->source + dec->current->length +
-            dec->current->preamblelen;
 
-    return dec->current->length + dec->current->preamblelen;
+    return ret;
 }
 
 int wandder_decode_next(wandder_decoder_t *dec) {

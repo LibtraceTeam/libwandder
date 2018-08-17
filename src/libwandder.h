@@ -148,6 +148,9 @@ struct wandder_item {
     uint8_t *valptr;
     wandder_itemblob_t *memsrc;
     wandder_itemhandler_t *handler;
+
+    wandder_item_t *cachednext;
+    wandder_item_t *cachedchildren;
 };
 
 
@@ -164,6 +167,8 @@ typedef struct wandder_decoder {
     wandder_itemhandler_t *foundlist_handler;
     wandder_item_t *toplevel;
     wandder_item_t *current;
+
+    wandder_item_t *cacheditems;
 
     uint8_t *topptr;
     uint8_t *nextitem;
