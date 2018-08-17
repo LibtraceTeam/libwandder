@@ -105,6 +105,29 @@ struct wandder_dumper {
 
 extern struct wandder_dump_action WANDDER_NOACTION;
 
+typedef struct wandder_itemblob wandder_itemblob_t;
+
+struct wandder_itemblob {
+    uint8_t *blob;
+    size_t blobsize;
+    size_t itemsize;
+    uint32_t alloceditems;
+    uint32_t nextavail;
+    uint32_t released;
+
+    wandder_itemblob_t *nextfree;
+};
+
+typedef struct wandder_itemhandler {
+    uint32_t items_per_blob;
+    size_t itemsize;
+    int freelistavail;
+    wandder_itemblob_t *current;
+    wandder_itemblob_t *freelist;
+    uint32_t unreleased;
+    size_t pagesize;
+} wandder_itemhandler_t;
+
 
 /* Items are decoded fields extracted from the input stream.
  *
@@ -123,8 +146,14 @@ struct wandder_item {
     uint16_t level;
     uint8_t identclass;
     uint8_t *valptr;
+    wandder_itemblob_t *memsrc;
+    wandder_itemhandler_t *handler;
 
+    wandder_item_t *cachednext;
+    wandder_item_t *cachedchildren;
+    uint8_t descend;
 };
+
 
 /* The decoder manages the overall decoding process. It maintains a pointer
  * to the most recently decoded item and the location in the input stream
@@ -134,8 +163,13 @@ struct wandder_item {
  */
 typedef struct wandder_decoder {
 
+    wandder_itemhandler_t *item_handler;
+    wandder_itemhandler_t *found_handler;
+    wandder_itemhandler_t *foundlist_handler;
     wandder_item_t *toplevel;
     wandder_item_t *current;
+
+    wandder_item_t *cacheditems;
 
     uint8_t *topptr;
     uint8_t *nextitem;
@@ -144,7 +178,8 @@ typedef struct wandder_decoder {
     uint32_t sourcelen;
 
     bool ownsource;
-
+    uint32_t cachedts;
+    char prevgts[16];
 } wandder_decoder_t;
 
 
@@ -175,6 +210,10 @@ typedef struct wandder_found_items {
     wandder_found_item_t *list;
     int itemcount;
     int alloced;
+    wandder_itemhandler_t *handler;
+    wandder_itemblob_t *memsrc;
+    wandder_itemhandler_t *list_handler;
+    wandder_itemblob_t *list_memsrc;
 } wandder_found_t;
 
 
@@ -245,6 +284,8 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
 void wandder_reset_decoder(wandder_decoder_t *dec);
 void free_wandder_decoder(wandder_decoder_t *dec);
 int wandder_decode_next(wandder_decoder_t *dec);
+int wandder_decode_skip(wandder_decoder_t *dec);
+int wandder_decode_sequence_until(wandder_decoder_t *dec, uint32_t ident);
 uint8_t wandder_get_class(wandder_decoder_t *dec);
 uint32_t wandder_get_identifier(wandder_decoder_t *dec);
 uint16_t wandder_get_level(wandder_decoder_t *dec);
@@ -254,7 +295,8 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
         uint8_t interpretas);
 const char *wandder_get_tag_string(wandder_decoder_t *dec);
 
-struct timeval wandder_generalizedts_to_timeval(char *gts, int len);
+struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len);
 int64_t wandder_get_integer_value(wandder_item_t *c, uint32_t *intlen);
 int wandder_timeval_to_generalizedts(struct timeval tv, char *gts, int space);
 int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,

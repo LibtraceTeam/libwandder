@@ -35,6 +35,9 @@
 #include <stdbool.h>
 #include <time.h>
 #include <math.h>
+#include <errno.h>
+
+#include "src/itemhandler.h"
 #include "src/libwandder.h"
 
 #define DIGIT(x)  (x - '0')
@@ -50,18 +53,55 @@ struct wandder_dump_action WANDDER_NOACTION =
         .interpretas = WANDDER_TAG_NULL
     };
 
+static inline void free_item(wandder_item_t *item) {
+
+    if (item->handler) {
+        release_wandder_handled_item(item->handler, item->memsrc);
+    } else {
+        free(item);
+    }
+}
+
+void free_cached_items(wandder_item_t *it, wandder_itemhandler_t *handler) {
+
+    if (it == NULL) {
+        return;
+    }
+
+    if (it->cachedchildren) {
+        free_cached_items(it->cachedchildren, handler);
+    }
+
+    if (it->cachednext) {
+        free_cached_items(it->cachednext, handler);
+    }
+
+    release_wandder_handled_item(handler, it->memsrc);
+}
+
 wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
         uint8_t *source, uint32_t len, bool copy) {
 
-
     if (dec != NULL) {
         wandder_reset_decoder(dec);
+        free_cached_items(dec->cacheditems, dec->item_handler);
+        dec->cacheditems = NULL;
     } else {
         dec = (wandder_decoder_t *)malloc(sizeof(wandder_decoder_t));
         dec->toplevel = NULL;
         dec->current = NULL;
         dec->topptr = NULL;
         dec->nextitem = NULL;
+        dec->item_handler = init_wandder_itemhandler(sizeof(wandder_item_t),
+                10000);
+        dec->foundlist_handler = init_wandder_itemhandler(
+                sizeof(wandder_found_item_t) * 10, 10000);
+        dec->found_handler = init_wandder_itemhandler(
+                sizeof(wandder_found_t), 10000);
+
+        dec->cacheditems = NULL;
+        dec->cachedts = 0;
+        memset(dec->prevgts, 0, 16);
     }
 
     if (copy) {
@@ -78,13 +118,15 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
 
 void wandder_reset_decoder(wandder_decoder_t *dec) {
 
+/*
     wandder_item_t *it = dec->current;
 
     while (it) {
         wandder_item_t *tmp = it;
         it = it->parent;
-        free(tmp);
+        free_item(tmp);
     }
+*/
 
     dec->toplevel = NULL;
     dec->current = NULL;
@@ -92,12 +134,21 @@ void wandder_reset_decoder(wandder_decoder_t *dec) {
     dec->nextitem = NULL;
 }
 
-
 void free_wandder_decoder(wandder_decoder_t *dec) {
 
-    wandder_reset_decoder(dec);
+    free_cached_items(dec->cacheditems, dec->item_handler);
+
     if (dec->ownsource) {
         free(dec->source);
+    }
+    if (dec->item_handler) {
+        destroy_wandder_itemhandler(dec->item_handler);
+    }
+    if (dec->found_handler) {
+        destroy_wandder_itemhandler(dec->found_handler);
+    }
+    if (dec->foundlist_handler) {
+        destroy_wandder_itemhandler(dec->foundlist_handler);
     }
     free(dec);
 
@@ -105,7 +156,18 @@ void free_wandder_decoder(wandder_decoder_t *dec) {
 
 static inline wandder_item_t *create_new_item(wandder_decoder_t *dec) {
 
-    wandder_item_t *item = (wandder_item_t *)malloc(sizeof(wandder_item_t));
+    wandder_item_t *item;
+    wandder_itemblob_t *memsrc;
+    if (dec->item_handler) {
+        item = (wandder_item_t *)get_wandder_handled_item(dec->item_handler,
+                &memsrc);
+        item->memsrc = memsrc;
+        item->handler = dec->item_handler;
+    } else {
+        item = (wandder_item_t *)malloc(sizeof(wandder_item_t));
+        item->memsrc = NULL;
+        item->handler = NULL;
+    }
 
     item->parent = NULL;
     return item;
@@ -118,17 +180,45 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
     uint32_t prelen = 0;
     int i;
     wandder_item_t *item = NULL;
+    uint8_t incache = 0;
 
     if (dec == NULL) {
         fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
         return -1;
     }
 
-    if (dec->current == NULL || dec->current == parent) {
-        item = create_new_item(dec);
+    if (dec->current == NULL) {
+        if (dec->cacheditems) {
+            item = dec->cacheditems;
+            incache = 1;
+        } else {
+            incache = 0;
+        }
+    } else if (dec->current == parent && parent->cachedchildren &&
+            dec->current->descend == 1) {
+        incache = 1;
+        item = parent->cachedchildren;
+    } else if (dec->current == parent && dec->current->descend == 0 &&
+            dec->current->cachednext) {
+        incache = 1;
+        item = dec->current->cachednext;
+    } else if (dec->current != parent && dec->current->cachednext) {
+        incache = 1;
+        item = dec->current->cachednext;
     } else {
-        item = dec->current;
+        incache = 0;
     }
+
+    if (incache) {
+        dec->current = item;
+        if (IS_CONSTRUCTED(dec->current)) {
+            dec->current->descend = 1;
+        } else {
+            dec->current->descend = 0;
+        }
+        return 1;
+    }
+
 
     while (parent != NULL && ptr >= parent->valptr + parent->length) {
         /* Reached end of preceding sequence */
@@ -141,16 +231,15 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
         if (tmp == dec->current) {
             dec->current = NULL;
         }
-        free(tmp);
 
         if (parent == NULL) {
             /* Reached end of the top level sequence */
-            free(item);
             dec->current = NULL;
             return 0;
         }
     }
 
+    item = create_new_item(dec);
     if (parent == NULL) {
         item->level = 0;
     } else {
@@ -176,7 +265,7 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
             if (prelen >= 5) {
                 fprintf(stderr, "libwandder does not support type fields longer than 4 bytes right now\n");
                 if (item != dec->current) {
-                    free(item);
+                    free_item(item);
                 }
                 return -1;
             }
@@ -199,7 +288,7 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
             fprintf(stderr, "libwandder does not support length fields longer than %zd bytes right now\n", sizeof(item->length));
             fprintf(stderr, "Tried to decode an item with a length field of %u bytes.\n", lenoctets);
             if (item != dec->current) {
-                free(item);
+                free_item(item);
             }
             return -1;
         }
@@ -216,6 +305,17 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
 
     item->preamblelen = prelen;
     item->valptr = ptr;
+    item->cachednext = NULL;
+    item->cachedchildren = NULL;
+
+    if (dec->current == parent && parent != NULL) {
+        assert(parent->cachedchildren == NULL);
+        parent->cachedchildren = item;
+    } else if (dec->current) {
+        assert(dec->current->cachednext == NULL);
+        dec->current->cachednext = item;
+    }
+
     dec->current = item;
 
     return 1;
@@ -226,25 +326,34 @@ static int first_decode(wandder_decoder_t *dec) {
 
     int ret;
 
-    ret = decode(dec, dec->source, NULL);
-    if (ret <= 0) {
-        return ret;
+    if (dec->cacheditems) {
+        dec->current = dec->cacheditems;
+    } else {
+        ret = decode(dec, dec->source, NULL);
+        if (ret <= 0) {
+            return ret;
+        }
+
+        dec->cacheditems = dec->current;
     }
 
     dec->toplevel = dec->current;
-
     dec->topptr = dec->source;
-    if (IS_CONSTRUCTED(dec->current)) {
-        dec->nextitem = dec->source + dec->current->preamblelen;
-        return dec->current->preamblelen;
-    }
-    dec->nextitem = dec->source + dec->current->length +
-            dec->current->preamblelen;
 
-    return dec->current->length + dec->current->preamblelen;
+    if (IS_CONSTRUCTED(dec->current)) {
+        dec->current->descend = 1;
+        dec->nextitem = dec->source + dec->current->preamblelen;
+        ret = dec->current->preamblelen;
+    } else {
+        dec->nextitem = dec->source + dec->current->length +
+                dec->current->preamblelen;
+        ret = dec->current->length + dec->current->preamblelen;
+    }
+
+    return ret;
 }
 
-int wandder_decode_next(wandder_decoder_t *dec) {
+static inline int _decode_next(wandder_decoder_t *dec) {
     int ret;
 
     if (dec == NULL) {
@@ -270,15 +379,73 @@ int wandder_decode_next(wandder_decoder_t *dec) {
         return ret;
     }
     if (IS_CONSTRUCTED(dec->current)) {
+        dec->current->descend = 1;
         dec->nextitem = dec->nextitem + dec->current->preamblelen;
         return dec->current->preamblelen;
+    } else {
+        dec->current->descend = 0;
     }
 
     dec->nextitem = dec->nextitem + dec->current->length +
             dec->current->preamblelen;
 
     return dec->current->length + dec->current->preamblelen;
+}
 
+int wandder_decode_next(wandder_decoder_t *dec) {
+    return _decode_next(dec);
+}
+
+int wandder_decode_sequence_until(wandder_decoder_t *dec, uint32_t ident) {
+
+    uint32_t thisident = 0;
+    uint16_t baselevel = dec->current->level;
+    wandder_item_t *orig = dec->current;
+    uint8_t *savednext = dec->nextitem;
+
+    do {
+        if (_decode_next(dec) < 0) {
+            return -1;
+        }
+
+        if (dec->current->level <= baselevel) {
+            return 0;
+        }
+
+        thisident = dec->current->identifier;
+
+        if (IS_CONSTRUCTED(dec->current) && thisident != ident) {
+            wandder_decode_skip(dec);
+            continue;
+        }
+
+    } while (thisident < ident);
+
+    if (thisident == ident) {
+        return 1;
+    }
+
+    dec->current = orig;
+    dec->nextitem = savednext;
+    return 0;
+}
+
+int wandder_decode_skip(wandder_decoder_t *dec) {
+
+    if (dec == NULL) {
+        fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
+        return -1;
+    }
+
+    /* If toplevel is NULL, this is the first run */
+    if (dec->toplevel == NULL) {
+        fprintf(stderr, "cannot call wandder_decode_skip() without at least one call to wandder_decode_next()");
+        return -1;
+    }
+
+    dec->current->descend = 0;
+    dec->nextitem = dec->current->valptr + dec->current->length;
+    return dec->current->length;
 }
 
 const char *wandder_get_tag_string(wandder_decoder_t *dec) {
@@ -568,13 +735,14 @@ uint32_t stringify_roid(uint8_t *start, uint32_t length, char *space,
     return oid_to_string(start, length, space, spacerem, 0);
 }
 
-struct timeval wandder_generalizedts_to_timeval(char *gts, int len) {
+struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len) {
     struct timeval tv;
-    struct tm tm;
+    struct tm tm, localres;
     char *nxt = NULL;
     char *skipto = NULL;
-    int ms = 0;
-    int tzcorrect = 0;
+    uint32_t ms = 0;
+    int tzcorrect = 0, gmtoffset = 0;
     time_t current;
 
     tv.tv_sec = 0;
@@ -588,51 +756,63 @@ struct timeval wandder_generalizedts_to_timeval(char *gts, int len) {
     nxt = gts + 14;     /* YYYYmmddHHMMSS */
 
     if (*nxt == '.') {
-        skipto = nxt;
+        skipto = nxt + 1;
 
-        while (*skipto != 'Z' && *skipto != '-' && *skipto != '+') {
-            if (skipto - gts > len) {
-                fprintf(stderr, "Timezone missing from generalized time.\n");
+        while (*skipto) {
+            if (*skipto == 'Z' || *skipto == '+' || *skipto == '-') {
+                break;
+            }
+
+            if (*skipto < '0' || *skipto > '9') {
+                fprintf(stderr, "Unexpected character in generalized time string %s (%c)\n", gts, *skipto);
                 return tv;
             }
+            ms = ms * 10 + ((*skipto) - '0');
             skipto ++;
         }
+    }
 
-        /* Assuming 3 digits here -- more (or less) are technically possible
-         * though :( */
-        if (sscanf(nxt, ".%d", &ms) != 1) {
-            fprintf(stderr, "%s\n", nxt);
-            fprintf(stderr, "Failed to parse milliseconds in generalized time.\n");
-            return tv;
-        }
+    if (memcmp(gts, dec->prevgts, 14) == 0) {
+        tv.tv_sec = dec->cachedts;
+        tv.tv_usec = ms * 1000;
+        return tv;
     }
 
     if (strptime(gts, "%Y%m%d%H%M%S", &tm) == NULL) {
         fprintf(stderr, "strptime failed to parse generalized time: %s\n", gts);
         return tv;
     }
-    tm.tm_isdst = -1;
+    /* The time is going to be interpreted as UTC, so we'll need to
+     * remove any timezone differences using TZ_TO_OFFSET. However, mktime
+     * assumes local time so we'll need to also add the time difference
+     * between us and UTC to get a sensible unix timestamp.
+     *
+     * TODO maybe only do the localtime() call if the TZ is different
+     * to previously?
+     */
     current = time(NULL);
+    gmtoffset = (localtime_r(&current, &localres))->tm_gmtoff;
+
     switch(*skipto) {
-        /* The time is going to be interpreted as UTC, so we'll need to
-         * remove any timezone differences using TZ_TO_OFFSET. However, mktime
-         * assumes local time so we'll need to also add the time difference
-         * between us and UTC to get a sensible unix timestamp.
-         */
         case 'Z':
-            tzcorrect = localtime(&current)->tm_gmtoff;
+            tzcorrect = gmtoffset;
             break;
         case '+':
-            tzcorrect = localtime(&current)->tm_gmtoff - TZ_TO_OFFSET(skipto + 1);
+            tzcorrect = gmtoffset - TZ_TO_OFFSET(skipto + 1);
             break;
         case '-':
-            tzcorrect = localtime(&current)->tm_gmtoff + TZ_TO_OFFSET(skipto + 1);
+            tzcorrect = gmtoffset + TZ_TO_OFFSET(skipto + 1);
             break;
     }
 
+    tm.tm_isdst = -1;       // important! required to do DST calc automatically
     tm.tm_gmtoff = 0;
     tv.tv_sec = mktime(&tm) + tzcorrect;
     tv.tv_usec = ms * 1000;
+
+    dec->cachedts = tv.tv_sec;
+    memcpy(dec->prevgts, gts, 14);
+    dec->prevgts[14] = '\0';
     return tv;
 }
 
@@ -729,12 +909,22 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
 }
 
 static wandder_found_t *add_found_item(wandder_item_t *item,
-        wandder_found_t *found, int targetid, uint16_t type) {
+        wandder_found_t *found, int targetid, uint16_t type,
+        wandder_decoder_t *dec) {
+
+    wandder_itemblob_t *fsrc;
 
     if (found == NULL) {
-        found = (wandder_found_t *)malloc(sizeof(wandder_found_t));
-        found->list = (wandder_found_item_t *)malloc(
-                sizeof(wandder_found_item_t) * 10);
+        found = (wandder_found_t *)get_wandder_handled_item(dec->found_handler,
+                &fsrc);
+
+        found->handler = dec->found_handler;
+        found->memsrc = fsrc;
+
+        found->list = (wandder_found_item_t *)get_wandder_handled_item(
+                dec->foundlist_handler, &fsrc);
+        found->list_handler = dec->foundlist_handler;
+        found->list_memsrc = fsrc;
         found->itemcount = 0;
         found->alloced = 10;
     }
@@ -742,15 +932,23 @@ static wandder_found_t *add_found_item(wandder_item_t *item,
     if (found->itemcount == found->alloced) {
         found->list = (wandder_found_item_t *)realloc(found->list,
                 sizeof(wandder_found_item_t) * (found->alloced + 10));
+        if (found->list_handler) {
+            release_wandder_handled_item(found->list_handler,
+                    found->list_memsrc);
+            found->list_handler = NULL;
+            found->list_memsrc = NULL;
+        }
         found->alloced += 10;
     }
 
-    found->list[found->itemcount].item = (wandder_item_t *)malloc(
-            sizeof(wandder_item_t));
+    found->list[found->itemcount].item = (wandder_item_t *)
+            get_wandder_handled_item(dec->item_handler, &fsrc);
 
     memcpy(found->list[found->itemcount].item, item, sizeof(wandder_item_t));
     found->list[found->itemcount].targetid = targetid;
     found->list[found->itemcount].interpretas = type;
+    found->list[found->itemcount].item->memsrc = fsrc;
+    found->list[found->itemcount].item->handler = dec->item_handler;
     found->itemcount ++;
 
     return found;
@@ -766,10 +964,19 @@ void wandder_free_found(wandder_found_t *found) {
     }
 
     for (i = 0; i < found->itemcount; i++) {
-        free(found->list[i].item);
+        free_item(found->list[i].item);
     }
-    free(found->list);
-    free(found);
+    if (found->list_handler) {
+        release_wandder_handled_item(found->list_handler, found->list_memsrc);
+    } else {
+        free(found->list);
+    }
+
+    if (found->handler) {
+        release_wandder_handled_item(found->handler, found->memsrc);
+    } else {
+        free(found);
+    }
 }
 
 static inline void check_if_found_ctxt(wandder_decoder_t *dec, uint32_t ident,
@@ -792,7 +999,7 @@ static inline void check_if_found_ctxt(wandder_decoder_t *dec, uint32_t ident,
         }
 
         *found = add_found_item(dec->current, *found, i,
-                actions->members[i].interpretas);
+                actions->members[i].interpretas, dec);
         targets[i].found = true;
     }
 }
@@ -816,7 +1023,7 @@ static inline void check_if_found_noctxt(wandder_decoder_t *dec, uint32_t ident,
             continue;
         }
 
-        *found = add_found_item(dec->current, *found, i, interpretas);
+        *found = add_found_item(dec->current, *found, i, interpretas, dec);
         targets[i].found = true;
     }
 }
