@@ -273,7 +273,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             {
                 if (stringify_ipaddress(etsidec, etsidec->dec->current, curr,
                         valstr, 2048) == NULL) {
-                    fprintf(stderr, "Failed to interpret field %d:%d\n",
+                    fprintf(stderr, "Failed to interpret IP field %d:%d\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -282,7 +282,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             else if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
                 if (interpret_enum(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
-                    fprintf(stderr, "Failed to interpret field %d:%d\n",
+                    fprintf(stderr, "Failed to interpret enum field %d:%d\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -1121,7 +1121,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "sIPContent",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_OCTETSTRING
+                .interpretas = WANDDER_TAG_IPPACKET
         };
     dec->sipmessage.sequence = WANDDER_NOACTION;
 
