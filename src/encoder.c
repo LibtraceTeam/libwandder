@@ -151,7 +151,18 @@ static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
     return floor((log(x) / log(256)) + 1);
 }
 
-static uint32_t calc_preamblen(wandder_pend_t *p) {
+static inline int64_t WANDDER_EXTRA_OCTET_THRESH(uint8_t lenocts) {
+
+    if (lenocts == 1) return 128;
+    if (lenocts == 2) return 32768;
+    if (lenocts == 3) return 8388608;
+    if (lenocts == 4) return 2147483648;
+    if (lenocts == 5) return 549755813888;
+    if (lenocts == 6) return 140737488355328;
+    return 36028797018963968;
+}
+
+static inline uint32_t calc_preamblen(wandder_pend_t *p) {
     uint32_t plen = 0;
     uint32_t loglen = 0;
 
@@ -313,7 +324,10 @@ static uint32_t encode_integer(wandder_pend_t *p, void *valptr, uint32_t len) {
             lenocts = 1;
         }
 
-        if (lenocts < len && val >= pow(2, (lenocts * 8) - 1)) {
+        if (lenocts > 7) {
+            lenocts = len;
+        }
+        if (lenocts < len && val >= WANDDER_EXTRA_OCTET_THRESH(lenocts)) {
             lenocts ++;
         }
     }
