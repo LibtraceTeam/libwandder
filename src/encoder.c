@@ -148,6 +148,10 @@ static inline uint32_t WANDDER_LOG128_SIZE(uint64_t x) {
 static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
     if (x < 256) return 1;
     if (x < 65536) return 2;
+    if (x < 16777216) return 3;
+    if (x < 4294967296) return 4;
+    if (x < 1099511627776) return 5;
+    if (x < 281474976710656) return 6;
     return floor((log(x) / log(256)) + 1);
 }
 
@@ -493,56 +497,63 @@ uint32_t encode_r(wandder_pend_t *p, uint8_t *buf, uint32_t rem) {
     uint32_t ret;
     uint32_t tot = 0;
 
-    ret = encode_identifier(p->identclass, p->identifier, buf, rem);
+    while (p) {
 
-    if (ret == 0) {
-        return 0;
-    }
+        ret = encode_identifier(p->identclass, p->identifier, buf, rem);
 
-    buf += ret;
-    rem -= ret;
-    tot += ret;
-
-    ret = encode_length(p->vallen, buf, rem);
-
-    if (ret == 0) {
-        return 0;
-    }
-
-    buf += ret;
-    rem -= ret;
-    tot += ret;
-
-    if (p->children) {
-        ret = encode_r(p->children, buf, rem);
         if (ret == 0) {
-            return 0;
+            break;
         }
+
         buf += ret;
         rem -= ret;
         tot += ret;
-    }
 
-    if (p->encodeas != WANDDER_TAG_NULL && p->encodeas != WANDDER_TAG_SET
-            && p->encodeas != WANDDER_TAG_SEQUENCE &&
-            p->encodeas != WANDDER_TAG_IPPACKET) {
-        if (rem < p->vallen) {
-            fprintf(stderr, "Encode error: not enough space for value\n");
-            return 0;
-        }
-        memcpy(buf, p->valspace, p->vallen);
+        ret = encode_length(p->vallen, buf, rem);
 
-        buf += p->vallen;
-        rem -= p->vallen;
-        tot += p->vallen;
-    }
-
-    if (p->siblings) {
-        ret = encode_r(p->siblings, buf, rem);
         if (ret == 0) {
-            return 0;
+            break;
         }
-        return ret + tot;
+
+        buf += ret;
+        rem -= ret;
+        tot += ret;
+
+        if (p->children) {
+            p = p->children;
+            continue;
+        }
+
+        if (p->encodeas != WANDDER_TAG_NULL && p->encodeas != WANDDER_TAG_SET
+                && p->encodeas != WANDDER_TAG_SEQUENCE &&
+                p->encodeas != WANDDER_TAG_IPPACKET) {
+            if (rem < p->vallen) {
+                fprintf(stderr, "Encode error: not enough space for value\n");
+                return 0;
+            }
+            memcpy(buf, p->valspace, p->vallen);
+
+            buf += p->vallen;
+            rem -= p->vallen;
+            tot += p->vallen;
+        }
+
+        if (p->siblings) {
+            p = p->siblings;
+            continue;
+        }
+
+        p = p->parent;
+        if (p == NULL) {
+            break;
+        }
+
+        while (p && p->siblings == NULL) {
+            p = p->parent;
+        }
+        if (p) {
+            p = p->siblings;
+        }
     }
 
     return tot;
