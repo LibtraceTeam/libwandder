@@ -233,6 +233,8 @@ typedef struct wandder_encode_job {
     uint8_t *valspace;
     uint8_t encodeas;
     uint8_t preamblen;
+    uint8_t *encodedspace;
+    uint32_t encodedlen;
 } wandder_encode_job_t;
 
 
@@ -280,9 +282,9 @@ void free_wandder_encoder(wandder_encoder_t *enc);
 
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen);
-void wandder_encode_value_only(wandder_encode_job_t *p, void *valptr,
+int wandder_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,
         uint32_t vallen);
-void wandder_encode_preencoded(wandder_encoder_t *enc,
+void wandder_encode_next_preencoded(wandder_encoder_t *enc,
         wandder_encode_job_t *job);
 void wandder_encode_endseq(wandder_encoder_t *enc);
 wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc);
