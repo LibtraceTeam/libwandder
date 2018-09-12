@@ -225,18 +225,26 @@ typedef struct wandder_found_items {
  */
 typedef struct wandder_pending wandder_pend_t;
 
-struct wandder_pending {
+typedef struct wandder_encode_job {
     uint8_t identclass;
     uint32_t identifier;
     uint32_t valalloced;
     uint32_t vallen;
     uint8_t *valspace;
     uint8_t encodeas;
+    uint8_t preamblen;
+} wandder_encode_job_t;
+
+
+struct wandder_pending {
+    wandder_encode_job_t *thisjob;
+    uint32_t childrensize;
 
     wandder_pend_t *children;
     wandder_pend_t *lastchild;
     wandder_pend_t *siblings;
     wandder_pend_t *parent;
+    uint8_t shouldfree;
 };
 
 typedef struct wandder_encoded_result wandder_encoded_result_t;
@@ -271,6 +279,10 @@ void free_wandder_encoder(wandder_encoder_t *enc);
 
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen);
+void wandder_encode_value_only(wandder_encode_job_t *p, void *valptr,
+        uint32_t vallen);
+void wandder_encode_preencoded(wandder_encoder_t *enc,
+        wandder_encode_job_t *job);
 void wandder_encode_endseq(wandder_encoder_t *enc);
 wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc);
 void wandder_release_encoded_result(wandder_encoder_t *enc,
