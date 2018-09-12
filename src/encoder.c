@@ -53,19 +53,20 @@ wandder_encoder_t *init_wandder_encoder(void) {
     enc->pendlist = NULL;
     enc->current = NULL;
     enc->freelist = NULL;
+    enc->freeprecompute = NULL;
     enc->freeresults = NULL;
 
     return enc;
 }
 
-static inline void free_single_pending(wandder_encoder_t *enc,
+static inline void free_single_pending(wandder_pend_t **freelist,
         wandder_pend_t *p) {
 
     p->lastchild = NULL;
     p->siblings = NULL;
     p->parent = NULL;
-    p->children = enc->freelist;
-    enc->freelist = p;
+    p->children = *freelist;
+    *freelist = p;
 }
 
 static void free_pending_r(wandder_encoder_t *enc, wandder_pend_t *p) {
@@ -78,9 +79,9 @@ static void free_pending_r(wandder_encoder_t *enc, wandder_pend_t *p) {
     }
 
     if (p->shouldfree) {
-        free_single_pending(enc, p);
+        free_single_pending(&(enc->freelist), p);
     } else {
-        free(p);
+        free_single_pending(&(enc->freeprecompute), p);
     }
 }
 
@@ -103,10 +104,15 @@ void free_wandder_encoder(wandder_encoder_t *enc) {
     while (p) {
         tmp = p;
         p = p->children;
-        if (tmp->shouldfree) {
-            free(tmp->thisjob->valspace);
-            free(tmp->thisjob);
-        }
+        free(tmp->thisjob->valspace);
+        free(tmp->thisjob);
+        free(tmp);
+    }
+
+    p = enc->freeprecompute;
+    while (p) {
+        tmp = p;
+        p = p->children;
         free(tmp);
     }
 
@@ -125,23 +131,30 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
         wandder_encode_job_t *job, wandder_pend_t *parent) {
     wandder_pend_t *newp;
 
-    if (!job && enc->freelist) {
-        newp = enc->freelist;
-        enc->freelist = newp->children;
-        newp->children = NULL;
-    } else {
-        newp = (wandder_pend_t *)calloc(1, sizeof(wandder_pend_t));
-        if (job) {
-            if (job->vallen == 0) {
-                job->preamblen = 0;
-            }
-            newp->thisjob = job;
-            newp->shouldfree = 0;
+    if (!job) {
+        if (enc->freelist) {
+            newp = enc->freelist;
+            enc->freelist = newp->children;
+            newp->children = NULL;
         } else {
+            newp = (wandder_pend_t *)calloc(1, sizeof(wandder_pend_t));
             newp->thisjob = (wandder_encode_job_t *)calloc(1,
                     sizeof(wandder_encode_job_t));
             newp->shouldfree = 1;
         }
+    } else {
+        if (enc->freeprecompute) {
+            newp = enc->freeprecompute;
+            enc->freeprecompute = newp->children;
+            newp->children = NULL;
+        } else {
+            newp = (wandder_pend_t *)calloc(1, sizeof(wandder_pend_t));
+            if (job->vallen == 0) {
+                job->preamblen = 0;
+            }
+            newp->shouldfree = 0;
+        }
+        newp->thisjob = job;
     }
 
     newp->parent = parent;

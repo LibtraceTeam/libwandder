@@ -266,6 +266,7 @@ typedef struct wandder_encoder {
     wandder_pend_t *pendlist;
     wandder_pend_t *current;
     wandder_pend_t *freelist;
+    wandder_pend_t *freeprecompute;
     wandder_encoded_result_t *freeresults;
 } wandder_encoder_t;
 
