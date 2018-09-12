@@ -69,28 +69,36 @@ static inline void free_single_pending(wandder_pend_t **freelist,
     *freelist = p;
 }
 
-static void free_pending_r(wandder_encoder_t *enc, wandder_pend_t *p) {
-    if (p->children) {
-        free_pending_r(enc, p->children);
-    }
-
-    if (p->siblings) {
-        free_pending_r(enc, p->siblings);
-    }
-
-    if (p->shouldfree) {
-        free_single_pending(&(enc->freelist), p);
-    } else {
-        free_single_pending(&(enc->freeprecompute), p);
-    }
-}
-
 void reset_wandder_encoder(wandder_encoder_t *enc) {
+    wandder_pend_t *p, *tmp, *savedsib;
 
     /* TODO walk encoding tree and free all items */
-    if (enc->pendlist) {
-        free_pending_r(enc, enc->pendlist);
+    p = enc->pendlist;
+    while (p) {
+
+        if (p->children) {
+            p = p->children;
+            continue;
+        }
+
+        tmp = p;
+        if (p->siblings) {
+            p = p->siblings;
+        } else {
+            p = p->parent;
+        }
+
+        if (tmp->parent && tmp->parent->children == tmp) {
+            tmp->parent->children = NULL;
+        }
+
+        if (tmp->shouldfree) {
+            free_single_pending(&(enc->freelist), tmp);
+        } else {
+            free_single_pending(&(enc->freeprecompute), tmp);
+        }
     }
+
     enc->pendlist = NULL;
     enc->current = NULL;
 }
