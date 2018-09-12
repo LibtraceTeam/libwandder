@@ -514,24 +514,29 @@ void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
 }
 
 void wandder_encode_next_preencoded(wandder_encoder_t *enc,
-        wandder_encode_job_t *job) {
+        wandder_encode_job_t **jobs, int jobcount) {
 
-    if (enc->pendlist == NULL) {
-        /* First item */
-        enc->pendlist = new_pending(enc, job, NULL);
-        enc->current = enc->pendlist;
-    } else if (IS_CONSTRUCTED(enc->current->thisjob) &&
-            enc->current->children == NULL) {
-        wandder_pend_t *next = new_pending(enc, job, enc->current);
-        enc->current->children = next;
-        enc->current->lastchild = next;
-        enc->current = next;
-    } else {
-        /* Must be a sibling */
-        wandder_pend_t *next = new_pending(enc, job, enc->current->parent);
-        enc->current->siblings = next;
-        enc->current->parent->lastchild = next;
-        enc->current = next;
+    int i;
+    for (i = 0; i < jobcount; i++) {
+        wandder_encode_job_t *job = jobs[i];
+
+        if (enc->pendlist == NULL) {
+            /* First item */
+            enc->pendlist = new_pending(enc, job, NULL);
+            enc->current = enc->pendlist;
+        } else if (IS_CONSTRUCTED(enc->current->thisjob) &&
+                enc->current->children == NULL) {
+            wandder_pend_t *next = new_pending(enc, job, enc->current);
+            enc->current->children = next;
+            enc->current->lastchild = next;
+            enc->current = next;
+        } else {
+            /* Must be a sibling */
+            wandder_pend_t *next = new_pending(enc, job, enc->current->parent);
+            enc->current->siblings = next;
+            enc->current->parent->lastchild = next;
+            enc->current = next;
+        }
     }
 
     /*
