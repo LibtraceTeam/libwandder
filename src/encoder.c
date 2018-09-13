@@ -47,14 +47,8 @@
 
 wandder_encoder_t *init_wandder_encoder(void) {
 
-    wandder_encoder_t *enc = (wandder_encoder_t *)malloc(
+    wandder_encoder_t *enc = (wandder_encoder_t *)calloc(1,
             sizeof(wandder_encoder_t));
-
-    enc->pendlist = NULL;
-    enc->current = NULL;
-    enc->freelist = NULL;
-    enc->freeprecompute = NULL;
-    enc->freeresults = NULL;
 
     return enc;
 }
@@ -65,40 +59,29 @@ static inline void free_single_pending(wandder_pend_t **freelist,
     p->lastchild = NULL;
     p->siblings = NULL;
     p->parent = NULL;
-    p->children = *freelist;
+    p->children = NULL;
+    p->nextfree = *freelist;
     *freelist = p;
 }
 
 void reset_wandder_encoder(wandder_encoder_t *enc) {
     wandder_pend_t *p, *tmp, *savedsib;
 
-    /* TODO walk encoding tree and free all items */
-    p = enc->pendlist;
-    while (p) {
-
-        if (p->children) {
-            p = p->children;
-            continue;
-        }
-
-        tmp = p;
-        if (p->siblings) {
-            p = p->siblings;
-        } else {
-            p = p->parent;
-        }
-
-        if (tmp->parent && tmp->parent->children == tmp) {
-            tmp->parent->children = NULL;
-        }
-
-        if (tmp->shouldfree) {
-            free_single_pending(&(enc->freelist), tmp);
-        } else {
-            free_single_pending(&(enc->freeprecompute), tmp);
-        }
+    if (enc->quickfree_tail) {
+        enc->quickfree_tail->nextfree = enc->freelist;
+        enc->freelist = enc->quickfree_head;
     }
 
+    if (enc->quickfree_pc_tail) {
+        enc->quickfree_pc_tail->nextfree = enc->freeprecompute;
+        enc->freeprecompute = enc->quickfree_pc_head;
+    }
+
+
+    enc->quickfree_tail = NULL;
+    enc->quickfree_head = NULL;
+    enc->quickfree_pc_tail = NULL;
+    enc->quickfree_pc_head = NULL;
     enc->pendlist = NULL;
     enc->current = NULL;
 }
@@ -111,7 +94,7 @@ void free_wandder_encoder(wandder_encoder_t *enc) {
     p = enc->freelist;
     while (p) {
         tmp = p;
-        p = p->children;
+        p = p->nextfree;
         free(tmp->thisjob->valspace);
         free(tmp->thisjob);
         free(tmp);
@@ -120,7 +103,7 @@ void free_wandder_encoder(wandder_encoder_t *enc) {
     p = enc->freeprecompute;
     while (p) {
         tmp = p;
-        p = p->children;
+        p = p->nextfree;
         free(tmp);
     }
 
@@ -142,7 +125,11 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
     if (!job) {
         if (enc->freelist) {
             newp = enc->freelist;
-            enc->freelist = newp->children;
+            enc->freelist = newp->nextfree;
+            newp->nextfree = NULL;
+            newp->lastchild = NULL;
+            newp->siblings = NULL;
+            newp->parent = NULL;
             newp->children = NULL;
         } else {
             newp = (wandder_pend_t *)calloc(1, sizeof(wandder_pend_t));
@@ -150,10 +137,23 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
                     sizeof(wandder_encode_job_t));
             newp->shouldfree = 1;
         }
+
+        if (!enc->quickfree_tail) {
+            enc->quickfree_tail = newp;
+            enc->quickfree_head = newp;
+            newp->nextfree = NULL;
+        } else {
+            newp->nextfree = enc->quickfree_head;
+            enc->quickfree_head = newp;
+        }
     } else {
         if (enc->freeprecompute) {
             newp = enc->freeprecompute;
-            enc->freeprecompute = newp->children;
+            enc->freeprecompute = newp->nextfree;
+            newp->nextfree = NULL;
+            newp->lastchild = NULL;
+            newp->siblings = NULL;
+            newp->parent = NULL;
             newp->children = NULL;
         } else {
             newp = (wandder_pend_t *)calloc(1, sizeof(wandder_pend_t));
@@ -163,6 +163,14 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
             newp->shouldfree = 0;
         }
         newp->thisjob = job;
+        if (!enc->quickfree_pc_tail) {
+            enc->quickfree_pc_tail = newp;
+            enc->quickfree_pc_head = newp;
+            newp->nextfree = NULL;
+        } else {
+            newp->nextfree = enc->quickfree_pc_head;
+            enc->quickfree_pc_head = newp;
+        }
     }
 
     newp->parent = parent;
@@ -216,6 +224,14 @@ static inline uint32_t calc_preamblen(uint32_t identifier, uint32_t len) {
         plen += (1 + loglen);
     }
     return plen;
+}
+
+static inline uint32_t encode_identifier_fast(uint8_t class, uint32_t ident,
+        uint8_t *buf) {
+
+    /* Single byte identifier */
+    *buf = (uint8_t)((class << 5) | ident);
+    return 1;
 }
 
 static uint32_t encode_identifier(uint8_t class, uint32_t ident,
@@ -287,29 +303,24 @@ static uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
         return 1;
     }
 
+    lenocts = WANDDER_LOG256_SIZE(len) + 1;
+
     *buf = ((uint8_t)(WANDDER_LOG256_SIZE(len))) | 0x80;
 
     buf += 1;
     rem -= 1;
 
-    while (len > 0) {
-        encarray[ind] = (len & 0xff);
+    if (rem < lenocts) {
+        fprintf(stderr, "Not enough bytes left to encode length field\n");
+        return 0;
+    }
+
+    for (i = lenocts - 1; i >= 0; i--) {
+        *(buf + i) = (len & 0xff);
         len = len >> 8;
-        ind += 1;
     }
 
-    for (i = ind - 1; i >= 0; i--) {
-        if (rem == 0) {
-            fprintf(stderr, "Encode error: no more space while encoding length\n");
-            return 0;
-        }
-
-        *buf = encarray[i];
-        buf += 1;
-        rem -= 1;
-    }
-
-    return ind + 1;
+    return lenocts;
 
 }
 
@@ -569,7 +580,11 @@ int wandder_encode_preencoded_value(wandder_encode_job_t *job, void *valptr,
     buf = job->encodedspace;
     rem = job->encodedlen;
 
-    ret = encode_identifier(job->identclass, job->identifier, buf, rem);
+    if (job->identifier <= 30 && job->identclass != WANDDER_CLASS_UNKNOWN) {
+        ret = encode_identifier_fast(job->identclass, job->identifier, buf);
+    } else {
+        ret = encode_identifier(job->identclass, job->identifier, buf, rem);
+    }
 
     if (ret == 0) {
         return -1;
@@ -632,8 +647,14 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
         uint32_t *rem) {
     uint32_t ret;
     uint32_t tot = 0;
-    ret = encode_identifier(p->thisjob->identclass,
-            p->thisjob->identifier, *buf, *rem);
+    if (p->thisjob->identifier <= 30 &&
+            p->thisjob->identclass != WANDDER_CLASS_UNKNOWN) {
+        ret = encode_identifier_fast(p->thisjob->identclass,
+                p->thisjob->identifier, *buf);
+    } else {
+        ret = encode_identifier(p->thisjob->identclass,
+                p->thisjob->identifier, *buf, *rem);
+    }
 
     if (ret == 0) {
         return 0;

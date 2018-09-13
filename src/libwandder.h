@@ -242,6 +242,7 @@ struct wandder_pending {
     wandder_encode_job_t *thisjob;
     uint32_t childrensize;
 
+    wandder_pend_t *nextfree;
     wandder_pend_t *children;
     wandder_pend_t *lastchild;
     wandder_pend_t *siblings;
@@ -267,6 +268,10 @@ struct wandder_encoded_result {
 typedef struct wandder_encoder {
     wandder_pend_t *pendlist;
     wandder_pend_t *current;
+    wandder_pend_t *quickfree_head;
+    wandder_pend_t *quickfree_tail;
+    wandder_pend_t *quickfree_pc_head;
+    wandder_pend_t *quickfree_pc_tail;
     wandder_pend_t *freelist;
     wandder_pend_t *freeprecompute;
     wandder_encoded_result_t *freeresults;
