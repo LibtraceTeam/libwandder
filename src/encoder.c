@@ -334,12 +334,11 @@ static uint32_t encode_oid(wandder_encode_job_t *p, void *valptr,
     return len - 1;
 }
 
-static uint32_t encode_integer(wandder_encode_job_t *p, void *valptr,
+static inline uint32_t encode_integer(wandder_encode_job_t *p, void *valptr,
         uint32_t len) {
 
     int64_t val;
     uint8_t lenocts;
-    uint8_t encarray[8];
     uint8_t *ptr;
     int i;
 
@@ -370,18 +369,13 @@ static uint32_t encode_integer(wandder_encode_job_t *p, void *valptr,
         }
     }
 
-    for (i = 0; i < lenocts; i++) {
-        encarray[i] = (val & 0xff);
-        val = val >> 8;
-    }
-
     VALALLOC(lenocts, p);
     p->vallen = lenocts;
-
     ptr = p->valspace;
+
     for (i = lenocts - 1; i >= 0; i--) {
-        *ptr = encarray[i];
-        ptr += 1;
+        ptr[i] = (val & 0xff);
+        val = val >> 8;
     }
 
     return lenocts;
@@ -507,6 +501,11 @@ void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
     enc->current->thisjob->encodeas = encodeas;
     if (valptr != NULL && vallen > 0) {
         save_value_to_encode(enc->current->thisjob, valptr, vallen);
+        if (enc->current->parent) {
+            enc->current->parent->childrensize +=
+                (enc->current->thisjob->vallen +
+                 enc->current->thisjob->preamblen);
+        }
     } else {
         enc->current->thisjob->vallen = 0;
     }
@@ -536,6 +535,11 @@ void wandder_encode_next_preencoded(wandder_encoder_t *enc,
             enc->current->siblings = next;
             enc->current->parent->lastchild = next;
             enc->current = next;
+        }
+
+        if (enc->current->parent) {
+            enc->current->parent->childrensize +=
+                    enc->current->thisjob->encodedlen;
         }
     }
 
@@ -591,38 +595,37 @@ int wandder_encode_preencoded_value(wandder_encode_job_t *job, void *valptr,
     return 0;
 }
 
-void wandder_encode_endseq(wandder_encoder_t *enc) {
-
-    wandder_pend_t *p = NULL;
-    uint32_t totallen = 0;
+static inline int _wandder_encode_endseq(wandder_encoder_t *enc) {
 
     if (enc->current->parent == NULL) {
-        return;
+        return -1;
     }
+
 
     enc->current = enc->current->parent;
+    enc->current->thisjob->preamblen = calc_preamblen(
+            enc->current->thisjob->identifier, enc->current->childrensize);
 
-    p = enc->current->children;
-    while (p != NULL) {
-        /*
-        printf("child %u:%u %u %u %u\n",
-                p->thisjob->identifier, p->thisjob->encodeas,
-                p->thisjob->preamblen, p->childrensize,
-                p->thisjob->vallen);
-        */
-
-        if (p->childrensize > 0) {
-            totallen += (p->childrensize);
-        } else {
-            totallen += (p->thisjob->vallen + p->thisjob->preamblen);
-        }
-        p = p->siblings;
+    if (enc->current->parent) {
+        enc->current->parent->childrensize +=
+                enc->current->childrensize + enc->current->thisjob->preamblen;
     }
 
-    enc->current->thisjob->preamblen = calc_preamblen(
-            enc->current->thisjob->identifier, totallen);
-    //printf("seqcomplete %u %u\n", totallen, enc->current->thisjob->preamblen);
-    enc->current->childrensize = totallen + enc->current->thisjob->preamblen;
+    return 0;
+}
+
+void wandder_encode_endseq(wandder_encoder_t *enc) {
+    _wandder_encode_endseq(enc);
+}
+
+void wandder_encode_endseq_repeat(wandder_encoder_t *enc, int repeats) {
+    int i;
+
+    for (i = 0; i < repeats; i++) {
+        if (_wandder_encode_endseq(enc) == -1) {
+            break;
+        }
+    }
 }
 
 static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
@@ -643,8 +646,7 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
     if (p->childrensize != 0) {
         ret = encode_length(p->childrensize, *buf, *rem);
     } else {
-        ret = encode_length(p->thisjob->vallen + p->thisjob->preamblen,
-                *buf, *rem);
+        ret = encode_length(p->thisjob->vallen, *buf, *rem);
     }
 
     if (ret == 0) {
@@ -654,14 +656,22 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
     *buf += ret;
     *rem -= ret;
     tot += ret;
-
+    
+    /*
+    printf("%u -- %u:%u %u %u\n", *rem, p->thisjob->identifier,
+            p->thisjob->encodeas, p->thisjob->vallen,
+            p->childrensize);
+    */
     if (p->thisjob->vallen > 0) {
         if (*rem < p->thisjob->vallen) {
             fprintf(stderr,
                     "Encode error: not enough space for value\n");
+            assert(0);
             return 0;
         }
-        memcpy(*buf, p->thisjob->valspace, p->thisjob->vallen);
+        if (p->thisjob->valspace) {
+            memcpy(*buf, p->thisjob->valspace, p->thisjob->vallen);
+        }
 
         *buf += p->thisjob->vallen;
         *rem -= p->thisjob->vallen;
@@ -678,6 +688,18 @@ uint32_t encode_r(wandder_pend_t *p, uint8_t *buf, uint32_t rem) {
     while (p) {
 
         if (p->thisjob->encodedlen > 0) {
+            /*
+            printf("A %u -- %u:%u %u %u\n", rem, p->thisjob->identifier,
+                    p->thisjob->encodeas, p->thisjob->encodedlen,
+                    p->childrensize);
+            */
+            if (rem < p->thisjob->encodedlen) {
+                fprintf(stderr,
+                        "Encode error: not enough space for value\n");
+                assert(0);
+                return 0;
+            }
+
             memcpy(buf, p->thisjob->encodedspace, p->thisjob->encodedlen);
             buf += p->thisjob->encodedlen;
             rem -= p->thisjob->encodedlen;
@@ -749,7 +771,7 @@ wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
     }
 
     result->next = NULL;
-    result->len = enc->pendlist->childrensize;
+    result->len = enc->pendlist->childrensize + enc->pendlist->thisjob->preamblen;
     //printf("final size=%d\n", result->len);
     if (result->alloced < result->len) {
         uint32_t x = 512;

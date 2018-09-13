@@ -287,6 +287,7 @@ int wandder_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,
 void wandder_encode_next_preencoded(wandder_encoder_t *enc,
         wandder_encode_job_t **jobs, int jobcount);
 void wandder_encode_endseq(wandder_encoder_t *enc);
+void wandder_encode_endseq_repeat(wandder_encoder_t *enc, int repeats);
 wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc);
 void wandder_release_encoded_result(wandder_encoder_t *enc,
         wandder_encoded_result_t *res);
