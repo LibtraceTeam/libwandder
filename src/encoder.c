@@ -104,6 +104,7 @@ void free_wandder_encoder(wandder_encoder_t *enc) {
     while (p) {
         tmp = p;
         p = p->nextfree;
+        free(tmp->thisjob);
         free(tmp);
     }
 
@@ -162,7 +163,11 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
             }
             newp->shouldfree = 0;
         }
-        newp->thisjob = job;
+
+        newp->thisjob = (wandder_encode_job_t *)calloc(1,
+                sizeof(wandder_encode_job_t));
+        memcpy(newp->thisjob, job, sizeof(wandder_encode_job_t));
+
         if (!enc->quickfree_pc_tail) {
             enc->quickfree_pc_tail = newp;
             enc->quickfree_pc_head = newp;
@@ -223,6 +228,7 @@ static inline uint32_t calc_preamblen(uint32_t identifier, uint32_t len) {
         loglen = WANDDER_LOG256_SIZE(len);
         plen += (1 + loglen);
     }
+
     return plen;
 }
 
@@ -677,7 +683,6 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
     *buf += ret;
     *rem -= ret;
     tot += ret;
-    
     /*
     printf("%u -- %u:%u %u %u\n", *rem, p->thisjob->identifier,
             p->thisjob->encodeas, p->thisjob->vallen,
@@ -793,7 +798,8 @@ wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
 
     result->next = NULL;
     result->len = enc->pendlist->childrensize + enc->pendlist->thisjob->preamblen;
-    //printf("final size=%d\n", result->len);
+    //printf("final size=%d %d %d\n", result->len, enc->pendlist->childrensize,
+    //        enc->pendlist->thisjob->preamblen);
     if (result->alloced < result->len) {
         uint32_t x = 512;
         if (x < result->len) {
