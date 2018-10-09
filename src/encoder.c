@@ -227,6 +227,10 @@ static inline uint32_t calc_preamblen(uint32_t identifier, uint32_t len) {
     } else {
         loglen = WANDDER_LOG256_SIZE(len);
         plen += (1 + loglen);
+
+        if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
+            plen ++;
+        }
     }
 
     return plen;
@@ -309,9 +313,12 @@ static uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
         return 1;
     }
 
-    lenocts = WANDDER_LOG256_SIZE(len) + 1;
+    lenocts = WANDDER_LOG256_SIZE(len);
+    if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) {
+        lenocts ++;
+    }
 
-    *buf = ((uint8_t)(WANDDER_LOG256_SIZE(len))) | 0x80;
+    *buf = lenocts | 0x80;
 
     buf += 1;
     rem -= 1;
@@ -326,7 +333,7 @@ static uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
         len = len >> 8;
     }
 
-    return lenocts;
+    return lenocts + 1;
 
 }
 
@@ -599,7 +606,7 @@ int wandder_encode_preencoded_value(wandder_encode_job_t *job, void *valptr,
     buf += ret;
     rem -= ret;
 
-    ret = encode_length(job->vallen + job->preamblen, buf, rem);
+    ret = encode_length(job->vallen, buf, rem);
 
     if (ret == 0) {
         return -1;
@@ -683,11 +690,6 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
     *buf += ret;
     *rem -= ret;
     tot += ret;
-    /*
-    printf("%u -- %u:%u %u %u\n", *rem, p->thisjob->identifier,
-            p->thisjob->encodeas, p->thisjob->vallen,
-            p->childrensize);
-    */
     if (p->thisjob->vallen > 0) {
         if (*rem < p->thisjob->vallen) {
             fprintf(stderr,
@@ -714,11 +716,6 @@ uint32_t encode_r(wandder_pend_t *p, uint8_t *buf, uint32_t rem) {
     while (p) {
 
         if (p->thisjob->encodedlen > 0) {
-            /*
-            printf("A %u -- %u:%u %u %u\n", rem, p->thisjob->identifier,
-                    p->thisjob->encodeas, p->thisjob->encodedlen,
-                    p->childrensize);
-            */
             if (rem < p->thisjob->encodedlen) {
                 fprintf(stderr,
                         "Encode error: not enough space for value\n");
