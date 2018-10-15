@@ -29,6 +29,7 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 #define IS_CONSTRUCTED(x) ((x->identclass) & 0x01 ? 1: 0)
 #define ALLOC_MEMBERS(x) x.members = (struct wandder_dump_action *)malloc( \
@@ -247,12 +248,13 @@ struct wandder_pending {
     wandder_pend_t *lastchild;
     wandder_pend_t *siblings;
     wandder_pend_t *parent;
-    uint8_t shouldfree;
 };
 
 typedef struct wandder_encoded_result wandder_encoded_result_t;
+typedef struct wandder_encoder wandder_encoder_t;
 
 struct wandder_encoded_result {
+    wandder_encoder_t *encoder;
     uint8_t *encoded;
     uint32_t len;
     uint32_t alloced;
@@ -265,7 +267,7 @@ struct wandder_encoded_result {
  *
  * Almost all encoding operations will require a reference to a encoder.
  */
-typedef struct wandder_encoder {
+struct wandder_encoder {
     wandder_pend_t *pendlist;
     wandder_pend_t *current;
     wandder_pend_t *quickfree_head;
@@ -275,7 +277,9 @@ typedef struct wandder_encoder {
     wandder_pend_t *freelist;
     wandder_pend_t *freeprecompute;
     wandder_encoded_result_t *freeresults;
-} wandder_encoder_t;
+
+    pthread_mutex_t mutex;
+};
 
 
 /* Encoding API
@@ -296,6 +300,8 @@ void wandder_encode_endseq_repeat(wandder_encoder_t *enc, int repeats);
 wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc);
 void wandder_release_encoded_result(wandder_encoder_t *enc,
         wandder_encoded_result_t *res);
+void wandder_release_encoded_results(wandder_encoder_t *enc,
+        wandder_encoded_result_t *res, wandder_encoded_result_t *tail);
 
 /* Decoding API
  * ----------------------------------------------------

@@ -50,6 +50,7 @@ wandder_encoder_t *init_wandder_encoder(void) {
     wandder_encoder_t *enc = (wandder_encoder_t *)calloc(1,
             sizeof(wandder_encoder_t));
 
+    pthread_mutex_init(&(enc->mutex), NULL);
     return enc;
 }
 
@@ -108,6 +109,7 @@ void free_wandder_encoder(wandder_encoder_t *enc) {
         free(tmp);
     }
 
+    pthread_mutex_lock(&(enc->mutex));
     res = enc->freeresults;
     while (res) {
         restmp = res;
@@ -115,7 +117,9 @@ void free_wandder_encoder(wandder_encoder_t *enc) {
         free(restmp->encoded);
         free(restmp);
     }
+    pthread_mutex_unlock(&(enc->mutex));
 
+    pthread_mutex_destroy(&(enc->mutex));
     free(enc);
 }
 
@@ -136,7 +140,6 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
             newp = (wandder_pend_t *)calloc(1, sizeof(wandder_pend_t));
             newp->thisjob = (wandder_encode_job_t *)calloc(1,
                     sizeof(wandder_encode_job_t));
-            newp->shouldfree = 1;
         }
 
         if (!enc->quickfree_tail) {
@@ -161,11 +164,10 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
             if (job->vallen == 0) {
                 job->preamblen = 0;
             }
-            newp->shouldfree = 0;
+            newp->thisjob = (wandder_encode_job_t *)calloc(1,
+                    sizeof(wandder_encode_job_t));
         }
 
-        newp->thisjob = (wandder_encode_job_t *)calloc(1,
-                sizeof(wandder_encode_job_t));
         memcpy(newp->thisjob, job, sizeof(wandder_encode_job_t));
 
         if (!enc->quickfree_pc_tail) {
@@ -766,9 +768,10 @@ uint32_t encode_r(wandder_pend_t *p, uint8_t *buf, uint32_t rem) {
 void wandder_release_encoded_result(wandder_encoder_t *enc,
         wandder_encoded_result_t *res) {
 
-    if (enc) {
+    if (enc && pthread_mutex_trylock(&(enc->mutex)) == 0) {
         res->next = enc->freeresults;
         enc->freeresults = res;
+        pthread_mutex_unlock(&(enc->mutex));
     } else if (res) {
         if (res->encoded) {
             free(res->encoded);
@@ -778,13 +781,37 @@ void wandder_release_encoded_result(wandder_encoder_t *enc,
 
 }
 
+void wandder_release_encoded_results(wandder_encoder_t *enc,
+        wandder_encoded_result_t *res, wandder_encoded_result_t *tail) {
+
+    if (!enc) {
+        while (res != NULL) {
+            wandder_encoded_result_t *tmp = res;
+            res = res->next;
+            if (tmp->encoded) {
+                free(tmp->encoded);
+            }
+            free(tmp);
+        }
+        return;
+    }
+
+    pthread_mutex_lock(&(enc->mutex));
+
+    tail->next = enc->freeresults;
+    enc->freeresults = res;
+
+    pthread_mutex_unlock(&(enc->mutex));
+}
+
 wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
 
     wandder_encoded_result_t *result = NULL;
 
-    if (enc->freeresults) {
+    if (enc->freeresults && pthread_mutex_trylock(&(enc->mutex)) == 0) {
         result = enc->freeresults;
         enc->freeresults = result->next;
+        pthread_mutex_unlock(&(enc->mutex));
     } else {
         result = (wandder_encoded_result_t *)calloc(1,
                 sizeof(wandder_encoded_result_t));
@@ -793,6 +820,7 @@ wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
         result->alloced = 0;
     }
 
+    result->encoder = enc;
     result->next = NULL;
     result->len = enc->pendlist->childrensize + enc->pendlist->thisjob->preamblen;
     //printf("final size=%d %d %d\n", result->len, enc->pendlist->childrensize,
