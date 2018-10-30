@@ -21,11 +21,16 @@ gcc_PACKED
 EXTRA_LIBS=""
 
 AC_CHECK_LIB([m], [ceil],,math_found = 0)
+AC_CHECK_LIB([pthread], [pthread_mutex_trylock],,pthread_found=0)
 
 AC_CONFIG_FILES([Makefile src/Makefile])
 
 if test "$math_found" = 0; then
         AC_MSG_ERROR(Required library libm not found; use LDFLAGS to specify library location)
+fi
+
+if test "$pthread_found" = 0; then
+        AC_MSG_ERROR(Required library libpthread not found; use LDFLAGS to specify library location)
 fi
 
 
