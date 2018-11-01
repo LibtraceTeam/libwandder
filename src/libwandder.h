@@ -240,7 +240,7 @@ typedef struct wandder_encode_job {
 
 
 struct wandder_pending {
-    wandder_encode_job_t *thisjob;
+    wandder_encode_job_t thisjob;
     uint32_t childrensize;
 
     wandder_pend_t *nextfree;
