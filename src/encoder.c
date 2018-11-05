@@ -162,7 +162,11 @@ static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
             }
         }
 
-        newp->thisjob = *job;
+        newp->thisjob.identclass = job->identclass;
+        newp->thisjob.identifier = job->identifier;
+        newp->thisjob.encodeas = job->encodeas;
+        newp->thisjob.encodedspace = job->encodedspace;
+        newp->thisjob.encodedlen = job->encodedlen;
 
         if (!enc->quickfree_pc_tail) {
             enc->quickfree_pc_tail = newp;
@@ -292,8 +296,7 @@ static uint32_t encode_identifier(uint8_t class, uint32_t ident,
     return ind + 1;
 }
 
-static uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
-
+static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     uint8_t lenocts = 0;
     uint8_t encarray[128];
     uint8_t ind = 0;
