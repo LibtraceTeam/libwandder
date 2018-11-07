@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 The University of Waikato, Hamilton, New Zealand.
+ * Copyright (c) 2017, 2018 The University of Waikato, Hamilton, New Zealand.
  * All rights reserved.
  *
  * This file is part of libwandder.
