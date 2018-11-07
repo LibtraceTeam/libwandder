@@ -1,0 +1,36 @@
+Version 1.0.1
+=============
+
+Decoding:
+ * Added new API function to access ETSI CIN: wandder_etsili_get_cin()
+ * Added new API function to skip an encoded structure, including all of
+   its children: wandder_decode_skip()
+ * Add support for decoding ETSI LI microsecondTimestamp structures.
+ * Cache results of decoding fields so that subsequent searches do not
+   have to decode the same fields again.
+ * Improve ETSI LI decoder performance by avoiding decoding contents of
+   structures that we know won't contain the field we are looking for.
+ * Improve generalizedTS decoding performance.
+
+Encoding:
+ * Fix bug where sIPContents ETSI LI fields were encoded as a string rather
+   than an "IP" packet.
+ * Add API to allow users to create "pre-encoded" fields for constant data
+   values. The encoder then substitutes in the pre-encoded value directly
+   rather than re-encoding the value every single time it appears in an
+   encoded record.
+ * Replace recursive functions with iterative equivalents to minimise
+   function call overhead.
+ * Improved encoding performance for integer values.
+ * Improved encoding performance for single-byte identifiers.
+ * Numerous other performance enhancements.
+
+Other:
+ * Added specific configure check for libpthread to ensure that code that
+   links against us knows that libpthread is required.
+
+
+Version 1.0.0
+=============
+
+Initial public release.

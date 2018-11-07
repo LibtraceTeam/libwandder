@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 The University of Waikato, Hamilton, New Zealand.
+ * Copyright (c) 2017, 2018 The University of Waikato, Hamilton, New Zealand.
  * All rights reserved.
  *
  * This file is part of libwandder.
@@ -43,6 +43,14 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         wandder_dumper_t *curr, char *valstr, int len);
 static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+
+#define QUICK_DECODE(fail) \
+    ret = wandder_decode_next(etsidec->dec); \
+    if (ret <= 0) { \
+        return fail; \
+    } \
+    ident = wandder_get_identifier(etsidec->dec);
+
 
 static void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
     free(stack->stk);
@@ -95,6 +103,9 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
 {
     struct timeval tv;
     uint16_t savedlevel = 0;
+    uint32_t ident;
+    int ret;
+    uint8_t class;
 
 
     tv.tv_sec = 0;
@@ -107,34 +118,35 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
 
     /* Find PSHeader */
     wandder_reset_decoder(etsidec->dec);
-    wandder_found_t *found = NULL;
-    wandder_target_t pshdrtgt = {&(etsidec->pspdu), 1, false};
-
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &pshdrtgt, 1,
-                &found, 1) == 0) {
-        return tv;
-    }
+    QUICK_DECODE(tv);
+    QUICK_DECODE(tv);
 
     /* dec->current should be pointing right at PSHeader */
     savedlevel = wandder_get_level(etsidec->dec);
-
-    wandder_decode_next(etsidec->dec);
-    while (wandder_get_level(etsidec->dec) > savedlevel) {
-        if (wandder_get_identifier(etsidec->dec) == 5) {
-            tv = wandder_generalizedts_to_timeval(
-                    wandder_get_itemptr(etsidec->dec),
-                    wandder_get_itemlen(etsidec->dec));
-            break;
-        }
-        if (wandder_get_identifier(etsidec->dec) == 7) {
-            printf("got msts field, please write a parser for it!\n");
-
-            /* TODO parse msts field */
-            break;
-        }
-        wandder_decode_next(etsidec->dec);
+    if (ident != 1) {
+        return tv;
     }
-    wandder_free_found(found);
+
+    if ((ret = wandder_decode_sequence_until(etsidec->dec, 5)) < 0) {
+        return tv;
+    }
+
+    if (ret == 1) {
+        tv = wandder_generalizedts_to_timeval(etsidec->dec,
+                wandder_get_itemptr(etsidec->dec),
+                wandder_get_itemlen(etsidec->dec));
+        return tv;
+    } else if ((ret = wandder_decode_sequence_until(etsidec->dec, 7)) < 0) {
+        return tv;
+    }
+
+    if (ret == 1) {
+        QUICK_DECODE(tv);
+        tv.tv_sec = wandder_get_integer_value(etsidec->dec->current, NULL);
+        QUICK_DECODE(tv);
+        tv.tv_usec = wandder_get_integer_value(etsidec->dec->current, NULL);
+        return tv;
+    }
     return tv;
 
 }
@@ -239,7 +251,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             {
                 if (stringify_ipaddress(etsidec, etsidec->dec->current, curr,
                         valstr, 2048) == NULL) {
-                    fprintf(stderr, "Failed to interpret field %d:%d\n",
+                    fprintf(stderr, "Failed to interpret IP field %d:%d\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -248,7 +260,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             else if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
                 if (interpret_enum(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
-                    fprintf(stderr, "Failed to interpret field %d:%d\n",
+                    fprintf(stderr, "Failed to interpret enum field %d:%d\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -405,13 +417,50 @@ uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
 
 }
 
+uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
+
+    wandder_target_t cintgt = {&(etsidec->cid), 1, false};
+    uint32_t ident;
+    int ret;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return 0;
+    }
+
+    wandder_reset_decoder(etsidec->dec);
+    QUICK_DECODE(0);
+    QUICK_DECODE(0);
+    if (ident != 1) {
+        return 0;
+    }
+
+    do {
+        QUICK_DECODE(0);
+    } while (ident < 3);
+
+    if (ident != 3) {
+        return 0;
+    }
+
+    do {
+        QUICK_DECODE(0);
+    } while (ident < 1);
+
+    if (ident != 1) {
+        return 0;
+    }
+
+    return (uint32_t)(wandder_get_integer_value(etsidec->dec->current, NULL));
+
+}
+
 char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
         int spacelen) {
 
-    char *liidptr;
-
-    wandder_found_t *found = NULL;
-    wandder_target_t liidtgt = {&(etsidec->psheader), 1, false};
+    uint32_t ident;
+    int ret;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -420,26 +469,32 @@ char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
     }
 
     wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &liidtgt, 1,
-            &found, 1) == 0) {
-        wandder_free_found(found);
+    QUICK_DECODE(NULL);
+    QUICK_DECODE(NULL);
+    if (ident != 1) {
         return NULL;
     }
 
-    if (wandder_get_valuestr(found->list[0].item, space, (uint16_t)spacelen,
-            WANDDER_TAG_OCTETSTRING) == NULL) {
-        wandder_free_found(found);
+    do {
+        QUICK_DECODE(NULL);
+    } while (ident < 1);
+
+    if (ident != 1) {
         return NULL;
     }
-    wandder_free_found(found);
+
+    if (wandder_get_valuestr(etsidec->dec->current, space, (uint16_t)spacelen,
+            WANDDER_TAG_OCTETSTRING) == NULL) {
+        return NULL;
+    }
     return space;
 }
 
-int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
+static inline int _wandder_etsili_is_ka(wandder_etsispec_t *etsidec,
+        uint8_t isresp) {
 
-    wandder_found_t *found = NULL;
-    wandder_target_t katgt = {&(etsidec->tripayload), 3, false};
     int ret = -1;
+    uint32_t ident;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -447,45 +502,52 @@ int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
         return -1;
     }
 
+    /* Manual decode tends to be a lot faster than using the search
+     * method, especially when we know exactly what we're searching for
+     * and what we can skip entirely.
+     */
+
     wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
-            &found, 1) == 0) {
-        ret = 0;
-    } else {
-        ret = 1;
+    QUICK_DECODE(-1);
+    QUICK_DECODE(-1);
+    if (ident == 1) {
+        /* Skip pSHeader */
+        wandder_decode_skip(etsidec->dec);
+        QUICK_DECODE(-1);
     }
-    wandder_free_found(found);
-    return ret;
+
+    if (ident != 2) {
+        return 0;
+    }
+
+    QUICK_DECODE(-1);
+    if (ident != 2) {
+        return 0;
+    }
+
+    QUICK_DECODE(-1);
+    if (!isresp && ident != 3) {
+        return 0;
+    }
+    if (isresp && ident != 4) {
+        return 0;
+    }
+    return 1;
+}
+
+int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec) {
+    return _wandder_etsili_is_ka(etsidec, 0);
 }
 
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec) {
 
-    wandder_found_t *found = NULL;
-    wandder_target_t katgt = {&(etsidec->tripayload), 4, false};
-    int ret = -1;
-
-    if (etsidec->decstate == 0) {
-        fprintf(stderr, "No buffer attached to this decoder -- please call"
-                "wandder_attach_etsili_buffer() first!\n");
-        return -1;
-    }
-
-    wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &katgt, 1,
-            &found, 1) == 0) {
-        ret = 0;
-    } else {
-        ret = 1;
-    }
-
-    wandder_free_found(found);
-    return ret;
+    return _wandder_etsili_is_ka(etsidec, 1);
 }
 
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
-    wandder_found_t *found = NULL;
-    wandder_target_t seqtgt = {&(etsidec->psheader), 4, false};
+    uint32_t ident;
     int64_t res;
+    int ret;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -494,13 +556,26 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
     }
 
     wandder_reset_decoder(etsidec->dec);
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &seqtgt, 1,
-            &found, 1) == 0) {
+    QUICK_DECODE(-1);
+    QUICK_DECODE(-1);
+    if (ident != 1) {
         return -1;
     }
 
-    res = wandder_get_integer_value(found->list[0].item, NULL);
-    wandder_free_found(found);
+    do {
+        QUICK_DECODE(-1);
+        if (wandder_get_class(etsidec->dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT
+                || wandder_get_class(etsidec->dec) ==
+                        WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
+            wandder_decode_skip(etsidec->dec);
+        }
+    } while (ident < 4);
+
+    if (ident != 4) {
+        return -1;
+    }
+
+    res = wandder_get_integer_value(etsidec->dec->current, NULL);
     return res;
 }
 
@@ -1024,7 +1099,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "sIPContent",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_OCTETSTRING
+                .interpretas = WANDDER_TAG_IPPACKET
         };
     dec->sipmessage.sequence = WANDDER_NOACTION;
 

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017 The University of Waikato, Hamilton, New Zealand.
+ * Copyright (c) 2017, 2018 The University of Waikato, Hamilton, New Zealand.
  * All rights reserved.
  *
  * This file is part of libwandder.
@@ -108,6 +108,7 @@ uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *dec,
         uint32_t *len, uint8_t *ident, char *name, int namelen);
 char *wandder_etsili_get_liid(wandder_etsispec_t *dec, char *space,
         int spacelen);
+uint32_t wandder_etsili_get_cin(wandder_etsispec_t *dec);
 int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec);
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
