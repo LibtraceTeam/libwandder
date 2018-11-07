@@ -147,31 +147,6 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
         tv.tv_usec = wandder_get_integer_value(etsidec->dec->current, NULL);
         return tv;
     }
-#if 0
-    do {
-        QUICK_DECODE(tv);
-        if (ident == 5 || ident == 7) {
-            break;
-        }
-        class = wandder_get_class(etsidec->dec);
-        if (class == WANDDER_CLASS_CONTEXT_CONSTRUCT
-                || class == WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
-            wandder_decode_skip(etsidec->dec);
-        }
-    } while (ident < 8);
-
-    if (ident == 5) {
-        tv = wandder_generalizedts_to_timeval(etsidec->dec,
-                wandder_get_itemptr(etsidec->dec),
-                wandder_get_itemlen(etsidec->dec));
-        return tv;
-    }
-
-    if (ident == 7) {
-        printf("got msts field, please write a parser for it!\n");
-        return tv;
-    }
-#endif
     return tv;
 
 }
