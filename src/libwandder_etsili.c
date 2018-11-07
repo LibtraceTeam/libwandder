@@ -141,7 +141,10 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
     }
 
     if (ret == 1) {
-        printf("got msts field, please write a parser for it!\n");
+        QUICK_DECODE(tv);
+        tv.tv_sec = wandder_get_integer_value(etsidec->dec->current, NULL);
+        QUICK_DECODE(tv);
+        tv.tv_usec = wandder_get_integer_value(etsidec->dec->current, NULL);
         return tv;
     }
 #if 0

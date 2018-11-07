@@ -47,45 +47,42 @@
 
 wandder_encoder_t *init_wandder_encoder(void) {
 
-    wandder_encoder_t *enc = (wandder_encoder_t *)malloc(
+    wandder_encoder_t *enc = (wandder_encoder_t *)calloc(1,
             sizeof(wandder_encoder_t));
 
-    enc->pendlist = NULL;
-    enc->current = NULL;
-    enc->freelist = NULL;
-    enc->freeresults = NULL;
-
+    pthread_mutex_init(&(enc->mutex), NULL);
     return enc;
 }
 
-static inline void free_single_pending(wandder_encoder_t *enc,
+static inline void free_single_pending(wandder_pend_t **freelist,
         wandder_pend_t *p) {
 
     p->lastchild = NULL;
     p->siblings = NULL;
     p->parent = NULL;
-    p->children = enc->freelist;
-    enc->freelist = p;
-}
-
-static void free_pending_r(wandder_encoder_t *enc, wandder_pend_t *p) {
-    if (p->children) {
-        free_pending_r(enc, p->children);
-    }
-
-    if (p->siblings) {
-        free_pending_r(enc, p->siblings);
-    }
-
-    free_single_pending(enc, p);
+    p->children = NULL;
+    p->nextfree = *freelist;
+    *freelist = p;
 }
 
 void reset_wandder_encoder(wandder_encoder_t *enc) {
+    wandder_pend_t *p, *tmp, *savedsib;
 
-    /* TODO walk encoding tree and free all items */
-    if (enc->pendlist) {
-        free_pending_r(enc, enc->pendlist);
+    if (enc->quickfree_tail) {
+        enc->quickfree_tail->nextfree = enc->freelist;
+        enc->freelist = enc->quickfree_head;
     }
+
+    if (enc->quickfree_pc_tail) {
+        enc->quickfree_pc_tail->nextfree = enc->freeprecompute;
+        enc->freeprecompute = enc->quickfree_pc_head;
+    }
+
+
+    enc->quickfree_tail = NULL;
+    enc->quickfree_head = NULL;
+    enc->quickfree_pc_tail = NULL;
+    enc->quickfree_pc_head = NULL;
     enc->pendlist = NULL;
     enc->current = NULL;
 }
@@ -98,11 +95,19 @@ void free_wandder_encoder(wandder_encoder_t *enc) {
     p = enc->freelist;
     while (p) {
         tmp = p;
-        p = p->children;
-        free(tmp->valspace);
+        p = p->nextfree;
+        free(tmp->thisjob.valspace);
         free(tmp);
     }
 
+    p = enc->freeprecompute;
+    while (p) {
+        tmp = p;
+        p = p->nextfree;
+        free(tmp);
+    }
+
+    pthread_mutex_lock(&(enc->mutex));
     res = enc->freeresults;
     while (res) {
         restmp = res;
@@ -110,31 +115,71 @@ void free_wandder_encoder(wandder_encoder_t *enc) {
         free(restmp->encoded);
         free(restmp);
     }
+    pthread_mutex_unlock(&(enc->mutex));
 
+    pthread_mutex_destroy(&(enc->mutex));
     free(enc);
 }
 
 static inline wandder_pend_t *new_pending(wandder_encoder_t *enc,
-        wandder_pend_t *parent) {
+        wandder_encode_job_t *job, wandder_pend_t *parent) {
     wandder_pend_t *newp;
 
-    if (enc->freelist) {
-        newp = enc->freelist;
-        enc->freelist = newp->children;
+    if (!job) {
+        if (enc->freelist) {
+            newp = enc->freelist;
+            enc->freelist = newp->nextfree;
+            newp->nextfree = NULL;
+            newp->lastchild = NULL;
+            newp->siblings = NULL;
+            newp->parent = NULL;
+            newp->children = NULL;
+        } else {
+            newp = (wandder_pend_t *)calloc(1, sizeof(wandder_pend_t));
+        }
+
+        if (!enc->quickfree_tail) {
+            enc->quickfree_tail = newp;
+            enc->quickfree_head = newp;
+            newp->nextfree = NULL;
+        } else {
+            newp->nextfree = enc->quickfree_head;
+            enc->quickfree_head = newp;
+        }
     } else {
-        newp = (wandder_pend_t *)malloc(sizeof(wandder_pend_t));
-        newp->valspace = NULL;
-        newp->valalloced = 0;
+        if (enc->freeprecompute) {
+            newp = enc->freeprecompute;
+            enc->freeprecompute = newp->nextfree;
+            newp->nextfree = NULL;
+            newp->lastchild = NULL;
+            newp->siblings = NULL;
+            newp->parent = NULL;
+            newp->children = NULL;
+        } else {
+            newp = (wandder_pend_t *)calloc(1, sizeof(wandder_pend_t));
+            if (job->vallen == 0) {
+                job->preamblen = 0;
+            }
+        }
+
+        newp->thisjob.identclass = job->identclass;
+        newp->thisjob.identifier = job->identifier;
+        newp->thisjob.encodeas = job->encodeas;
+        newp->thisjob.encodedspace = job->encodedspace;
+        newp->thisjob.encodedlen = job->encodedlen;
+
+        if (!enc->quickfree_pc_tail) {
+            enc->quickfree_pc_tail = newp;
+            enc->quickfree_pc_head = newp;
+            newp->nextfree = NULL;
+        } else {
+            newp->nextfree = enc->quickfree_pc_head;
+            enc->quickfree_pc_head = newp;
+        }
     }
 
-    newp->vallen = 0;
-    newp->identclass = WANDDER_CLASS_UNKNOWN;
-    newp->encodeas = WANDDER_TAG_SEQUENCE;
-    newp->identifier = 0;
-    newp->children = NULL;
-    newp->lastchild = NULL;
-    newp->siblings = NULL;
     newp->parent = parent;
+    newp->childrensize = 0;
 
     return newp;
 }
@@ -166,24 +211,37 @@ static inline int64_t WANDDER_EXTRA_OCTET_THRESH(uint8_t lenocts) {
     return 36028797018963968;
 }
 
-static inline uint32_t calc_preamblen(wandder_pend_t *p) {
+static inline uint32_t calc_preamblen(uint32_t identifier, uint32_t len) {
     uint32_t plen = 0;
     uint32_t loglen = 0;
 
-    if (p->identifier <= 30) {
+    if (identifier <= 30) {
         plen += 1;
     } else {
-        loglen = WANDDER_LOG128_SIZE(p->identifier);
+        loglen = WANDDER_LOG128_SIZE(identifier);
         plen += (1 + loglen);
     }
 
-    if (p->vallen < 128) {
+    if (len < 128) {
         plen += 1;
     } else {
-        loglen = WANDDER_LOG256_SIZE(p->vallen);
+        loglen = WANDDER_LOG256_SIZE(len);
         plen += (1 + loglen);
+
+        if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
+            plen ++;
+        }
     }
+
     return plen;
+}
+
+static inline uint32_t encode_identifier_fast(uint8_t class, uint32_t ident,
+        uint8_t *buf) {
+
+    /* Single byte identifier */
+    *buf = (uint8_t)((class << 5) | ident);
+    return 1;
 }
 
 static uint32_t encode_identifier(uint8_t class, uint32_t ident,
@@ -238,8 +296,7 @@ static uint32_t encode_identifier(uint8_t class, uint32_t ident,
     return ind + 1;
 }
 
-static uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
-
+static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     uint8_t lenocts = 0;
     uint8_t encarray[128];
     uint8_t ind = 0;
@@ -255,33 +312,32 @@ static uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
         return 1;
     }
 
-    *buf = ((uint8_t)(WANDDER_LOG256_SIZE(len))) | 0x80;
+    lenocts = WANDDER_LOG256_SIZE(len);
+    if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) {
+        lenocts ++;
+    }
+
+    *buf = lenocts | 0x80;
 
     buf += 1;
     rem -= 1;
 
-    while (len > 0) {
-        encarray[ind] = (len & 0xff);
+    if (rem < lenocts) {
+        fprintf(stderr, "Not enough bytes left to encode length field\n");
+        return 0;
+    }
+
+    for (i = lenocts - 1; i >= 0; i--) {
+        *(buf + i) = (len & 0xff);
         len = len >> 8;
-        ind += 1;
     }
 
-    for (i = ind - 1; i >= 0; i--) {
-        if (rem == 0) {
-            fprintf(stderr, "Encode error: no more space while encoding length\n");
-            return 0;
-        }
-
-        *buf = encarray[i];
-        buf += 1;
-        rem -= 1;
-    }
-
-    return ind + 1;
+    return lenocts + 1;
 
 }
 
-static uint32_t encode_oid(wandder_pend_t *p, void *valptr, uint32_t len) {
+static uint32_t encode_oid(wandder_encode_job_t *p, void *valptr,
+        uint32_t len) {
 
     uint8_t *ptr;
     uint8_t *cast = (uint8_t *)valptr;
@@ -301,11 +357,11 @@ static uint32_t encode_oid(wandder_pend_t *p, void *valptr, uint32_t len) {
     return len - 1;
 }
 
-static uint32_t encode_integer(wandder_pend_t *p, void *valptr, uint32_t len) {
+static inline uint32_t encode_integer(wandder_encode_job_t *p, void *valptr,
+        uint32_t len) {
 
     int64_t val;
     uint8_t lenocts;
-    uint8_t encarray[8];
     uint8_t *ptr;
     int i;
 
@@ -336,24 +392,20 @@ static uint32_t encode_integer(wandder_pend_t *p, void *valptr, uint32_t len) {
         }
     }
 
-    for (i = 0; i < lenocts; i++) {
-        encarray[i] = (val & 0xff);
-        val = val >> 8;
-    }
-
     VALALLOC(lenocts, p);
     p->vallen = lenocts;
-
     ptr = p->valspace;
+
     for (i = lenocts - 1; i >= 0; i--) {
-        *ptr = encarray[i];
-        ptr += 1;
+        ptr[i] = (val & 0xff);
+        val = val >> 8;
     }
 
     return lenocts;
 }
 
-static uint32_t encode_gtime(wandder_pend_t *p, void *valptr, uint32_t len) {
+static uint32_t encode_gtime(wandder_encode_job_t *p, void *valptr,
+        uint32_t len) {
 
     struct timeval *tv = (struct timeval *)valptr;
     struct tm tm;
@@ -386,111 +438,277 @@ static uint32_t encode_gtime(wandder_pend_t *p, void *valptr, uint32_t len) {
     return (uint32_t)towrite;
 }
 
-static uint32_t encode_value(wandder_pend_t *p, void *valptr, uint32_t vallen) {
+static inline uint32_t save_value_to_encode(wandder_encode_job_t *job, void *valptr,
+        uint32_t vallen) {
 
-    switch(p->encodeas) {
+    switch(job->encodeas) {
         case WANDDER_TAG_OCTETSTRING:
         case WANDDER_TAG_UTF8STR:
         case WANDDER_TAG_NUMERIC:
         case WANDDER_TAG_PRINTABLE:
         case WANDDER_TAG_IA5:
         case WANDDER_TAG_RELATIVEOID:
-            VALALLOC(vallen, p);
-            memcpy(p->valspace, valptr, vallen);
-            p->vallen = vallen;
+            VALALLOC(vallen, job);
+            memcpy(job->valspace, valptr, vallen);
+            job->vallen = vallen;
+            job->preamblen = calc_preamblen(job->identifier, vallen);
             break;
 
         case WANDDER_TAG_GENERALTIME:
             /* Timeval to general TS */
-            if (encode_gtime(p, valptr, vallen) == 0) {
+            if (encode_gtime(job, valptr, vallen) == 0) {
                 return 0;
             }
+            job->preamblen = calc_preamblen(job->identifier, vallen);
             break;
         case WANDDER_TAG_INTEGER:
         case WANDDER_TAG_ENUM:
             /* Signed int to Integer */
-            if (encode_integer(p, valptr, vallen) == 0) {
+            if (encode_integer(job, valptr, vallen) == 0) {
                 return 0;
             }
+            job->preamblen = calc_preamblen(job->identifier, vallen);
             break;
 
         case WANDDER_TAG_OID:
             /* Byte array to OID */
-            if (encode_oid(p, valptr, vallen) == 0) {
+            if (encode_oid(job, valptr, vallen) == 0) {
                 return 0;
             }
+            job->preamblen = calc_preamblen(job->identifier, vallen);
             break;
 
 
         case WANDDER_TAG_NULL:
         case WANDDER_TAG_SEQUENCE:
         case WANDDER_TAG_SET:
-            p->vallen = 0;
+            job->vallen = 0;
+            job->preamblen = 0;
             break;
 
         case WANDDER_TAG_IPPACKET:
-            p->vallen = vallen;
+            job->vallen = vallen;
+            job->preamblen = calc_preamblen(job->identifier, vallen);
             break;
 
         default:
             fprintf(stderr, "Encode error: unable to encode tag type %d\n",
-                    p->encodeas);
+                    job->encodeas);
             return 0;
     }
-
 }
 
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen) {
 
+    wandder_encode_job_t *job = &(enc->current->thisjob);
+
     if (enc->pendlist == NULL) {
         /* First item */
-        enc->pendlist = new_pending(enc, NULL);
+        enc->pendlist = new_pending(enc, NULL, NULL);
         enc->current = enc->pendlist;
-    } else if (IS_CONSTRUCTED(enc->current) && enc->current->children == NULL) {
-        wandder_pend_t *next = new_pending(enc, enc->current);
+    } else if (IS_CONSTRUCTED(job) &&
+            enc->current->children == NULL) {
+        wandder_pend_t *next = new_pending(enc, NULL, enc->current);
         enc->current->children = next;
         enc->current->lastchild = next;
         enc->current = next;
     } else {
         /* Must be a sibling */
-        wandder_pend_t *next = new_pending(enc, enc->current->parent);
+        wandder_pend_t *next = new_pending(enc, NULL, enc->current->parent);
         enc->current->siblings = next;
         enc->current->parent->lastchild = next;
         enc->current = next;
     }
 
-    enc->current->identclass = itemclass;
-    enc->current->identifier = idnum;
-    enc->current->encodeas = encodeas;
+    enc->current->thisjob.identclass = itemclass;
+    enc->current->thisjob.identifier = idnum;
+    enc->current->thisjob.encodeas = encodeas;
     if (valptr != NULL && vallen > 0) {
-        encode_value(enc->current, valptr, vallen);
+        save_value_to_encode(&(enc->current->thisjob), valptr, vallen);
+        if (enc->current->parent) {
+            enc->current->parent->childrensize +=
+                (enc->current->thisjob.vallen +
+                 enc->current->thisjob.preamblen);
+        }
     } else {
-        enc->current->vallen = 0;
+        enc->current->thisjob.vallen = 0;
     }
 
 }
 
+void wandder_encode_next_preencoded(wandder_encoder_t *enc,
+        wandder_encode_job_t **jobs, int jobcount) {
 
-void wandder_encode_endseq(wandder_encoder_t *enc) {
+    int i;
+    for (i = 0; i < jobcount; i++) {
+        wandder_encode_job_t *thisjob = &(enc->current->thisjob);
+        wandder_encode_job_t *job = jobs[i];
 
-    wandder_pend_t *p = NULL;
-    uint32_t totallen = 0;
+        if (enc->pendlist == NULL) {
+            /* First item */
+            enc->pendlist = new_pending(enc, job, NULL);
+            enc->current = enc->pendlist;
+        } else if (IS_CONSTRUCTED(thisjob) &&
+                enc->current->children == NULL) {
+            wandder_pend_t *next = new_pending(enc, job, enc->current);
+            enc->current->children = next;
+            enc->current->lastchild = next;
+            enc->current = next;
+        } else {
+            /* Must be a sibling */
+            wandder_pend_t *next = new_pending(enc, job, enc->current->parent);
+            enc->current->siblings = next;
+            enc->current->parent->lastchild = next;
+            enc->current = next;
+        }
+
+        if (enc->current->parent) {
+            enc->current->parent->childrensize +=
+                    enc->current->thisjob.encodedlen;
+        }
+    }
+
+    /*
+    printf("P %u %u %u %u %u\n", enc->current->thisjob.identclass,
+            enc->current->thisjob.identifier,
+            enc->current->thisjob.encodeas,
+            enc->current->thisjob.vallen,
+            enc->current->thisjob.preamblen);
+    */
+}
+
+int wandder_encode_preencoded_value(wandder_encode_job_t *job, void *valptr,
+        uint32_t vallen) {
+
+    uint8_t *buf;
+    uint32_t rem, ret;
+
+    save_value_to_encode(job, valptr, vallen);
+    if (vallen == 0) {
+        return 0;
+    }
+
+    job->encodedspace = (uint8_t *)malloc(job->preamblen + job->vallen);
+    job->encodedlen = job->preamblen + job->vallen;
+
+    buf = job->encodedspace;
+    rem = job->encodedlen;
+
+    if (job->identifier <= 30 && job->identclass != WANDDER_CLASS_UNKNOWN) {
+        ret = encode_identifier_fast(job->identclass, job->identifier, buf);
+    } else {
+        ret = encode_identifier(job->identclass, job->identifier, buf, rem);
+    }
+
+    if (ret == 0) {
+        return -1;
+    }
+
+    buf += ret;
+    rem -= ret;
+
+    ret = encode_length(job->vallen, buf, rem);
+
+    if (ret == 0) {
+        return -1;
+    }
+
+    buf += ret;
+    rem -= ret;
+
+    if (rem < job->vallen) {
+        fprintf(stderr, "Encode error: not enough space for value\n");
+        return -1;
+    }
+    memcpy(buf, job->valspace, job->vallen);
+    return 0;
+}
+
+static inline int _wandder_encode_endseq(wandder_encoder_t *enc) {
 
     if (enc->current->parent == NULL) {
-        return;
+        return -1;
     }
+
 
     enc->current = enc->current->parent;
+    enc->current->thisjob.preamblen = calc_preamblen(
+            enc->current->thisjob.identifier, enc->current->childrensize);
 
-    /* All children are complete, can calculate length for parent */
-    p = enc->current->children;
-    while (p != NULL) {
-        totallen += (p->vallen + calc_preamblen(p));
-        p = p->siblings;
+    if (enc->current->parent) {
+        enc->current->parent->childrensize +=
+                enc->current->childrensize + enc->current->thisjob.preamblen;
     }
 
-    enc->current->vallen = totallen;
+    return 0;
+}
+
+void wandder_encode_endseq(wandder_encoder_t *enc) {
+    _wandder_encode_endseq(enc);
+}
+
+void wandder_encode_endseq_repeat(wandder_encoder_t *enc, int repeats) {
+    int i;
+
+    for (i = 0; i < repeats; i++) {
+        if (_wandder_encode_endseq(enc) == -1) {
+            break;
+        }
+    }
+}
+
+static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
+        uint32_t *rem) {
+    uint32_t ret;
+    uint32_t tot = 0;
+    if (p->thisjob.identifier <= 30 &&
+            p->thisjob.identclass != WANDDER_CLASS_UNKNOWN) {
+        ret = encode_identifier_fast(p->thisjob.identclass,
+                p->thisjob.identifier, *buf);
+    } else {
+        ret = encode_identifier(p->thisjob.identclass,
+                p->thisjob.identifier, *buf, *rem);
+    }
+
+    if (ret == 0) {
+        return 0;
+    }
+
+    *buf += ret;
+    *rem -= ret;
+    tot += ret;
+
+    if (p->childrensize != 0) {
+        ret = encode_length(p->childrensize, *buf, *rem);
+    } else {
+        ret = encode_length(p->thisjob.vallen, *buf, *rem);
+    }
+
+    if (ret == 0) {
+        return 0;
+    }
+
+    *buf += ret;
+    *rem -= ret;
+    tot += ret;
+    if (p->thisjob.vallen > 0) {
+        if (*rem < p->thisjob.vallen) {
+            fprintf(stderr,
+                    "Encode error: not enough space for value\n");
+            assert(0);
+            return 0;
+        }
+        if (p->thisjob.valspace) {
+            memcpy(*buf, p->thisjob.valspace, p->thisjob.vallen);
+        }
+
+        *buf += p->thisjob.vallen;
+        *rem -= p->thisjob.vallen;
+        tot += p->thisjob.vallen;
+    }
+
+    return tot;
 }
 
 uint32_t encode_r(wandder_pend_t *p, uint8_t *buf, uint32_t rem) {
@@ -499,43 +717,31 @@ uint32_t encode_r(wandder_pend_t *p, uint8_t *buf, uint32_t rem) {
 
     while (p) {
 
-        ret = encode_identifier(p->identclass, p->identifier, buf, rem);
+        if (p->thisjob.encodedlen > 0) {
+            if (rem < p->thisjob.encodedlen) {
+                fprintf(stderr,
+                        "Encode error: not enough space for value\n");
+                assert(0);
+                return 0;
+            }
 
-        if (ret == 0) {
-            break;
+            memcpy(buf, p->thisjob.encodedspace, p->thisjob.encodedlen);
+            buf += p->thisjob.encodedlen;
+            rem -= p->thisjob.encodedlen;
+            tot += p->thisjob.encodedlen;
+
+            assert(p->children == NULL);
+
+        } else {
+            if ((ret = encode_pending(p, &buf, &rem)) == 0) {
+                break;
+            }
+            tot += ret;
         }
-
-        buf += ret;
-        rem -= ret;
-        tot += ret;
-
-        ret = encode_length(p->vallen, buf, rem);
-
-        if (ret == 0) {
-            break;
-        }
-
-        buf += ret;
-        rem -= ret;
-        tot += ret;
 
         if (p->children) {
             p = p->children;
             continue;
-        }
-
-        if (p->encodeas != WANDDER_TAG_NULL && p->encodeas != WANDDER_TAG_SET
-                && p->encodeas != WANDDER_TAG_SEQUENCE &&
-                p->encodeas != WANDDER_TAG_IPPACKET) {
-            if (rem < p->vallen) {
-                fprintf(stderr, "Encode error: not enough space for value\n");
-                return 0;
-            }
-            memcpy(buf, p->valspace, p->vallen);
-
-            buf += p->vallen;
-            rem -= p->vallen;
-            tot += p->vallen;
         }
 
         if (p->siblings) {
@@ -562,9 +768,10 @@ uint32_t encode_r(wandder_pend_t *p, uint8_t *buf, uint32_t rem) {
 void wandder_release_encoded_result(wandder_encoder_t *enc,
         wandder_encoded_result_t *res) {
 
-    if (enc) {
+    if (enc && pthread_mutex_trylock(&(enc->mutex)) == 0) {
         res->next = enc->freeresults;
         enc->freeresults = res;
+        pthread_mutex_unlock(&(enc->mutex));
     } else if (res) {
         if (res->encoded) {
             free(res->encoded);
@@ -574,13 +781,37 @@ void wandder_release_encoded_result(wandder_encoder_t *enc,
 
 }
 
+void wandder_release_encoded_results(wandder_encoder_t *enc,
+        wandder_encoded_result_t *res, wandder_encoded_result_t *tail) {
+
+    if (!enc) {
+        while (res != NULL) {
+            wandder_encoded_result_t *tmp = res;
+            res = res->next;
+            if (tmp->encoded) {
+                free(tmp->encoded);
+            }
+            free(tmp);
+        }
+        return;
+    }
+
+    pthread_mutex_lock(&(enc->mutex));
+
+    tail->next = enc->freeresults;
+    enc->freeresults = res;
+
+    pthread_mutex_unlock(&(enc->mutex));
+}
+
 wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
 
     wandder_encoded_result_t *result = NULL;
 
-    if (enc->freeresults) {
+    if (enc->freeresults && pthread_mutex_trylock(&(enc->mutex)) == 0) {
         result = enc->freeresults;
         enc->freeresults = result->next;
+        pthread_mutex_unlock(&(enc->mutex));
     } else {
         result = (wandder_encoded_result_t *)calloc(1,
                 sizeof(wandder_encoded_result_t));
@@ -589,8 +820,11 @@ wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
         result->alloced = 0;
     }
 
+    result->encoder = enc;
     result->next = NULL;
-    result->len = enc->pendlist->vallen + calc_preamblen(enc->pendlist);
+    result->len = enc->pendlist->childrensize + enc->pendlist->thisjob.preamblen;
+    //printf("final size=%d %d %d\n", result->len, enc->pendlist->childrensize,
+    //        enc->pendlist->thisjob.preamblen);
     if (result->alloced < result->len) {
         uint32_t x = 512;
         if (x < result->len) {
