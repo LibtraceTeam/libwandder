@@ -105,7 +105,7 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
     }
 
     if (copy) {
-        dec->source = (char *)malloc(len);
+        dec->source = (uint8_t *)malloc(len);
         memcpy(dec->source, source, len);
         dec->ownsource = true;
     } else {
