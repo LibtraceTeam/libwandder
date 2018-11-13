@@ -361,7 +361,7 @@ static inline uint32_t encode_integer(wandder_encode_job_t *p, void *valptr,
         uint32_t len) {
 
     int64_t val;
-    uint8_t lenocts;
+    uint16_t lenocts;
     uint8_t *ptr;
     int i;
 
@@ -438,7 +438,7 @@ static uint32_t encode_gtime(wandder_encode_job_t *p, void *valptr,
     return (uint32_t)towrite;
 }
 
-static inline uint32_t save_value_to_encode(wandder_encode_job_t *job, void *valptr,
+static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
         uint32_t vallen) {
 
     switch(job->encodeas) {
@@ -457,7 +457,7 @@ static inline uint32_t save_value_to_encode(wandder_encode_job_t *job, void *val
         case WANDDER_TAG_GENERALTIME:
             /* Timeval to general TS */
             if (encode_gtime(job, valptr, vallen) == 0) {
-                return 0;
+                return;
             }
             job->preamblen = calc_preamblen(job->identifier, vallen);
             break;
@@ -465,7 +465,7 @@ static inline uint32_t save_value_to_encode(wandder_encode_job_t *job, void *val
         case WANDDER_TAG_ENUM:
             /* Signed int to Integer */
             if (encode_integer(job, valptr, vallen) == 0) {
-                return 0;
+                return;
             }
             job->preamblen = calc_preamblen(job->identifier, vallen);
             break;
@@ -473,7 +473,7 @@ static inline uint32_t save_value_to_encode(wandder_encode_job_t *job, void *val
         case WANDDER_TAG_OID:
             /* Byte array to OID */
             if (encode_oid(job, valptr, vallen) == 0) {
-                return 0;
+                return;
             }
             job->preamblen = calc_preamblen(job->identifier, vallen);
             break;
@@ -498,7 +498,7 @@ static inline uint32_t save_value_to_encode(wandder_encode_job_t *job, void *val
         default:
             fprintf(stderr, "Encode error: unable to encode tag type %d\n",
                     job->encodeas);
-            return 0;
+            return;
     }
 }
 

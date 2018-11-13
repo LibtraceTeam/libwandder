@@ -30,6 +30,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #define IS_CONSTRUCTED(x) ((x->identclass) & 0x01 ? 1: 0)
 #define ALLOC_MEMBERS(x) x.members = (struct wandder_dump_action *)malloc( \

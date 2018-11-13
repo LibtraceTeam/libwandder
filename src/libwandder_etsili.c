@@ -26,6 +26,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <time.h>
@@ -133,7 +135,7 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
 
     if (ret == 1) {
         tv = wandder_generalizedts_to_timeval(etsidec->dec,
-                wandder_get_itemptr(etsidec->dec),
+                (char *)(wandder_get_itemptr(etsidec->dec)),
                 wandder_get_itemlen(etsidec->dec));
         return tv;
     } else if ((ret = wandder_decode_sequence_until(etsidec->dec, 7)) < 0) {
