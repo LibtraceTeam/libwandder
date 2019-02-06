@@ -9,8 +9,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y equivs devscripts dpkg-dev quilt curl apt-transport-https \
     apt-utils ssl-cert ca-certificates gnupg lsb-release debhelper git
-apt-get upgrade -y
 
-debchange --newversion ${CI_COMMIT_REF_NAME} -b "New upstream release"
+dpkg-parsechangelog -S version | grep -q ${CI_COMMIT_REF_NAME} || debchange --newversion ${CI_COMMIT_REF_NAME} -b "New upstream release"
 mk-build-deps -i -r -t 'apt-get -f -y --force-yes'
 dpkg-buildpackage -b -us -uc -rfakeroot -j4
