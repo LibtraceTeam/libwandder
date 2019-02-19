@@ -1,3 +1,9 @@
+libwandder1 (1.1.0-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Shane Alcock <salcock@waikato.ac.nz>  Tue, 19 Feb 2019 15:25:22 +1300
+
 libwandder1 (1.0.0-1) unstable; urgency=medium
 
   * New upstream release
