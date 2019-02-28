@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017, 2018 The University of Waikato, Hamilton, New Zealand.
+ * Copyright (c) 2017-2019 The University of Waikato, Hamilton, New Zealand.
  * All rights reserved.
  *
  * This file is part of libwandder.
@@ -480,6 +480,10 @@ static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
 
 
         case WANDDER_TAG_NULL:
+            job->vallen = 0;
+            job->preamblen = calc_preamblen(job->identifier, vallen);
+            break;
+
         case WANDDER_TAG_SEQUENCE:
         case WANDDER_TAG_SET:
             job->vallen = 0;
@@ -524,15 +528,11 @@ void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
     enc->current->thisjob.identclass = itemclass;
     enc->current->thisjob.identifier = idnum;
     enc->current->thisjob.encodeas = encodeas;
-    if (valptr != NULL && vallen > 0) {
-        save_value_to_encode(&(enc->current->thisjob), valptr, vallen);
-        if (enc->current->parent) {
-            enc->current->parent->childrensize +=
-                (enc->current->thisjob.vallen +
-                 enc->current->thisjob.preamblen);
-        }
-    } else {
-        enc->current->thisjob.vallen = 0;
+    save_value_to_encode(&(enc->current->thisjob), valptr, vallen);
+    if (enc->current->parent) {
+        enc->current->parent->childrensize +=
+            (enc->current->thisjob.vallen +
+             enc->current->thisjob.preamblen);
     }
 
 }

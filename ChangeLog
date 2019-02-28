@@ -1,3 +1,8 @@
+Version 1.1.1
+=============
+Encoding:
+ * Fix bug where NULL elements were not being included in encoded messages
+
 Version 1.1.0
 =============
 

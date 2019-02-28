@@ -1,3 +1,9 @@
+libwandder1 (1.1.1-1) unstable; urgency=medium
+
+  * Fix encoding bug where NULL elements were not included
+
+ -- Shane Alcock <salcock@waikato.ac.nz>  Fri, 01 Mar 2019 10:40:07 +1300
+
 libwandder1 (1.1.0-1) unstable; urgency=medium
 
   * New upstream release
