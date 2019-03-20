@@ -1,3 +1,8 @@
+Version 1.1.2
+=============
+Encoding:
+ * Fix bad memory accesses when encoding IP packets larger than 512 bytes.
+
 Version 1.1.1
 =============
 Encoding:

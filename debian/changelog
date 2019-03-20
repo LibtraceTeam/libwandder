@@ -1,3 +1,9 @@
+libwandder1 (1.1.2-1) unstable; urgency=medium
+
+  * Fix bad memory accesses when encoding large IP packet contents
+
+ -- Shane Alcock <salcock@waikato.ac.nz>  Wed, 20 Mar 2019 13:26:44 +1300
+
 libwandder1 (1.1.1-1) unstable; urgency=medium
 
   * Fix encoding bug where NULL elements were not included
