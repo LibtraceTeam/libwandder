@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017, 2018 The University of Waikato, Hamilton, New Zealand.
+ * Copyright (c) 2017-2019 The University of Waikato, Hamilton, New Zealand.
  * All rights reserved.
  *
  * This file is part of libwandder.
@@ -1167,8 +1167,8 @@ int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,
         }
 
         ident = wandder_get_identifier(dec);
+        act = &(actions->members[ident]);
         if (wandder_get_class(dec) == WANDDER_CLASS_CONTEXT_PRIMITIVE) {
-            act = &(actions->members[ident]);
 
             assert(act->descend == NULL);
             if (!wandder_get_valuestr(dec->current, space, 2048, act->interpretas)) {
@@ -1179,7 +1179,6 @@ int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,
         }
 
         if (wandder_get_class(dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT) {
-            act = &(actions->members[ident]);
             printf("[%u] %u %s --\n", ident, level, act->name);
 
             assert(act->descend != NULL);

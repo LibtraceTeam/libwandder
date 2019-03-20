@@ -1,3 +1,13 @@
+Version 1.1.2
+=============
+Encoding:
+ * Fix bad memory accesses when encoding IP packets larger than 512 bytes.
+
+Version 1.1.1
+=============
+Encoding:
+ * Fix bug where NULL elements were not being included in encoded messages
+
 Version 1.1.0
 =============
 

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017, 2018 The University of Waikato, Hamilton, New Zealand.
+ * Copyright (c) 2017-2019 The University of Waikato, Hamilton, New Zealand.
  * All rights reserved.
  *
  * This file is part of libwandder.
@@ -36,8 +36,6 @@
 
 const uint8_t etsi_lipsdomainid[9] = {
         0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11};
-
-static int init_called = 0;
 
 static void init_dumpers(wandder_etsispec_t *dec);
 static void free_dumpers(wandder_etsispec_t *dec);
@@ -104,11 +102,8 @@ wandder_dumper_t *wandder_get_etsili_structure(wandder_etsispec_t *etsidec) {
 struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec) 
 {
     struct timeval tv;
-    uint16_t savedlevel = 0;
     uint32_t ident;
     int ret;
-    uint8_t class;
-
 
     tv.tv_sec = 0;
     tv.tv_usec = 0;
@@ -124,7 +119,6 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
     QUICK_DECODE(tv);
 
     /* dec->current should be pointing right at PSHeader */
-    savedlevel = wandder_get_level(etsidec->dec);
     if (ident != 1) {
         return tv;
     }
@@ -325,7 +319,6 @@ wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec) {
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
         uint32_t *len, char *name, int namelen) {
     uint8_t *vp = NULL;
-    char *foundname;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -367,7 +360,6 @@ uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
         uint32_t *len, uint8_t *ident, char *name, int namelen) {
 
     uint8_t *vp = NULL;
-    char *foundname;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -421,7 +413,6 @@ uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
 
 uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
 
-    wandder_target_t cintgt = {&(etsidec->cid), 1, false};
     uint32_t ident;
     int ret;
 

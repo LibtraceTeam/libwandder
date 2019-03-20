@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017, 2018 The University of Waikato, Hamilton, New Zealand.
+ * Copyright (c) 2017-2019 The University of Waikato, Hamilton, New Zealand.
  * All rights reserved.
  *
  * This file is part of libwandder.
@@ -66,7 +66,6 @@ static inline void free_single_pending(wandder_pend_t **freelist,
 }
 
 void reset_wandder_encoder(wandder_encoder_t *enc) {
-    wandder_pend_t *p, *tmp, *savedsib;
 
     if (enc->quickfree_tail) {
         enc->quickfree_tail->nextfree = enc->freelist;
@@ -298,9 +297,7 @@ static uint32_t encode_identifier(uint8_t class, uint32_t ident,
 
 static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     uint8_t lenocts = 0;
-    uint8_t encarray[128];
-    uint8_t ind = 0;
-    int i = 0;
+    int i;
 
     if (rem == 0) {
         fprintf(stderr, "Encode error: no more space while encoding length\n");
@@ -480,6 +477,10 @@ static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
 
 
         case WANDDER_TAG_NULL:
+            job->vallen = 0;
+            job->preamblen = calc_preamblen(job->identifier, vallen);
+            break;
+
         case WANDDER_TAG_SEQUENCE:
         case WANDDER_TAG_SET:
             job->vallen = 0;
@@ -524,15 +525,11 @@ void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
     enc->current->thisjob.identclass = itemclass;
     enc->current->thisjob.identifier = idnum;
     enc->current->thisjob.encodeas = encodeas;
-    if (valptr != NULL && vallen > 0) {
-        save_value_to_encode(&(enc->current->thisjob), valptr, vallen);
-        if (enc->current->parent) {
-            enc->current->parent->childrensize +=
-                (enc->current->thisjob.vallen +
-                 enc->current->thisjob.preamblen);
-        }
-    } else {
-        enc->current->thisjob.vallen = 0;
+    save_value_to_encode(&(enc->current->thisjob), valptr, vallen);
+    if (enc->current->parent) {
+        enc->current->parent->childrensize +=
+            (enc->current->thisjob.vallen +
+             enc->current->thisjob.preamblen);
     }
 
 }
@@ -658,6 +655,22 @@ void wandder_encode_endseq_repeat(wandder_encoder_t *enc, int repeats) {
     }
 }
 
+static inline int job_requires_valcopy(wandder_encode_job_t *job) {
+    if (job->vallen == 0) {
+        return 0;
+    }
+
+    switch(job->encodeas) {
+        case WANDDER_TAG_IPPACKET:
+        case WANDDER_TAG_NULL:
+        case WANDDER_TAG_SEQUENCE:
+        case WANDDER_TAG_SET:
+            return 0;
+    }
+
+    return 1;
+}
+
 static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
         uint32_t *rem) {
     uint32_t ret;
@@ -692,6 +705,7 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
     *buf += ret;
     *rem -= ret;
     tot += ret;
+
     if (p->thisjob.vallen > 0) {
         if (*rem < p->thisjob.vallen) {
             fprintf(stderr,
@@ -699,7 +713,7 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
             assert(0);
             return 0;
         }
-        if (p->thisjob.valspace) {
+        if (job_requires_valcopy(&(p->thisjob))) {
             memcpy(*buf, p->thisjob.valspace, p->thisjob.vallen);
         }
 
