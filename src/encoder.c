@@ -658,6 +658,22 @@ void wandder_encode_endseq_repeat(wandder_encoder_t *enc, int repeats) {
     }
 }
 
+static inline int job_requires_valcopy(wandder_encode_job_t *job) {
+    if (job->vallen == 0) {
+        return 0;
+    }
+
+    switch(job->encodeas) {
+        case WANDDER_TAG_IPPACKET:
+        case WANDDER_TAG_NULL:
+        case WANDDER_TAG_SEQUENCE:
+        case WANDDER_TAG_SET:
+            return 0;
+    }
+
+    return 1;
+}
+
 static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
         uint32_t *rem) {
     uint32_t ret;
@@ -692,6 +708,7 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
     *buf += ret;
     *rem -= ret;
     tot += ret;
+
     if (p->thisjob.vallen > 0) {
         if (*rem < p->thisjob.vallen) {
             fprintf(stderr,
@@ -699,7 +716,7 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
             assert(0);
             return 0;
         }
-        if (p->thisjob.valspace) {
+        if (job_requires_valcopy(&(p->thisjob))) {
             memcpy(*buf, p->thisjob.valspace, p->thisjob.vallen);
         }
 
