@@ -66,7 +66,6 @@ static inline void free_single_pending(wandder_pend_t **freelist,
 }
 
 void reset_wandder_encoder(wandder_encoder_t *enc) {
-    wandder_pend_t *p, *tmp, *savedsib;
 
     if (enc->quickfree_tail) {
         enc->quickfree_tail->nextfree = enc->freelist;
@@ -298,9 +297,7 @@ static uint32_t encode_identifier(uint8_t class, uint32_t ident,
 
 static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     uint8_t lenocts = 0;
-    uint8_t encarray[128];
-    uint8_t ind = 0;
-    int i = 0;
+    int i;
 
     if (rem == 0) {
         fprintf(stderr, "Encode error: no more space while encoding length\n");
