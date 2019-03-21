@@ -429,6 +429,7 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
         return 0;
     }
 
+    /* Work our way to the communicationIdentifier sequence */
     do {
         QUICK_DECODE(0);
     } while (ident < 3);
@@ -437,6 +438,13 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
         return 0;
     }
 
+    /* Skip past the contents of the NetworkIdentifier field */
+    QUICK_DECODE(0);
+    if (ident == 0) {
+        wandder_decode_skip(etsidec->dec);
+    }
+
+    /* Get communicationIdentityNumber if present */
     do {
         QUICK_DECODE(0);
     } while (ident < 1);
