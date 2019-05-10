@@ -1,3 +1,9 @@
+libwandder1 (1.1.2-2) unstable; urgency=medium
+
+  * Re-package after fixing various RPM packaging bugs
+
+ -- Shane Alcock <salcock@waikato.ac.nz>  Fri, 10 May 2019 14:12:58 +1200
+
 libwandder1 (1.1.2-1) unstable; urgency=medium
 
   * Fix bad memory accesses when encoding large IP packet contents
