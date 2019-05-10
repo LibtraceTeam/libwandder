@@ -1,6 +1,6 @@
 Name:           libwandder1
 Version:        1.1.2
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        C Library for encoding and decoding data using DER
 
 License:        LPGLv3
@@ -56,5 +56,8 @@ find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 %{_libdir}/*.so
 
 %changelog
+* Fri May 10 2019 Shane Alcock <salcock@waikato.ac.nz> - 1.1.2-2
+- Re-package for new Bintray repo architecture
+
 * Wed Mar 20 2019 Shane Alcock <salcock@waikato.ac.nz> - 1.1.2-1
 - First libwandder package
