@@ -279,28 +279,40 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
 
     shortlen = *ptr;
     if ((shortlen & 0x80) == 0) {
+        //definite short form
+        item->indefform = 0;
         item->length = (shortlen & 0x7f);
         prelen += 1;
         ptr ++;
     } else {
         uint8_t lenoctets = (shortlen & 0x7f);
-        if (lenoctets > sizeof(item->length)) {
-            fprintf(stderr, "libwandder does not support length fields longer than %zd bytes right now\n", sizeof(item->length));
-            fprintf(stderr, "Tried to decode an item with a length field of %u bytes.\n", lenoctets);
-            if (item != dec->current) {
-                free_item(item);
+        if(lenoctets){
+            //definite long form
+            if (lenoctets > sizeof(item->length)) {
+                fprintf(stderr, "libwandder does not support length fields longer than %zd bytes right now\n", sizeof(item->length));
+                fprintf(stderr, "Tried to decode an item with a length field of %u bytes.\n", lenoctets);
+                if (item != dec->current) {
+                    free_item(item);
+                }
+                return -1;
             }
-            return -1;
-        }
-        ptr ++;
-        item->length = 0;
-        for (i = 0; i < (int)lenoctets; i++) {
-            item->length = item->length << 8;
-            item->length |= (*ptr);
             ptr ++;
+            item->length = 0;
+            for (i = 0; i < (int)lenoctets; i++) {
+                item->length = item->length << 8;
+                item->length |= (*ptr);
+                ptr ++;
 
+            }
+            prelen += (lenoctets + 1);            
         }
-        prelen += (lenoctets + 1);
+        else {
+            //indfinite form
+            item->length = 0;
+            item->indefform = 1;
+            prelen += 1;
+            ptr ++;
+        }
     }
 
     item->preamblelen = prelen;
@@ -430,6 +442,13 @@ int wandder_decode_sequence_until(wandder_decoder_t *dec, uint32_t ident) {
     return 0;
 }
 
+int _decode_skip(wandder_decoder_t *dec){
+    //TODO
+
+
+    return -1;
+}
+
 int wandder_decode_skip(wandder_decoder_t *dec) {
 
     if (dec == NULL) {
@@ -444,6 +463,10 @@ int wandder_decode_skip(wandder_decoder_t *dec) {
     }
 
     dec->current->descend = 0;
+    if (dec->current->indefform){
+        //have to recurse in to skip
+        return _decode_skip(dec);
+    }
     dec->nextitem = dec->current->valptr + dec->current->length;
     return dec->current->length;
 }
@@ -568,6 +591,26 @@ uint32_t wandder_get_itemlen(wandder_decoder_t *dec) {
     }
 
     if (dec->current) {
+        if (dec->current->indefform){
+            if (IS_CONSTRUCTED(dec->current)) {
+                //if self is constructed, will be made up of smaller units
+                    //while not 0x00
+                        //stepinto nextunit
+                        //skipover <-TODO
+                    //end of inside
+            } else {
+                //otherwise it is one value block terminated by 0x00
+                    //while not 0x00
+                        //ptr++
+                    //end of inside
+            }
+            //have reached end
+            //dec->current->indefform = 0; //no longer indefinite
+            //can define dec->current->length here
+
+        }
+
+
         return dec->current->length;
     }
     return 0;
