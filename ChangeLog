@@ -1,3 +1,9 @@
+Version 1.1.3
+=============
+Decoding:
+ * Fixed bug that was causing wandder_etsili_get_cin() to return bogus
+   values.
+
 Version 1.1.2
 =============
 Encoding:
