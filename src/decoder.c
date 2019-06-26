@@ -219,8 +219,7 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
         return 1;
     }
 
-
-    while (parent != NULL && ptr >= parent->valptr + parent->length) {
+    while (parent != NULL && parent->indefform != 1 && ptr >= parent->valptr + parent->length ) {
         /* Reached end of preceding sequence */
         wandder_item_t *tmp = parent;
         parent = parent->parent;
@@ -304,7 +303,8 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
                 ptr ++;
 
             }
-            prelen += (lenoctets + 1);            
+            prelen += (lenoctets + 1);
+            item->indefform = 0;
         }
         else {
             //indfinite form
@@ -319,6 +319,20 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
     item->valptr = ptr;
     item->cachednext = NULL;
     item->cachedchildren = NULL;
+
+    if (item->length == 0 && item->identclass == 0 && item->identifier == 0){
+        //end of indef value
+
+        if (item->parent == NULL) {
+            /* Reached end of the top level sequence */
+            dec->current = NULL;
+            item->parent = NULL;
+            return 0;
+        }
+        else{
+            item->parent =  item->parent->parent;
+        }
+    }
 
     if (dec->current == parent && parent != NULL) {
         assert(parent->cachedchildren == NULL);
@@ -378,7 +392,7 @@ static inline int _decode_next(wandder_decoder_t *dec) {
         return first_decode(dec);
     }
 
-    /* if current is a constructed type, the next item is the first child
+    /* if current is a constructed type, the next item is the first child 
      * of current */
     if ((IS_CONSTRUCTED(dec->current))) {
         ret = decode(dec, dec->nextitem, dec->current);
@@ -442,13 +456,6 @@ int wandder_decode_sequence_until(wandder_decoder_t *dec, uint32_t ident) {
     return 0;
 }
 
-int _decode_skip(wandder_decoder_t *dec){
-    //TODO
-
-
-    return -1;
-}
-
 int wandder_decode_skip(wandder_decoder_t *dec) {
 
     if (dec == NULL) {
@@ -464,10 +471,10 @@ int wandder_decode_skip(wandder_decoder_t *dec) {
 
     dec->current->descend = 0;
     if (dec->current->indefform){
-        //have to recurse in to skip
-        return _decode_skip(dec);
+        dec->nextitem = dec->current->valptr;
+    }else {
+        dec->nextitem = dec->current->valptr + dec->current->length;
     }
-    dec->nextitem = dec->current->valptr + dec->current->length;
     return dec->current->length;
 }
 
@@ -592,25 +599,8 @@ uint32_t wandder_get_itemlen(wandder_decoder_t *dec) {
 
     if (dec->current) {
         if (dec->current->indefform){
-            if (IS_CONSTRUCTED(dec->current)) {
-                //if self is constructed, will be made up of smaller units
-                    //while not 0x00
-                        //stepinto nextunit
-                        //skipover <-TODO
-                    //end of inside
-            } else {
-                //otherwise it is one value block terminated by 0x00
-                    //while not 0x00
-                        //ptr++
-                    //end of inside
-            }
-            //have reached end
-            //dec->current->indefform = 0; //no longer indefinite
-            //can define dec->current->length here
-
+            return 0;
         }
-
-
         return dec->current->length;
     }
     return 0;
