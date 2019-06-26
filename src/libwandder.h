@@ -145,7 +145,6 @@ struct wandder_item {
     uint32_t identifier;
     uint32_t preamblelen;
     uint32_t length;
-    bool indefform;
     uint16_t level;
     uint8_t identclass;
     uint8_t *valptr;
@@ -155,6 +154,7 @@ struct wandder_item {
     wandder_item_t *cachednext;
     wandder_item_t *cachedchildren;
     uint8_t descend;
+    uint8_t indefform;
 };
 
 
