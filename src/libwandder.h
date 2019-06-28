@@ -241,6 +241,27 @@ typedef struct wandder_encode_job {
 } wandder_encode_job_t;
 
 
+typedef struct my_item my_item_t;
+struct my_item {
+    uint8_t * buf;
+    uint32_t length;
+    my_item_t * next;
+};
+
+typedef struct my_encoded_result my_encoded_result_t;
+struct my_encoded_result {
+    uint8_t * buf;
+    uint32_t length;
+};
+
+typedef struct my_encoder my_encoder_t;
+struct my_encoder {
+    uint32_t totallen;
+    my_item_t *head;
+    my_item_t *tail;
+};
+
+
 struct wandder_pending {
     wandder_encode_job_t thisjob;
     uint32_t childrensize;
@@ -287,6 +308,13 @@ struct wandder_encoder {
 /* Encoding API
  * ----------------------------------------------------
  */
+my_encoded_result_t *my_encode_finish(my_encoder_t *enc);
+void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
+        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, uint8_t is_indefinte);
+my_encoder_t *init_my_encoder();
+void my_encode_endseq(my_encoder_t * enc);
+
+
 wandder_encoder_t *init_wandder_encoder();
 void reset_wandder_encoder(wandder_encoder_t *enc);
 void free_wandder_encoder(wandder_encoder_t *enc);

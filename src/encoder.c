@@ -54,6 +54,13 @@ wandder_encoder_t *init_wandder_encoder(void) {
     return enc;
 }
 
+my_encoder_t * init_my_encoder(void) {
+    my_encoder_t * enc = (my_encoder_t *)malloc(sizeof(my_encoder_t));
+
+    return enc;
+
+}
+
 static inline void free_single_pending(wandder_pend_t **freelist,
         wandder_pend_t *p) {
 
@@ -227,9 +234,12 @@ static inline uint32_t calc_preamblen(uint32_t identifier, uint32_t len) {
         loglen = WANDDER_LOG256_SIZE(len);
         plen += (1 + loglen);
 
-        if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
-            plen ++;
-        }
+        // if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
+        //     //I think this line is a bug and should part of the identifier size 
+        //     //(bit 8 is reserved for the stop bit of the long id form)
+        //     //where as in the long form of the length, the number of octets is specfied
+        //     plen ++;
+        // }
     }
 
     return plen;
@@ -294,6 +304,19 @@ static uint32_t encode_identifier(uint8_t class, uint32_t ident,
 
     return ind + 1;
 }
+static inline uint32_t encode_length_indefinite(uint8_t *buf, uint32_t rem) {
+    
+    if (rem == 0) {
+        fprintf(stderr, "Encode error: no more space while encoding length\n");
+        return 0;
+    }
+    *buf = 0x80;
+    buf +=1;
+    rem -=1;
+
+    return 1;
+}
+
 
 static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     uint8_t lenocts = 0;
@@ -310,9 +333,9 @@ static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     }
 
     lenocts = WANDDER_LOG256_SIZE(len);
-    if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) {
-        lenocts ++;
-    }
+    // if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) {
+    //     lenocts ++;
+    // }
 
     *buf = lenocts | 0x80;
 
@@ -499,8 +522,95 @@ static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
     }
 }
 
+my_encoded_result_t *my_encode_finish(my_encoder_t *enc){
+
+    my_encoded_result_t *res = malloc(sizeof(my_encoded_result_t));
+
+    res->buf = malloc(enc->totallen);
+    res->length = enc->totallen;
+    uint8_t * ptr = res->buf;
+    
+    my_item_t * temp = enc->head; 
+    my_item_t * freetemp; 
+
+    while(temp){
+        memcpy(ptr, temp->buf, temp->length);
+        ptr+=temp->length;
+        free(temp->buf);
+        freetemp = temp;
+        temp = temp->next;
+        free(freetemp);
+    }
+
+    return res;
+}
+
+void my_encode_endseq(my_encoder_t * enc){
+    my_encode_next(enc, 0, 0, 0, NULL, 0, 0);
+}
+
+void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
+        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, uint8_t is_indefinite) {
+
+    uint32_t prelen = 0;
+    uint32_t totallen = 0;
+    uint32_t rem = 0;
+    uint32_t ret = 0;
+    void * bufstart = NULL;
+    void * buf = NULL;
+    
+    
+    prelen = calc_preamblen(idnum, vallen);
+    totallen = prelen + ((itemclass & 1) ? 0 : vallen);
+    rem = totallen;
+    bufstart = malloc(sizeof(uint8_t) * totallen);
+    buf = bufstart;
+
+    ret = encode_identifier(itemclass, idnum, buf, rem);
+    buf += ret;
+    rem -= ret;
+
+    if(is_indefinite){
+        ret = encode_length_indefinite(buf, rem);
+        buf += ret;
+        rem -= ret;
+        
+    }
+    else{
+        ret = encode_length(vallen, buf, rem);
+        buf += ret;
+        rem -= ret;
+        if (itemclass & 1){ //if its constructed then we dont need to cpy the val
+            
+        }
+        else {
+            memcpy(buf, valptr, totallen - prelen);
+            buf += totallen - prelen;
+            rem -= totallen - prelen;
+        }
+    }
+    assert(rem == 0);
+
+    my_item_t * item = malloc(sizeof(my_item_t));
+    item->buf = bufstart;
+    item->length = totallen;
+    item->next = NULL;
+    if(enc->head == NULL){
+        //first item
+        enc->head = item;
+        enc->tail = item;
+    }else {
+        //not first item
+        enc->tail->next = item;
+        enc->tail = item;
+    }
+    enc->totallen += item->length;
+    printf("%3d:     hl=%d  l=%4d\n", enc->totallen, prelen, vallen);
+
+
+}
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
-        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen) {
+        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen) {    
 
     wandder_encode_job_t *job = &(enc->current->thisjob);
 
