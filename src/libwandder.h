@@ -243,9 +243,21 @@ typedef struct wandder_encode_job {
 
 typedef struct my_item my_item_t;
 struct my_item {
-    uint8_t * buf;
-    uint32_t length;
-    my_item_t * next;
+    uint8_t * buf;          //ptr to start of buffer
+    uint32_t length;        //length of the buffer, not the item
+    uint32_t depth;         //depth of current item
+    uint32_t cons_length;   //length of the constructed value (if defined, 0 otherwise)
+    my_item_t * next;       //ptr to next item, NULL if last
+    my_item_t * parent;     //ptr to parent item 
+};
+
+typedef struct my_encoder my_encoder_t;
+struct my_encoder {
+    uint32_t totallen;      //sum of all sub buffer lengths
+    my_item_t *head;        //ptr to first item
+    my_item_t *tail;        //ptr to most recent item
+    my_item_t *parent;      //ptr to most recent parent
+    uint32_t current_depth; //depth of most recent item
 };
 
 typedef struct my_encoded_result my_encoded_result_t;
@@ -254,12 +266,6 @@ struct my_encoded_result {
     uint32_t length;
 };
 
-typedef struct my_encoder my_encoder_t;
-struct my_encoder {
-    uint32_t totallen;
-    my_item_t *head;
-    my_item_t *tail;
-};
 
 
 struct wandder_pending {
@@ -308,13 +314,29 @@ struct wandder_encoder {
 /* Encoding API
  * ----------------------------------------------------
  */
-my_encoded_result_t *my_encode_finish(my_encoder_t *enc);
+//BER encoder
+my_encoder_t *init_my_encoder();
+void my_encoder_free(my_encoder_t *enc);
+void my_encoder_reset(my_encoder_t *enc);
+
 void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, uint8_t is_indefinte);
-my_encoder_t *init_my_encoder();
+int my_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,
+        uint32_t vallen);
+void my_encode_next_preencoded(wandder_encoder_t *enc,
+        wandder_encode_job_t **jobs, int jobcount);
+
 void my_encode_endseq(my_encoder_t * enc);
+void my_encode_endseq_repeat(my_encoder_t * enc, int repeats);
+
+my_encoded_result_t *my_encode_finish(my_encoder_t *enc);
+
+void my_encoded_release_result(my_encoded_result_t *res);
+void my_encoded_release_results(my_encoded_result_t *res, my_encoded_result_t *tail);
 
 
+/////////////////////////////////////////////////
+//DER encoder
 wandder_encoder_t *init_wandder_encoder();
 void reset_wandder_encoder(wandder_encoder_t *enc);
 void free_wandder_encoder(wandder_encoder_t *enc);

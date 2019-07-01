@@ -54,13 +54,6 @@ wandder_encoder_t *init_wandder_encoder(void) {
     return enc;
 }
 
-my_encoder_t * init_my_encoder(void) {
-    my_encoder_t * enc = (my_encoder_t *)malloc(sizeof(my_encoder_t));
-
-    return enc;
-
-}
-
 static inline void free_single_pending(wandder_pend_t **freelist,
         wandder_pend_t *p) {
 
@@ -522,11 +515,34 @@ static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
     }
 }
 
+my_encoder_t * init_my_encoder(void) {
+    my_encoder_t * enc = (my_encoder_t *)calloc(sizeof(my_encoder_t),1);
+
+    return enc;
+
+}
+
+void my_encoder_free(my_encoder_t *enc){
+    
+    if (enc != NULL){
+        free(enc);
+        enc = NULL;
+    }
+}
+void my_encoded_release_result(my_encoded_result_t *res){
+    
+    if (res != NULL){
+        free(res->buf);
+        free(res);
+        res = NULL;
+    }
+}
+
 my_encoded_result_t *my_encode_finish(my_encoder_t *enc){
 
     my_encoded_result_t *res = malloc(sizeof(my_encoded_result_t));
 
-    res->buf = malloc(enc->totallen);
+    res->buf = calloc(enc->totallen, 1);
     res->length = enc->totallen;
     uint8_t * ptr = res->buf;
     
@@ -545,23 +561,78 @@ my_encoded_result_t *my_encode_finish(my_encoder_t *enc){
     return res;
 }
 
+int _my_encode_endseq(my_encoder_t * enc){
+
+    uint32_t length = 2;
+    my_item_t *item = malloc(sizeof(my_item_t));
+    uint8_t *bufstart = calloc(sizeof(uint8_t), length);
+    item->buf = bufstart;
+    item->length = length;
+    item->next = NULL;
+    if(enc->head == NULL){ 
+        //this should really not be the case, (but still possible)
+        //represents an empty ASN1 encoding (1 element of tag 0, size 0 with no value)
+        //first item
+        item->parent = NULL;
+        enc->head = item;
+        enc->tail = item;
+    }else {
+        //not first item
+        item->parent = enc->parent->parent;
+        enc->tail->next = item;
+        enc->tail = item;
+    }
+
+    if (enc->current_depth == 0){
+        //had tried to go higher than root
+        return -1;
+    }
+    
+    //printf("%3d:d=%-2d hl=%d  l=%4d\n", enc->totallen, enc->current_depth, length, 0);
+
+    enc->totallen += item->length;
+
+   do{ //do once for end of indefinite length
+       if(enc->parent->cons_length > enc->totallen){
+            //exceeded length of definite constructed parent
+            printf("TOO LONG\n");
+        }
+        enc->current_depth--;
+        enc->parent = enc->parent->parent;
+    }  while (enc->parent && enc->parent->cons_length != 0 && enc->parent->cons_length == enc->totallen);
+        //keep checking if reached end of definite length constructed item
+
+    return 1;
+}
+
+void my_encode_endseq_repeats(my_encoder_t * enc, int repeats){
+    int i;
+
+    for (i = 0; i < repeats; i++) {
+        if (_my_encode_endseq(enc) == -1) {
+            break;
+        }
+    }
+}
+
 void my_encode_endseq(my_encoder_t * enc){
-    my_encode_next(enc, 0, 0, 0, NULL, 0, 0);
+    _my_encode_endseq(enc);
 }
 
 void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, uint8_t is_indefinite) {
 
-    uint32_t prelen = 0;
-    uint32_t totallen = 0;
-    uint32_t rem = 0;
-    uint32_t ret = 0;
-    void * bufstart = NULL;
-    void * buf = NULL;
+    uint32_t prelen = 0;    //length of tag + len octets
+    uint32_t totallen = 0;  //length of actually encoded octets 
+    uint32_t rem = 0;       //assert used
+    uint32_t ret = 0;       //temp variable
+    uint32_t cons_len = 0;  //length of current cons type definite end
+    void * bufstart = NULL; //start of current buffer
+    void * buf = NULL;      //movable ptr into buffer
     
     
     prelen = calc_preamblen(idnum, vallen);
-    totallen = prelen + ((itemclass & 1) ? 0 : vallen);
+    totallen = prelen + ((itemclass & 1) ? 0 : vallen); //constructed types have their value as subsequent items, 
     rem = totallen;
     bufstart = malloc(sizeof(uint8_t) * totallen);
     buf = bufstart;
@@ -580,8 +651,8 @@ void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
         ret = encode_length(vallen, buf, rem);
         buf += ret;
         rem -= ret;
-        if (itemclass & 1){ //if its constructed then we dont need to cpy the val
-            
+        if (itemclass & 1){
+            cons_len = prelen + vallen + enc->totallen;
         }
         else {
             memcpy(buf, valptr, totallen - prelen);
@@ -589,24 +660,49 @@ void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
             rem -= totallen - prelen;
         }
     }
-    assert(rem == 0);
+    assert(rem == 0); //ensure the number of byte to write has been written
 
     my_item_t * item = malloc(sizeof(my_item_t));
     item->buf = bufstart;
     item->length = totallen;
     item->next = NULL;
+    item->cons_length = cons_len; 
     if(enc->head == NULL){
         //first item
+        item->parent = NULL;
         enc->head = item;
         enc->tail = item;
     }else {
         //not first item
+        item->parent = enc->parent;
         enc->tail->next = item;
         enc->tail = item;
     }
     enc->totallen += item->length;
-    printf("%3d:     hl=%d  l=%4d\n", enc->totallen, prelen, vallen);
 
+
+    // printf("%3d:d=%-2d hl=%d  l=", enc->totallen - item->length, enc->current_depth, prelen);
+    // if (is_indefinite){
+    //     printf("inf  ");
+    // } else {
+    //     printf("%4d ", vallen);
+    // }
+    // printf("\n");
+
+    while (enc->parent && enc->parent->cons_length != 0 && enc->parent->cons_length == enc->totallen){
+        if(enc->parent->cons_length > enc->totallen){
+            //exceeded length of definite constructed parent
+            printf("TOO LONG\n");
+        }
+        //reached end of definite length constructed item
+        enc->current_depth--;
+        enc->parent = enc->parent->parent;
+    }
+    
+    if (itemclass & 1){ //if its constructed then descend the current depth
+        enc->current_depth++;
+        enc->parent = item;
+    }
 
 }
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
