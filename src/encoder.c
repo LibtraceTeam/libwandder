@@ -525,10 +525,33 @@ my_encoder_t * init_my_encoder(void) {
 void my_encoder_free(my_encoder_t *enc){
     
     if (enc != NULL){
+        my_encoder_reset(enc); //reset will walk the list and free all items
         free(enc);
         enc = NULL;
     }
 }
+
+void my_encoder_reset(my_encoder_t *enc){    
+
+    my_item_t * temp = enc->head;
+    my_item_t * freetemp; 
+
+    while(temp){
+        free(temp->buf);
+        freetemp = temp;
+        temp = temp->next;
+        free(freetemp);
+    }
+
+    enc->totallen = 0;
+    enc->head = NULL;
+    enc->tail = NULL;
+    enc->parent = NULL;
+    enc->current_depth = 0;
+
+}
+
+
 void my_encoded_release_result(my_encoded_result_t *res){
     
     if (res != NULL){
