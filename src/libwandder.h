@@ -241,32 +241,30 @@ typedef struct wandder_encode_job {
 } wandder_encode_job_t;
 
 
-typedef struct my_item my_item_t;
-struct my_item {
-    uint8_t * buf;          //ptr to start of buffer
-    uint32_t length;        //length of the buffer, not the item
-    uint32_t depth;         //depth of current item
-    uint32_t cons_length;   //length of the constructed value (if defined, 0 otherwise)
-    my_item_t * next;       //ptr to next item, NULL if last
-    my_item_t * parent;     //ptr to parent item 
+typedef struct wandber_item wandber_item_t;
+struct wandber_item {
+    uint8_t * buf;              //ptr to start of buffer
+    uint32_t length;            //length of the buffer, not the item
+    uint32_t depth;             //depth of current item
+    uint32_t cons_length;       //length of the constructed value (if defined, 0 otherwise)
+    wandber_item_t * next;      //ptr to next item, NULL if last
+    wandber_item_t * parent;    //ptr to parent item 
 };
 
-typedef struct my_encoder my_encoder_t;
-struct my_encoder {
-    uint32_t totallen;      //sum of all sub buffer lengths
-    my_item_t *head;        //ptr to first item
-    my_item_t *tail;        //ptr to most recent item
-    my_item_t *parent;      //ptr to most recent parent
-    uint32_t current_depth; //depth of most recent item
+typedef struct wandber_encoder wandber_encoder_t;
+struct wandber_encoder {
+    uint32_t totallen;          //sum of all sub buffer lengths
+    wandber_item_t *head;       //ptr to first item
+    wandber_item_t *tail;       //ptr to most recent item
+    wandber_item_t *parent;     //ptr to most recent parent
+    uint32_t current_depth;     //depth of most recent item
 };
 
-typedef struct my_encoded_result my_encoded_result_t;
-struct my_encoded_result {
-    uint8_t * buf;
-    uint32_t length;
+typedef struct wandber_encoded_result wandber_encoded_result_t;
+struct wandber_encoded_result {
+    uint8_t * buf;              //one large buffer contaning the entire encoding
+    uint32_t length;            //length of encoding
 };
-
-
 
 struct wandder_pending {
     wandder_encode_job_t thisjob;
@@ -315,24 +313,24 @@ struct wandder_encoder {
  * ----------------------------------------------------
  */
 //BER encoder
-my_encoder_t *init_my_encoder();
-void my_encoder_free(my_encoder_t *enc);
-void my_encoder_reset(my_encoder_t *enc);
+wandber_encoder_t *init_wandber_encoder();
+void free_wandber_encoder(wandber_encoder_t *enc);
+void wandber_encoder_reset(wandber_encoder_t *enc);
 
-void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
+void wandber_encode_next(wandber_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, uint8_t is_indefinte);
-int my_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,
-        uint32_t vallen);
-void my_encode_next_preencoded(wandder_encoder_t *enc,
-        wandder_encode_job_t **jobs, int jobcount);
+//int wandber_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,   //not implimented
+//        uint32_t vallen);
+//void wandber_encode_next_preencoded(wandder_encoder_t *enc,                  //not implimented
+//        wandder_encode_job_t **jobs, int jobcount);
 
-void my_encode_endseq(my_encoder_t * enc);
-void my_encode_endseq_repeat(my_encoder_t * enc, int repeats);
+void wandber_encode_endseq(wandber_encoder_t * enc);
+void wandber_encode_endseq_repeat(wandber_encoder_t * enc, int repeats);
 
-my_encoded_result_t *my_encode_finish(my_encoder_t *enc);
+wandber_encoded_result_t *wandber_encode_finish(wandber_encoder_t *enc);
 
-void my_encoded_release_result(my_encoded_result_t *res);
-void my_encoded_release_results(my_encoded_result_t *res, my_encoded_result_t *tail);
+void wandber_encoded_release_result(wandber_encoded_result_t *res);
+//void wandber_encoded_release_results(wandber_encoded_result_t *res, wandber_encoded_result_t *tail); //not implimented
 
 
 /////////////////////////////////////////////////

@@ -515,32 +515,38 @@ static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
     }
 }
 
-my_encoder_t * init_my_encoder(void) {
-    my_encoder_t * enc = (my_encoder_t *)calloc(sizeof(my_encoder_t),1);
+wandber_encoder_t * init_wandber_encoder(void) {
+    wandber_encoder_t * enc = (wandber_encoder_t *)calloc(sizeof(wandber_encoder_t),1);
 
     return enc;
 
 }
 
-void my_encoder_free(my_encoder_t *enc){
+void free_wandber_encoder(wandber_encoder_t *enc){
     
     if (enc != NULL){
-        my_encoder_reset(enc); //reset will walk the list and free all items
+        wandber_encoder_reset(enc); //reset will walk the list and free all items
         free(enc);
         enc = NULL;
     }
 }
 
-void my_encoder_reset(my_encoder_t *enc){    
+void wandber_encoder_reset(wandber_encoder_t *enc){    
 
-    my_item_t * temp = enc->head;
-    my_item_t * freetemp; 
+    wandber_item_t * temp = enc->head;
+    wandber_item_t * freetemp; 
 
     while(temp){
-        free(temp->buf);
+        if (temp->buf){
+            free(temp->buf);
+            temp->buf = NULL;
+        }
         freetemp = temp;
         temp = temp->next;
-        free(freetemp);
+        if (freetemp){
+            free(freetemp);
+            freetemp = NULL;
+        }
     }
 
     enc->totallen = 0;
@@ -552,42 +558,55 @@ void my_encoder_reset(my_encoder_t *enc){
 }
 
 
-void my_encoded_release_result(my_encoded_result_t *res){
+void wandber_encoded_release_result(wandber_encoded_result_t *res){
     
     if (res != NULL){
         free(res->buf);
+        res->buf = NULL;
         free(res);
         res = NULL;
     }
 }
 
-my_encoded_result_t *my_encode_finish(my_encoder_t *enc){
+wandber_encoded_result_t *wandber_encode_finish(wandber_encoder_t *enc){
 
-    my_encoded_result_t *res = malloc(sizeof(my_encoded_result_t));
+    wandber_encoded_result_t *res = malloc(sizeof(wandber_encoded_result_t));
 
     res->buf = calloc(enc->totallen, 1);
     res->length = enc->totallen;
     uint8_t * ptr = res->buf;
     
-    my_item_t * temp = enc->head; 
-    my_item_t * freetemp; 
+    wandber_item_t * temp = enc->head; 
+    wandber_item_t * freetemp; 
 
     while(temp){
         memcpy(ptr, temp->buf, temp->length);
         ptr+=temp->length;
-        free(temp->buf);
+        if (temp->buf){
+            free(temp->buf);
+            temp->buf = NULL;
+        }
         freetemp = temp;
         temp = temp->next;
-        free(freetemp);
+        if(freetemp){
+            free(freetemp);
+            freetemp = NULL;
+        }
     }
+
+    enc->totallen = 0;
+    enc->head = NULL;
+    enc->tail = NULL;
+    enc->parent = NULL;
+    enc->current_depth = 0;
 
     return res;
 }
 
-int _my_encode_endseq(my_encoder_t * enc){
+int _wandber_encode_endseq(wandber_encoder_t * enc){
 
     uint32_t length = 2;
-    my_item_t *item = malloc(sizeof(my_item_t));
+    wandber_item_t *item = malloc(sizeof(wandber_item_t));
     uint8_t *bufstart = calloc(sizeof(uint8_t), length);
     item->buf = bufstart;
     item->length = length;
@@ -595,7 +614,7 @@ int _my_encode_endseq(my_encoder_t * enc){
     if(enc->head == NULL){ 
         //this should really not be the case, (but still possible)
         //represents an empty ASN1 encoding (1 element of tag 0, size 0 with no value)
-        //first item
+        //root item
         item->parent = NULL;
         enc->head = item;
         enc->tail = item;
@@ -628,21 +647,21 @@ int _my_encode_endseq(my_encoder_t * enc){
     return 1;
 }
 
-void my_encode_endseq_repeats(my_encoder_t * enc, int repeats){
+void wandber_encode_endseq_repeat(wandber_encoder_t * enc, int repeats){
     int i;
 
     for (i = 0; i < repeats; i++) {
-        if (_my_encode_endseq(enc) == -1) {
+        if (_wandber_encode_endseq(enc) == -1) {
             break;
         }
     }
 }
 
-void my_encode_endseq(my_encoder_t * enc){
-    _my_encode_endseq(enc);
+void wandber_encode_endseq(wandber_encoder_t * enc){
+    _wandber_encode_endseq(enc);
 }
 
-void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
+void wandber_encode_next(wandber_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, uint8_t is_indefinite) {
 
     uint32_t prelen = 0;    //length of tag + len octets
@@ -685,7 +704,7 @@ void my_encode_next(my_encoder_t *enc, uint8_t encodeas,
     }
     assert(rem == 0); //ensure the number of byte to write has been written
 
-    my_item_t * item = malloc(sizeof(my_item_t));
+    wandber_item_t * item = malloc(sizeof(wandber_item_t));
     item->buf = bufstart;
     item->length = totallen;
     item->next = NULL;
