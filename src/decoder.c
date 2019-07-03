@@ -392,6 +392,10 @@ static inline int _decode_next(wandder_decoder_t *dec) {
         return first_decode(dec);
     }
 
+    if (dec->nextitem >= dec->source + dec->sourcelen){
+        return 0; //reached end
+    }
+
     /* if current is a constructed type, the next item is the first child 
      * of current */
     if ((IS_CONSTRUCTED(dec->current))) {
