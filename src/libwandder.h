@@ -245,10 +245,7 @@ typedef struct wandber_item wandber_item_t;
 struct wandber_item {
     uint8_t * buf;              //ptr to start of buffer
     uint32_t length;            //length of the buffer, not the item
-    uint32_t depth;             //depth of current item
-    uint32_t cons_length;       //length of the constructed value (if defined, 0 otherwise)
     wandber_item_t * next;      //ptr to next item, NULL if last
-    wandber_item_t * parent;    //ptr to parent item 
 };
 
 typedef struct wandber_encoder wandber_encoder_t;
@@ -256,8 +253,6 @@ struct wandber_encoder {
     uint32_t totallen;          //sum of all sub buffer lengths
     wandber_item_t *head;       //ptr to first item
     wandber_item_t *tail;       //ptr to most recent item
-    wandber_item_t *parent;     //ptr to most recent parent
-    uint32_t current_depth;     //depth of most recent item
 };
 
 typedef struct wandber_encoded_result wandber_encoded_result_t;
@@ -318,16 +313,18 @@ void free_wandber_encoder(wandber_encoder_t *enc);
 void wandber_encoder_reset(wandber_encoder_t *enc);
 
 void wandber_encode_next(wandber_encoder_t *enc, uint8_t encodeas,
-        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, uint8_t is_indefinte);
-//int wandber_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,   //not implimented
+        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen);
+//int wandber_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,
 //        uint32_t vallen);
-//void wandber_encode_next_preencoded(wandder_encoder_t *enc,                  //not implimented
-//        wandder_encode_job_t **jobs, int jobcount);
+void wandber_encode_next_preencoded(wandber_encoder_t *enc,
+        wandder_encode_job_t **jobs, int jobcount);
 
 void wandber_encode_endseq(wandber_encoder_t * enc);
 void wandber_encode_endseq_repeat(wandber_encoder_t * enc, int repeats);
 
 wandber_encoded_result_t *wandber_encode_finish(wandber_encoder_t *enc);
+
+wandber_encoded_result_t *wandber_encode_consolidate(wandber_encoder_t *enc);
 
 void wandber_encoded_release_result(wandber_encoded_result_t *res);
 //void wandber_encoded_release_results(wandber_encoded_result_t *res, wandber_encoded_result_t *tail); //not implimented
@@ -342,9 +339,9 @@ void free_wandder_encoder(wandder_encoder_t *enc);
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen);
 int wandder_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,
-        uint32_t vallen);
+        uint32_t vallen);                                                   //create a preencoded value
 void wandder_encode_next_preencoded(wandder_encoder_t *enc,
-        wandder_encode_job_t **jobs, int jobcount);
+        wandder_encode_job_t **jobs, int jobcount);                         //add array of preencoded values
 void wandder_encode_endseq(wandder_encoder_t *enc);
 void wandder_encode_endseq_repeat(wandder_encoder_t *enc, int repeats);
 wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc);
