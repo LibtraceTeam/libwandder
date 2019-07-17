@@ -283,6 +283,14 @@ struct wandder_encoded_result {
     wandder_encoded_result_t *next;
 };
 
+typedef struct wandder_buf wandder_buf_t;
+struct wandder_buf {
+    void * buf;
+    uint32_t len;
+};
+
+
+
 /* The encoder manages the overall encoder process. It simply maintains the
  * full hierarchy of pending items and will encode them all once the user
  * indicates that all fields have been pushed to the encoder.
@@ -328,6 +336,9 @@ wandber_encoded_result_t *wandber_encode_consolidate(wandber_encoder_t *enc);
 
 void wandber_encoded_release_result(wandber_encoded_result_t *res);
 //void wandber_encoded_release_results(wandber_encoded_result_t *res, wandber_encoded_result_t *tail); //not implimented
+
+uint32_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, void* buf);
+uint32_t ber_create_integer(uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, wandder_buf_t* buf);
 
 
 /////////////////////////////////////////////////

@@ -34,6 +34,9 @@
 #include <math.h>
 #include "src/libwandder.h"
 
+#define MAXLENGTHOCTS 7
+//ideally this value is 9 to support 64 bit ints
+
 #define VALALLOC(x, p) \
     if (x > p->valalloced) { \
         if (x < 512) { \
@@ -889,6 +892,90 @@ wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
     return result;
 }
 
+uint32_t ber_create_integer(
+        uint8_t itemclass, 
+        uint32_t idnum, 
+        void *valptr, 
+        uint32_t vallen,
+        wandder_buf_t * buf) {
+    
+    uint32_t ret;
+    buf->buf = malloc(MAXLENGTHOCTS + 3);
+    ret = ber_rebuild_integer(itemclass, idnum, valptr, vallen, buf->buf);
+    if (ret != (MAXLENGTHOCTS +3)){
+        //error in writing
+        free(buf->buf);
+        return 0;
+    }
+    return ret;
+
+}
+
+//returns the number of bytes written (usually const unless an error)
+uint32_t ber_rebuild_integer(
+        uint8_t itemclass, 
+        uint32_t idnum, 
+        void *valptr, 
+        uint32_t vallen,
+        void* buf) {
+
+    uint32_t rem = MAXLENGTHOCTS + 3;
+    uint32_t lenocts = 0;
+    int64_t val = 0;
+    uint8_t *ptr = buf;
+    if (vallen == 8) {
+        val = *((int64_t *)valptr);
+    } else if (vallen == 4) {
+        val = *((int32_t *)valptr);
+    } else {
+        fprintf(stderr, "Encode error: unexpected length for integer type: %u\n",
+            vallen);
+        return 0;
+    }
+
+    if (val < 0) {
+        /* Play it safe with negative numbers (or seemingly negative ones) */
+        lenocts = vallen;
+    } else {
+        lenocts = WANDDER_LOG256_SIZE(val);
+        if (lenocts == 0) {
+            lenocts = 1;
+        }
+
+        if (lenocts > 7) {
+            lenocts = vallen;
+        }
+        if (lenocts < vallen && val >= WANDDER_EXTRA_OCTET_THRESH(lenocts)) { //TODO
+            //lenocts ++;
+        }
+    }
+
+    int ret = encode_identifier(itemclass, idnum, ptr, rem);
+    ptr +=ret;
+    rem -= ret;
+
+    //lenocts = length of encoded value
+    //lenlen  = length of length value 
+    //total len = class|id(1) + lenhdr(1) + lenlen(1) + lenval(lenlen) + value(lenoctets)
+
+    uint32_t lenlen = MAXLENGTHOCTS - lenocts + 1; //length of length field 
+
+    *ptr = 0x80;
+    *ptr |= lenlen;
+
+    for (int i = 0 ; i < lenlen; i++){
+        ptr++;
+        *ptr = 0;
+    }
+    *ptr = lenocts;
+
+    for (int i = lenocts - 1; i >= 0; i--) {
+        ptr[i+1] = (val & 0xff);
+        val = val >> 8;
+    }
+    return MAXLENGTHOCTS + 3;
+}
+
 static inline uint32_t encode_integer_ber(wandder_encode_job_t *p, void *valptr,
         uint32_t len) {
 
@@ -924,8 +1011,7 @@ static inline uint32_t encode_integer_ber(wandder_encode_job_t *p, void *valptr,
         }
     }
 
-#define MAXLENGTHOCTS 6
-    uint32_t rem = MAXLENGTHOCTS +2;
+    uint32_t rem = MAXLENGTHOCTS +3;
     p->encodedspace = calloc(rem,1); //int is always 10
     p->encodedlen = rem;
     uint8_t * buf = p->encodedspace;
@@ -934,8 +1020,8 @@ static inline uint32_t encode_integer_ber(wandder_encode_job_t *p, void *valptr,
     rem -= ret;
 
     *buf = 0x80; //len of len flag
-    *buf |= (MAXLENGTHOCTS - lenocts);
-    buf += (MAXLENGTHOCTS - lenocts);
+    *buf |= ((MAXLENGTHOCTS+1) - lenocts);
+    buf += ((MAXLENGTHOCTS+1) - lenocts);
     *buf = lenocts;
 
     for (i = lenocts - 1; i >= 0; i--) {
@@ -1067,7 +1153,8 @@ wandber_encoded_result_t *wandber_encode_finish(wandber_encoder_t *enc){
 
     wandber_encoded_result_t *res = malloc(sizeof(wandber_encoded_result_t));
 
-    res->buf = calloc(enc->totallen, 1);
+    void * tempbuf = calloc(enc->totallen, 1);
+    res->buf = tempbuf;
     res->length = enc->totallen;
     uint8_t * ptr = res->buf;
     
