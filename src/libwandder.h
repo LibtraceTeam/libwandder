@@ -340,7 +340,10 @@ void wandber_encoded_release_result(wandber_encoded_result_t *res);
 uint32_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, void* buf);
 uint32_t ber_create_integer(uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, wandder_buf_t* buf);
 
+wandder_buf_t * build_ber_field(uint8_t class, uint8_t idnum, uint8_t encodeas, 
+        uint8_t * valptr, uint32_t vallen, void* buf, uint32_t rem);
 
+uint32_t ber_build_integer_value(void *valptr, uint32_t vallen, void* buf, uint32_t rem);
 /////////////////////////////////////////////////
 //DER encoder
 wandder_encoder_t *init_wandder_encoder();
