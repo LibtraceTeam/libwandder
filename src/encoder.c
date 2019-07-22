@@ -368,36 +368,37 @@ wandder_buf_t * build_ber_field(
     //first need to calculate how much space we are going to use
     //class + id len + len len + val len
 
-    uint32_t plen = 0;
+    uint32_t idlen = 0;
+    uint32_t lenlen = 0;
     uint32_t loglen = 0;
     uint32_t totallen = 0;
 
     if (idnum <= 30) { //idlen 
-        plen += 1;
+        idlen += 1;
     } else {
         loglen = WANDDER_LOG128_SIZE(idnum);
-        plen += (1 + loglen);
+        idlen += (1 + loglen);
     }
 
     switch (encodeas) {
         case WANDDER_TAG_INTEGER:
         case WANDDER_TAG_ENUM:{
-                totallen = plen + MAXLENGTHOCTS + 2; //integers are weird
+                totallen = idlen + MAXLENGTHOCTS + 2; //integers are weird
             }
             break;
 
         case WANDDER_TAG_OID:{
-                totallen = plen + vallen -1; //first two bytes of OID are combined?
+                totallen = idlen + vallen; //first two bytes of OID are combined?
 
             }
             break;
         
         default:
             if (vallen < 128) {
-                plen += 1;
+                idlen += 1;
             } else {
                 loglen = WANDDER_LOG256_SIZE(vallen);
-                plen += (1 + loglen);
+                idlen += (1 + loglen);
 
                 // if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
                 //     //I think this line is a bug and should part of the idnum size 
@@ -406,7 +407,7 @@ wandder_buf_t * build_ber_field(
                 //     plen ++;
                 // }
             }
-            totallen = plen + vallen;
+            totallen = idlen + vallen;
         break;
     }
 
@@ -511,7 +512,7 @@ wandder_buf_t * build_ber_field(
                 ret = encode_length_indefinite(ptr, rem);
             }
             else {
-                ret = encode_length(vallen-2, ptr, rem);
+                ret = encode_length(vallen-1, ptr, rem);
             }
             ptr += ret;
             rem -= ret;
@@ -527,6 +528,7 @@ wandder_buf_t * build_ber_field(
 
             *ptr = (40 * valptr[0]) + valptr[1]; //not sure why this is a thing
             ptr += 1;
+            rem -=1;
             //0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11
             memcpy(ptr, valptr + 2, vallen - 2);
 
