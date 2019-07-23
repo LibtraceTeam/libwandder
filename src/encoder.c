@@ -1176,6 +1176,10 @@ uint32_t ber_rebuild_integer(
         val = *((int64_t *)valptr);
     } else if (vallen == 4) {
         val = *((int32_t *)valptr);
+    } else if (vallen == 2) {
+        val = *((int16_t *)valptr);
+    } else if (vallen == 1) {
+        val = *((int8_t *)valptr);
     } else {
         fprintf(stderr, "Encode error: unexpected length for integer type: %u\n",
             vallen);

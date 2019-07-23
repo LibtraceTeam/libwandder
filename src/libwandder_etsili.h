@@ -31,6 +31,10 @@
 
 #define WANDDER_ETSILI_PSDOMAINID (etsi_lipsdomainid)
 
+#define MEMCPYPREENCODE(ptr, itembuf) {memcpy(ptr, itembuf->buf, itembuf->len); ptr+=itembuf->len;}
+
+#define ENDCONSTRUCTEDBLOCK(ptr,num) {for (int uniuqevari = 0; uniuqevari < num*2; uniuqevari++){*ptr = 0;ptr+=1;}}
+
 extern const uint8_t etsi_lipsdomainid[9];
 
 typedef struct wandder_etsistack {
@@ -85,6 +89,64 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
 } wandder_etsispec_t;
 
+typedef struct wandder_pshdr {
+    uint32_t totallen;
+    wandder_buf_t block_0;
+    wandder_buf_t cin;
+    wandder_buf_t block_1;
+    wandder_buf_t seqno;
+    wandder_buf_t block_2;
+    wandder_buf_t sec;
+    wandder_buf_t usec;
+    wandder_buf_t block_3;
+} wandder_pshdr_t;
+
+typedef struct wandder_ipcc_body {
+    uint32_t totallen;
+    uint32_t alloc_len;
+    wandder_buf_t block_0;
+    wandder_buf_t dir;
+    wandder_buf_t block_1;
+    wandder_buf_t ipcontent;
+} wandder_ipcc_body_t;
+
+typedef enum {
+    OPENLI_PREENCODE_USEQUENCE,
+    OPENLI_PREENCODE_CSEQUENCE_0,
+    OPENLI_PREENCODE_CSEQUENCE_1,
+    OPENLI_PREENCODE_CSEQUENCE_2,
+    OPENLI_PREENCODE_CSEQUENCE_3,
+    OPENLI_PREENCODE_CSEQUENCE_7,	/* Microsecond timestamp */
+    OPENLI_PREENCODE_CSEQUENCE_11,  /* IPMMIRI */
+    OPENLI_PREENCODE_CSEQUENCE_12,  /* IPMMCC */
+    OPENLI_PREENCODE_PSDOMAINID,
+    OPENLI_PREENCODE_LIID,
+    OPENLI_PREENCODE_AUTHCC,
+    OPENLI_PREENCODE_OPERATORID,
+    OPENLI_PREENCODE_NETWORKELEMID,
+    OPENLI_PREENCODE_DELIVCC,
+    OPENLI_PREENCODE_INTPOINTID,
+    OPENLI_PREENCODE_TVCLASS,
+    OPENLI_PREENCODE_IPMMIRIOID,
+    OPENLI_PREENCODE_IPCCOID,
+    OPENLI_PREENCODE_IPIRIOID,
+    OPENLI_PREENCODE_IPMMCCOID,
+    OPENLI_PREENCODE_DIRFROM,
+    OPENLI_PREENCODE_DIRTO,
+    OPENLI_PREENCODE_DIRUNKNOWN,
+    OPENLI_PREENCODE_LAST
+
+} preencode_index_t;
+
+typedef struct etsili_intercept_details {
+    char *liid;
+    char *authcc;
+    char *delivcc;
+    char *intpointid;
+    char *operatorid;
+    char *networkelemid;
+} etsili_intercept_details_t;
+
 enum {
     WANDDER_IRI_CONTENT_IP,
     WANDDER_IRI_CONTENT_SIP,
@@ -112,6 +174,18 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *dec);
 int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec);
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
+
+
+
+void wandder_pshdr_update(int64_t cin,
+        int64_t seqno, struct timeval *tv, wandder_pshdr_t * hdr);
+wandber_encoded_result_t *encode_etsi_ipcc(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, uint32_t iplen, uint8_t dir,
+        wandder_pshdr_t **hdr);
+void etsili_clear_preencoded_fields_ber(wandder_buf_t **pendarray);
+
+
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :
