@@ -354,14 +354,14 @@ static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
 
 }
 
-wandder_buf_t * build_ber_field(
+static wandder_buf_t build_ber_field(
         uint8_t class, 
         uint8_t idnum, 
         uint8_t encodeas, 
         uint8_t * valptr, //--/->combine into buf?
         uint32_t vallen,  //-/
         void* buf, 
-        uint32_t rem){
+        int32_t rem){
 
     //tab space
 
@@ -388,7 +388,9 @@ wandder_buf_t * build_ber_field(
             break;
 
         case WANDDER_TAG_OID:{
-                totallen = idlen + vallen; //first two bytes of OID are combined?
+                totallen = idlen + vallen; //( +1 -1 ) 
+                // first two bytes of OID are combined so -1
+                // also includ len field so +1 
 
             }
             break;
@@ -413,25 +415,26 @@ wandder_buf_t * build_ber_field(
 
    
 
-    wandder_buf_t * itembuf = malloc(sizeof *itembuf);
+    wandder_buf_t itembuf;
     //are we making a new buffer or using the one provided?
     if (buf == NULL){
-        itembuf->buf = malloc(totallen);
+        itembuf.buf = malloc(totallen);
         rem = totallen;
     } 
     else {
         if (rem > totallen){
-            itembuf->buf = buf;
+            itembuf.buf = buf;
             //rem = rem; //just to show we use old value
         }
         else {
-            printf("not enough remaining space\n");
+            printf("not enough remaining space, want:%d, have:%d\n",totallen,rem);
+            assert(0);
         }
     }
-    itembuf->len = totallen;
+    itembuf.len = totallen;
     
     uint32_t ret = 0;
-    uint8_t * ptr = itembuf->buf;
+    uint8_t * ptr = itembuf.buf;
 
     
 
@@ -477,7 +480,7 @@ wandder_buf_t * build_ber_field(
             // }
 
             {
-                //ptr = itembuf->buf;
+                //ptr = itembuf.buf;
 
                 // ret = encode_identifier(class, idnum, ptr, rem);
                 // ptr += ret;
@@ -499,7 +502,7 @@ wandder_buf_t * build_ber_field(
 
                 
             }
-            assert(rem == 0);
+            assert(rem >= 0);
             return itembuf;
 
         case WANDDER_TAG_OID:
@@ -519,7 +522,7 @@ wandder_buf_t * build_ber_field(
 
             if (vallen < 2) {
                 fprintf(stderr, "Encode error: OID is too short!\n");
-                return 0;
+                return (wandder_buf_t){NULL, 0};
             }
             if ((vallen - 2) > rem) { 
                 printf("not enough space for oid\n");
@@ -582,6 +585,10 @@ wandder_buf_t * build_ber_field(
                 }
                 ptr += ret;
                 rem -= ret;
+                memset(ptr, 0, vallen); //should this bea  memcpy? 
+                //memcpy(ptr, valptr, vallen);
+                ptr+=vallen;
+                rem-=vallen;
             break;
 
         default:
@@ -590,11 +597,42 @@ wandder_buf_t * build_ber_field(
             assert(0);
     }
 
-
-
-
-    assert(rem == 0);
+    assert(rem >= 0);
     return itembuf;
+}
+
+
+uint32_t build_inplace(
+        uint8_t class, 
+        uint8_t idnum, 
+        uint8_t encodeas, 
+        uint8_t * valptr, //--/->combine into buf?
+        uint32_t vallen,  //-/
+        void* buf, 
+        uint32_t rem){
+
+    if (!buf){
+        printf("NULL pointer provided to build_inplace()\n");
+        assert(0);
+    }
+
+    wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, buf, rem);
+
+    return item.len;
+}
+
+wandder_buf_t * build_new_item(
+        uint8_t class, 
+        uint8_t idnum, 
+        uint8_t encodeas, 
+        uint8_t * valptr, //--/->combine into buf?
+        uint32_t vallen){
+
+    wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, NULL, 0);
+    wandder_buf_t *newitem = malloc(sizeof item);
+    memcpy(newitem, &item, sizeof item);
+
+    return newitem;
 }
 
 static uint32_t encode_oid(wandder_encode_job_t *p, void *valptr,
@@ -1570,7 +1608,7 @@ static void wandber_encode_next_pre(wandber_encoder_t *enc, uint8_t encodeas,
     buf += vallen;
     rem -= vallen;
 
-    assert(rem == 0);
+    //assert(rem == 0); //
 
     item->length = (buf-item->buf);
     enc->totallen += item->length;
@@ -1638,7 +1676,7 @@ void wandber_encode_next(wandber_encoder_t *enc, uint8_t encodeas,
     buf += vallen;
     rem -= vallen;
 
-    assert(rem == 0);
+    //assert(rem == 0);
 
     item->length = (buf-item->buf);
     enc->totallen += item->length;
