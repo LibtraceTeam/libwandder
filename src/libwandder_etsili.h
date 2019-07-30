@@ -90,41 +90,63 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
 } wandder_etsispec_t;
 
+typedef enum body_type {
+    WANDDER_ETSILI_EMPTY,
+    WANDDER_ETSILI_IPCC,
+    WANDDER_ETSILI_IPMMCC,
+    WANDDER_ETSILI_IPIRI,
+    WANDDER_ETSILI_IPMMIRI,
+} body_type_t;
 
+typedef enum {
+    ETSILI_IRI_BEGIN = 1,
+    ETSILI_IRI_END = 2,
+    ETSILI_IRI_CONTINUE = 3,
+    ETSILI_IRI_REPORT = 4
+} etsili_iri_type_t;
 
 typedef struct wandder_pshdr {
     uint8_t* cin;
     uint8_t* seqno;
     uint8_t* sec;
     uint8_t* usec;
+    uint8_t* end;
 } wandder_pshdr_t;
 
 typedef struct wandder_ipcc_body {
-    uint8_t* start;
     uint8_t* dir;
     uint8_t* ipcontent;
 } wandder_ipcc_body_t;
 
 typedef struct wandder_ipmmcc_body {
-    uint32_t totallen;
-    uint32_t alloc_len;         //length of alloc remaning from after the hdr part
-    wandder_buf_t block_0;
-    wandder_buf_t dir;
-    wandder_buf_t block_1;
-    wandder_buf_t ipcontent;
-    wandder_buf_t block_2;
+    uint8_t* dir;
+    uint8_t* ipcontent;
 } wandder_ipmmcc_body_t;
+
+typedef struct wandder_ipiri_body {
+    uint8_t* iritype;
+    uint8_t* params;
+} wandder_ipiri_body_t;
+
+typedef struct wandder_ipmmiri_body {
+    uint8_t* iritype;
+    uint8_t* ipcontent;
+} wandder_ipmmiri_body_t;
 
 typedef struct wandber_etsili_top {
     uint8_t* buf;
     size_t len;
     size_t alloc_len;
     wandder_pshdr_t header;
+    body_type_t body_type;
     union {
         wandder_ipcc_body_t ipcc;
         wandder_ipmmcc_body_t ipmmcc;
+        wandder_ipmmiri_body_t ipmmiri;
+        wandder_ipiri_body_t ipiri;
     } body;
 } wandber_etsili_top_t;
+
 
 typedef enum {
     OPENLI_PREENCODE_USEQUENCE,
@@ -197,6 +219,20 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 void encode_etsi_ipcc(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, uint32_t iplen, uint8_t dir,
+        wandber_etsili_top_t *top);
+void encode_etsi_ipmmcc(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, uint32_t iplen, uint8_t dir,
+        wandber_etsili_top_t *top);
+
+void encode_etsi_ipmmiri(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, uint32_t iplen, etsili_iri_type_t iritype,
+        wandber_etsili_top_t *top);
+
+void encode_etsi_ipiri(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void* params, etsili_iri_type_t iritype,
         wandber_etsili_top_t *top);
 
 void etsili_preencode_static_fields_ber(
