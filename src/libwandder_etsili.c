@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stddef.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -1969,28 +1970,28 @@ void wandder_pshdr_update(int64_t cin,
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
         1, 
         &(cin), 
-        sizeof(int64_t),
+        sizeof cin,
         top->header.cin);
 
     ber_rebuild_integer(
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
         4, 
         &(seqno), 
-        sizeof(int64_t),
+        sizeof seqno,
         top->header.seqno);
 
     ber_rebuild_integer(
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
         0, 
         &(tv->tv_sec), 
-        sizeof(tv->tv_sec),
+        sizeof tv->tv_sec,
         top->header.sec);
 
     ber_rebuild_integer(
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
         1, 
         &(tv->tv_usec), 
-        sizeof(tv->tv_usec),
+        sizeof tv->tv_usec,
         top->header.usec);
 }
 
@@ -2006,7 +2007,7 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
      * into separate parameters.
      */
 
-    uint32_t totallen = 
+    uint32_t totallen = //this can probably just be generously be estimated, dont need the actual value
         precomputed[OPENLI_PREENCODE_USEQUENCE]->len+
         precomputed[OPENLI_PREENCODE_CSEQUENCE_1]->len+
         precomputed[OPENLI_PREENCODE_PSDOMAINID]->len+
@@ -2017,7 +2018,7 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
         precomputed[OPENLI_PREENCODE_OPERATORID]->len+
         precomputed[OPENLI_PREENCODE_NETWORKELEMID]->len+
         2 + //endseq
-        //THIS CAN BE ANY INTEGER just need to obtain the sizewhich is the same for all integers
+        //THIS CAN BE ANY INTEGER just need to obtain the size, which is the same for all integers
         precomputed[OPENLI_PREENCODE_DIRUNKNOWN]->len+ //Integer
         precomputed[OPENLI_PREENCODE_DELIVCC]->len+
         2 + //endseq
@@ -2038,7 +2039,7 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
         precomputed[OPENLI_PREENCODE_TVCLASS]->len+
         2; //endseq
 
-    top->len = totallen;
+    
     top->alloc_len = totallen;
     top->buf = malloc(top->alloc_len);
     uint8_t * ptr = top->buf;
@@ -2061,9 +2062,8 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
         1, 
         &(cin), 
-        sizeof(int64_t),
+        sizeof cin,
         ptr);
-    //top->header.cin.len = ((void *)ptr) - top->header.cin;
     //////////////////////////////////////////////////////////////// block 1
     MEMCPYPREENCODE(ptr, precomputed[OPENLI_PREENCODE_DELIVCC]);
     ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
@@ -2073,9 +2073,8 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
         4, 
         &(seqno), 
-        sizeof(int64_t),
+        sizeof seqno,
         ptr);
-    //top->header.seqno.len = ((void *)ptr) - top->header.seqno.buf;
     //////////////////////////////////////////////////////////////// block 2
     if (precomputed[OPENLI_PREENCODE_INTPOINTID]){
         MEMCPYPREENCODE(ptr, precomputed[OPENLI_PREENCODE_INTPOINTID]);
@@ -2085,25 +2084,24 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
     top->header.sec = ptr;
     ptr+= ber_rebuild_integer(
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-        0, 
+        0,
         &(tv->tv_sec), 
-        sizeof(tv->tv_sec),
+        sizeof tv->tv_sec,
         ptr);
-    //top->header.sec.len = ((void *)ptr) - top->header.sec.buf;
     //////////////////////////////////////////////////////////////// usec
     top->header.usec = ptr;
     ptr+= ber_rebuild_integer(
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
         1, 
         &(tv->tv_usec), 
-        sizeof(tv->tv_usec),
+        sizeof tv->tv_usec,
         ptr);
-    //top->header.usec.len = ((void *)ptr) - top->header.usec.buf;
     //////////////////////////////////////////////////////////////// block 3
     ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
     MEMCPYPREENCODE(ptr, precomputed[OPENLI_PREENCODE_TVCLASS]);
     ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
 
+    top->len = ptr - top->buf;
 }
 
 static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
@@ -2115,12 +2113,12 @@ static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *i
     //id for ipcont is known, is ALWAYS 1 byte
     //vallen is iplen 
     //just need lenlen
-    uint32_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
+    size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
     if (iplen > 127){  //if iplen > 127, long form must be used
         lenlen++;
     }
-    uint32_t iptotalen = 1 + lenlen + iplen;
-    uint32_t totallen = (top->body.ipcc.ipcontent - top->buf) + iptotalen + (7 * 2);
+    size_t iptotalen = 1 + lenlen + iplen;
+    size_t totallen = (top->body.ipcc.ipcontent - top->buf) + iptotalen + (7 * 2);
     //                  (size up to variable part) + (lenght of variable part) + (size of footer)
 
     //if new length is larger
@@ -2192,7 +2190,7 @@ static inline void init_ipcc_body(
 
     //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
 
-    uint32_t totallen = 
+    size_t totallen = 
         precomputed[OPENLI_PREENCODE_CSEQUENCE_2]->len+
         precomputed[OPENLI_PREENCODE_CSEQUENCE_1]->len+
         precomputed[OPENLI_PREENCODE_USEQUENCE]->len+
@@ -2276,7 +2274,7 @@ static inline void init_ipcc_body(
 
 void encode_etsi_ipcc(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, uint32_t iplen, uint8_t dir,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top) {
 
     if (top->buf){
@@ -2296,7 +2294,7 @@ void encode_etsi_ipcc(
 }
 
 static inline void wandder_ipmmiri_body_update(wandder_buf_t **precomputed, void *ipcontent,
-        uint32_t iplen, etsili_iri_type_t iritype, wandber_etsili_top_t * top) {
+        size_t iplen, etsili_iri_type_t iritype, wandber_etsili_top_t * top) {
 
     //tab space
 
@@ -2445,7 +2443,7 @@ static inline void init_ipmmiri_body(
 
 void encode_etsi_ipmmiri(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, uint32_t iplen, etsili_iri_type_t iritype,
+        struct timeval *tv, void *ipcontents, size_t iplen, etsili_iri_type_t iritype,
         wandber_etsili_top_t *top) {
 
     if (top->buf){
@@ -2808,11 +2806,9 @@ void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
     top->len = totallen;
 }
 
-
-
 void encode_etsi_ipmmcc(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, uint32_t iplen, uint8_t dir,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top) {
 
     if (top->buf){
@@ -3016,8 +3012,5 @@ void etsili_preencode_static_fields_ber(
             sizeof dirunk);
 
 }
-
-
-
 
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

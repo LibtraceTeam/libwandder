@@ -28,13 +28,13 @@
 #define LIBWANDDER_ETSILI_H_
 
 #include <libwandder.h>
+#include <stdint.h>
 
 #define WANDDER_ETSILI_PSDOMAINID (etsi_lipsdomainid)
 
 #define MEMCPYPREENCODE(ptr, itembuf) {memcpy(ptr, itembuf->buf, itembuf->len); ptr+=itembuf->len;}
 
-#define ENDCONSTRUCTEDBLOCK(ptr,num) {for (int uniuqevari = 0; uniuqevari < num*2; uniuqevari++){*ptr = 0;ptr+=1;}}
-//memset(ptr, 0, num*2);ptr+=num*2;
+#define ENDCONSTRUCTEDBLOCK(ptr,num) memset(ptr, 0, num*2);ptr+=num*2;
 
 extern const uint8_t etsi_lipsdomainid[9];
 
@@ -218,16 +218,16 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 void encode_etsi_ipcc(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, uint32_t iplen, uint8_t dir,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top);
 void encode_etsi_ipmmcc(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, uint32_t iplen, uint8_t dir,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top);
 
 void encode_etsi_ipmmiri(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, uint32_t iplen, etsili_iri_type_t iritype,
+        struct timeval *tv, void *ipcontents, size_t iplen, etsili_iri_type_t iritype,
         wandber_etsili_top_t *top);
 
 void encode_etsi_ipiri(

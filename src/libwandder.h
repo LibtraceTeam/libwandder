@@ -28,6 +28,7 @@
 #define LIBWANDDER_H_
 
 #include <inttypes.h>
+#include <stddef.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <sys/time.h>
@@ -240,27 +241,6 @@ typedef struct wandder_encode_job {
     uint32_t encodedlen;
 } wandder_encode_job_t;
 
-
-typedef struct wandber_item wandber_item_t;
-struct wandber_item {
-    uint8_t * buf;              //ptr to start of buffer
-    uint32_t length;            //length of the buffer, not the item
-    wandber_item_t * next;      //ptr to next item, NULL if last
-};
-
-typedef struct wandber_encoder wandber_encoder_t;
-struct wandber_encoder {
-    uint32_t totallen;          //sum of all sub buffer lengths
-    wandber_item_t *head;       //ptr to first item
-    wandber_item_t *tail;       //ptr to most recent item
-};
-
-typedef struct wandber_encoded_result wandber_encoded_result_t;
-struct wandber_encoded_result {
-    uint8_t * buf;              //one large buffer contaning the entire encoding
-    uint32_t length;            //length of encoding
-};
-
 struct wandder_pending {
     wandder_encode_job_t thisjob;
     uint32_t childrensize;
@@ -286,7 +266,7 @@ struct wandder_encoded_result {
 typedef struct wandder_buf wandder_buf_t;
 struct wandder_buf {
     void * buf;
-    uint32_t len;
+    size_t len;
 };
 
 
@@ -316,37 +296,13 @@ struct wandder_encoder {
  * ----------------------------------------------------
  */
 //BER encoder
-wandber_encoder_t *init_wandber_encoder();
-void free_wandber_encoder(wandber_encoder_t *enc);
-void wandber_encoder_reset(wandber_encoder_t *enc);
+size_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, size_t vallen, void* buf); //ber_rebuild_integer
 
-void wandber_encode_next(wandber_encoder_t *enc, uint8_t encodeas,
-        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen);
-//int wandber_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,
-//        uint32_t vallen);
-void wandber_encode_next_preencoded(wandber_encoder_t *enc,
-        wandder_encode_job_t **jobs, int jobcount);
-
-void wandber_encode_endseq(wandber_encoder_t * enc);
-void wandber_encode_endseq_repeat(wandber_encoder_t * enc, int repeats);
-
-wandber_encoded_result_t *wandber_encode_finish(wandber_encoder_t *enc);
-
-wandber_encoded_result_t *wandber_encode_consolidate(wandber_encoder_t *enc);
-
-void wandber_encoded_release_result(wandber_encoded_result_t *res);
-//void wandber_encoded_release_results(wandber_encoded_result_t *res, wandber_encoded_result_t *tail); //not implimented
-
-uint32_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, void* buf);
-uint32_t ber_create_integer(uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen, wandder_buf_t* buf);
-
-uint32_t build_inplace(uint8_t class, uint8_t idnum, uint8_t encodeas, 
-        uint8_t * valptr, uint32_t vallen, void* buf, uint32_t rem);
-
-wandder_buf_t * build_new_item(uint8_t class, uint8_t idnum, uint8_t encodeas, 
-        uint8_t * valptr, uint32_t vallen);
-
-uint32_t ber_build_integer_value(void *valptr, uint32_t vallen, void* buf, uint32_t rem);
+//TODO seperate these methods more
+size_t build_inplace(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_inplace
+        uint8_t * valptr, size_t vallen, void* buf, ptrdiff_t rem);
+wandder_buf_t * build_new_item(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_new_item
+        uint8_t * valptr, size_t vallen);
 /////////////////////////////////////////////////
 //DER encoder
 wandder_encoder_t *init_wandder_encoder();
