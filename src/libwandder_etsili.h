@@ -90,100 +90,100 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
 } wandder_etsispec_t;
 
-typedef enum body_type {
+typedef enum wandber_body_type {
     WANDDER_ETSILI_EMPTY,
     WANDDER_ETSILI_IPCC,
     WANDDER_ETSILI_IPMMCC,
     WANDDER_ETSILI_IPIRI,
     WANDDER_ETSILI_IPMMIRI,
-} body_type_t;
+} wandber_body_type_t;
 
 typedef enum {
-    ETSILI_IRI_BEGIN = 1,
-    ETSILI_IRI_END = 2,
-    ETSILI_IRI_CONTINUE = 3,
-    ETSILI_IRI_REPORT = 4
-} etsili_iri_type_t;
+    WANDDER_ETSILI_IRI_BEGIN = 1,
+    WANDDER_ETSILI_IRI_END = 2,
+    WANDDER_ETSILI_IRI_CONTINUE = 3,
+    WANDDER_ETSILI_IRI_REPORT = 4
+} wandber_etsili_iri_type_t;
 
-typedef struct wandder_pshdr {
+typedef struct wandber_pshdr {
     uint8_t* cin;
     uint8_t* seqno;
     uint8_t* sec;
     uint8_t* usec;
     uint8_t* end;
-} wandder_pshdr_t;
+} wandber_pshdr_t;
 
-typedef struct wandder_ipcc_body {
+typedef struct wandber_ipcc_body {
     uint8_t* dir;
     uint8_t* ipcontent;
-} wandder_ipcc_body_t;
+} wandber_ipcc_body_t;
 
-typedef struct wandder_ipmmcc_body {
+typedef struct wandber_ipmmcc_body {
     uint8_t* dir;
     uint8_t* ipcontent;
-} wandder_ipmmcc_body_t;
+} wandber_ipmmcc_body_t;
 
-typedef struct wandder_ipiri_body {
+typedef struct wandber_ipiri_body {
     uint8_t* iritype;
     uint8_t* params;
-} wandder_ipiri_body_t;
+} wandber_ipiri_body_t;
 
-typedef struct wandder_ipmmiri_body {
+typedef struct wandber_ipmmiri_body {
     uint8_t* iritype;
     uint8_t* ipcontent;
-} wandder_ipmmiri_body_t;
+} wandber_ipmmiri_body_t;
 
 typedef struct wandber_etsili_top {
     uint8_t* buf;
     size_t len;
     size_t alloc_len;
-    wandder_pshdr_t header;
-    body_type_t body_type;
+    wandber_pshdr_t header;
+    wandber_body_type_t body_type;
     union {
-        wandder_ipcc_body_t ipcc;
-        wandder_ipmmcc_body_t ipmmcc;
-        wandder_ipmmiri_body_t ipmmiri;
-        wandder_ipiri_body_t ipiri;
+        wandber_ipcc_body_t ipcc;
+        wandber_ipmmcc_body_t ipmmcc;
+        wandber_ipmmiri_body_t ipmmiri;
+        wandber_ipiri_body_t ipiri;
     } body;
 } wandber_etsili_top_t;
 
 
 typedef enum {
-    OPENLI_PREENCODE_USEQUENCE,
-    OPENLI_PREENCODE_CSEQUENCE_0,
-    OPENLI_PREENCODE_CSEQUENCE_1,
-    OPENLI_PREENCODE_CSEQUENCE_2,
-    OPENLI_PREENCODE_CSEQUENCE_3,
-    OPENLI_PREENCODE_CSEQUENCE_7,	/* Microsecond timestamp */
-    OPENLI_PREENCODE_CSEQUENCE_11,  /* IPMMIRI */
-    OPENLI_PREENCODE_CSEQUENCE_12,  /* IPMMCC */
-    OPENLI_PREENCODE_PSDOMAINID,
-    OPENLI_PREENCODE_LIID,
-    OPENLI_PREENCODE_AUTHCC,
-    OPENLI_PREENCODE_OPERATORID,
-    OPENLI_PREENCODE_NETWORKELEMID,
-    OPENLI_PREENCODE_DELIVCC,
-    OPENLI_PREENCODE_INTPOINTID,
-    OPENLI_PREENCODE_TVCLASS,
-    OPENLI_PREENCODE_IPMMIRIOID,
-    OPENLI_PREENCODE_IPCCOID,
-    OPENLI_PREENCODE_IPIRIOID,
-    OPENLI_PREENCODE_IPMMCCOID,
-    OPENLI_PREENCODE_DIRFROM,
-    OPENLI_PREENCODE_DIRTO,
-    OPENLI_PREENCODE_DIRUNKNOWN,
-    OPENLI_PREENCODE_LAST
+    WANDBER_PREENCODE_USEQUENCE,
+    WANDBER_PREENCODE_CSEQUENCE_0,
+    WANDBER_PREENCODE_CSEQUENCE_1,
+    WANDBER_PREENCODE_CSEQUENCE_2,
+    WANDBER_PREENCODE_CSEQUENCE_3,
+    WANDBER_PREENCODE_CSEQUENCE_7,	/* Microsecond timestamp */
+    WANDBER_PREENCODE_CSEQUENCE_11,  /* IPMMIRI */
+    WANDBER_PREENCODE_CSEQUENCE_12,  /* IPMMCC */
+    WANDBER_PREENCODE_PSDOMAINID,
+    WANDBER_PREENCODE_LIID,
+    WANDBER_PREENCODE_AUTHCC,
+    WANDBER_PREENCODE_OPERATORID,
+    WANDBER_PREENCODE_NETWORKELEMID,
+    WANDBER_PREENCODE_DELIVCC,
+    WANDBER_PREENCODE_INTPOINTID,
+    WANDBER_PREENCODE_TVCLASS,
+    WANDBER_PREENCODE_IPMMIRIOID,
+    WANDBER_PREENCODE_IPCCOID,
+    WANDBER_PREENCODE_IPIRIOID,
+    WANDBER_PREENCODE_IPMMCCOID,
+    WANDBER_PREENCODE_DIRFROM,
+    WANDBER_PREENCODE_DIRTO,
+    WANDBER_PREENCODE_DIRUNKNOWN,
+    WANDBER_PREENCODE_LAST
 
-} preencode_index_t;
+} wandber_preencode_index_t;
 
-typedef struct etsili_intercept_details {
+typedef struct wandber_etsili_intercept_details {
     char *liid;
     char *authcc;
     char *delivcc;
     char *intpointid;
     char *operatorid;
     char *networkelemid;
-} etsili_intercept_details_t;
+} wandber_etsili_intercept_details_t;
 
 enum {
     WANDDER_IRI_CONTENT_IP,
@@ -216,28 +216,28 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 
 
-void encode_etsi_ipcc(
+void wandber_encode_etsi_ipcc(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top);
-void encode_etsi_ipmmcc(
+void wandber_encode_etsi_ipmmcc(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top);
 
-void encode_etsi_ipmmiri(
+void wandber_encode_etsi_ipmmiri(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, size_t iplen, etsili_iri_type_t iritype,
+        struct timeval *tv, void *ipcontents, size_t iplen, wandber_etsili_iri_type_t iritype,
         wandber_etsili_top_t *top);
 
-void encode_etsi_ipiri(
+void wandber_encode_etsi_ipiri(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void* params, etsili_iri_type_t iritype,
+        struct timeval *tv, void* params, wandber_etsili_iri_type_t iritype,
         wandber_etsili_top_t *top);
 
-void etsili_preencode_static_fields_ber(
-        wandder_buf_t **pendarray, etsili_intercept_details_t *details);
-void etsili_clear_preencoded_fields_ber(wandder_buf_t **pendarray);
+void wandber_etsili_preencode_static_fields_ber(
+        wandder_buf_t **pendarray, wandber_etsili_intercept_details_t *details);
+void wandber_etsili_clear_preencoded_fields_ber(wandder_buf_t **pendarray);
 
 
 
