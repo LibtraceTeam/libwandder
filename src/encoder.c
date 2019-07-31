@@ -36,6 +36,8 @@
 
 #define MAXLENGTHOCTS 6
 //ideally this value is 9 to support 64 bit ints
+//is currently 6 so that i can use https://lapo.it/asn1js 
+//to view encodings
 
 #define VALALLOC(x, p) \
     if (x > p->valalloced) { \
@@ -230,12 +232,12 @@ static inline uint32_t calc_preamblen(uint32_t identifier, uint32_t len) {
         loglen = WANDDER_LOG256_SIZE(len);
         plen += (1 + loglen);
 
-        // if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
-        //     //I think this line is a bug and should part of the identifier size 
-        //     //(bit 8 is reserved for the stop bit of the long id form)
-        //     //where as in the long form of the length, the number of octets is specfied
-        //     plen ++;
-        // }
+        if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
+            //I think this line is a bug and should part of the identifier size 
+            //(bit 8 is reserved for the stop bit of the long id form)
+            //where as in the long form of the length, the number of octets is specfied
+            plen ++;
+        }
     }
 
     return plen;
@@ -300,21 +302,6 @@ static uint32_t encode_identifier(uint8_t class, uint32_t ident,
 
     return ind + 1;
 }
-static inline uint32_t encode_length_indefinite(uint8_t *buf, uint32_t rem) {
-    
-    if (rem == 0) {
-        fprintf(stderr, "Encode error: no more space while encoding length\n");
-        return 0;
-    }
-    *buf = 0x80; //should I set a #define for this somewhere or just use "magic" value?
-    buf +=1;
-    rem -=1;
-
-    return 1;
-}
-
-
-
 
 static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     uint8_t lenocts = 0;
@@ -331,9 +318,9 @@ static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     }
 
     lenocts = WANDDER_LOG256_SIZE(len);
-    // if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) {
-    //     lenocts ++;
-    // }
+    if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) {
+        lenocts ++;
+    }
 
     *buf = lenocts | 0x80;
 
@@ -354,287 +341,6 @@ static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
 
 }
 
-static wandder_buf_t build_ber_field(
-        uint8_t class, 
-        uint8_t idnum, 
-        uint8_t encodeas, 
-        uint8_t * valptr, //--/->combine into buf?
-        uint32_t vallen,  //-/
-        void* buf, 
-        int32_t rem){
-
-    //tab space
-
-    //first need to calculate how much space we are going to use
-    //class + id len + len len + val len
-
-    uint32_t idlen = 0;
-    uint32_t lenlen = 0;
-    uint32_t loglen = 0;
-    uint32_t totallen = 0;
-
-    if (idnum <= 30) { //idlen 
-        idlen += 1;
-    } else {
-        loglen = WANDDER_LOG128_SIZE(idnum);
-        idlen += (1 + loglen);
-    }
-
-    switch (encodeas) {
-        case WANDDER_TAG_INTEGER:
-        case WANDDER_TAG_ENUM:{
-                totallen = idlen + MAXLENGTHOCTS + 2; //integers are weird
-            }
-            break;
-
-        case WANDDER_TAG_OID:{
-                totallen = idlen + vallen; //( +1 -1 ) 
-                // first two bytes of OID are combined so -1
-                // also includ len field so +1 
-
-            }
-            break;
-        
-        default:
-            if (vallen < 128) {
-                idlen += 1;
-            } else {
-                loglen = WANDDER_LOG256_SIZE(vallen);
-                idlen += (1 + loglen);
-
-                // if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
-                //     //I think this line is a bug and should part of the idnum size 
-                //     //(bit 8 is reserved for the stop bit of the long id form)
-                //     //where as in the long form of the length, the number of octets is specfied
-                //     plen ++;
-                // }
-            }
-            totallen = idlen + vallen;
-        break;
-    }
-
-   
-
-    wandder_buf_t itembuf;
-    //are we making a new buffer or using the one provided?
-    if (buf == NULL){
-        itembuf.buf = malloc(totallen);
-        rem = totallen;
-    } 
-    else {
-        if (rem > totallen){
-            itembuf.buf = buf;
-            //rem = rem; //just to show we use old value
-        }
-        else {
-            printf("not enough remaining space, want:%d, have:%d\n",totallen,rem);
-            assert(0);
-        }
-    }
-    itembuf.len = totallen;
-    
-    uint32_t ret = 0;
-    uint8_t * ptr = itembuf.buf;
-
-    
-
-
-
-    switch(encodeas) {
-        case WANDDER_TAG_OCTETSTRING:
-        case WANDDER_TAG_UTF8STR:
-        case WANDDER_TAG_NUMERIC:
-        case WANDDER_TAG_PRINTABLE:
-        case WANDDER_TAG_IA5:
-        case WANDDER_TAG_RELATIVEOID:
-
-            ret = encode_identifier(class, idnum, ptr, rem);
-            ptr += ret;
-            rem -= ret;
-            
-            if(class & 1){
-                ret = encode_length_indefinite(ptr, rem);
-            }
-            else {
-                ret = encode_length(vallen, ptr, rem);
-            }
-            ptr += ret;
-            rem -= ret;
-
-            memcpy(ptr, valptr, vallen);
-            ptr += vallen;
-            rem -= vallen;
-            break;
-
-        case WANDDER_TAG_GENERALTIME:
-            /* Timeval to general TS */
-            // if (encode_gtime(job, valptr, vallen) == 0) { //TODO
-            //     return;
-            // }
-            break;
-        case WANDDER_TAG_INTEGER:
-        case WANDDER_TAG_ENUM:
-            // /* Signed int to Integer */
-            // if (encode_integer_ber(job, valptr, vallen) == 0) { //TODO
-            //     return;
-            // }
-
-            {
-                //ptr = itembuf.buf;
-
-                // ret = encode_identifier(class, idnum, ptr, rem);
-                // ptr += ret;
-                // rem -= ret;
-                
-                // if(class & 1){
-                //     ret = encode_length_indefinite(ptr, rem);
-                // }
-                // else {
-                //     ret = encode_length(vallen, ptr, rem);
-                // }
-                // ptr += ret;
-                // rem -= ret;
-                
-                // ret = ber_build_integer_value(valptr, vallen, ptr, rem);
-                ret = ber_rebuild_integer(class, idnum, valptr, vallen, ptr);
-                ptr += ret;
-                rem -= ret;
-
-                
-            }
-            assert(rem >= 0);
-            return itembuf;
-
-        case WANDDER_TAG_OID:
-
-            ret = encode_identifier(class, idnum, ptr, rem);
-            ptr += ret;
-            rem -= ret;
-            
-            if(class & 1){
-                ret = encode_length_indefinite(ptr, rem);
-            }
-            else {
-                ret = encode_length(vallen-1, ptr, rem);
-            }
-            ptr += ret;
-            rem -= ret;
-
-            if (vallen < 2) {
-                fprintf(stderr, "Encode error: OID is too short!\n");
-                return (wandder_buf_t){NULL, 0};
-            }
-            if ((vallen - 2) > rem) { 
-                printf("not enough space for oid\n");
-                assert(0);
-            }
-
-            *ptr = (40 * valptr[0]) + valptr[1]; //not sure why this is a thing
-            ptr += 1;
-            rem -=1;
-            //0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11
-            memcpy(ptr, valptr + 2, vallen - 2);
-
-            ptr += vallen -2;
-            rem -= vallen -2;
-
-            break;
-
-
-        case WANDDER_TAG_NULL:
-                ret = encode_identifier(class, idnum, ptr, rem);
-                ptr += ret;
-                rem -= ret;
-                
-                if(class & 1){
-                    ret = encode_length_indefinite(ptr, rem);
-                }
-                else {
-                    ret = encode_length(vallen, ptr, rem);
-                }
-                ptr += ret;
-                rem -= ret;
-            break;
-
-        case WANDDER_TAG_SEQUENCE:
-        case WANDDER_TAG_SET:
-                ret = encode_identifier(class, idnum, ptr, rem);
-                ptr += ret;
-                rem -= ret;
-                
-                if(class & 1){
-                    ret = encode_length_indefinite(ptr, rem);
-                }
-                else {
-                    ret = encode_length(vallen, ptr, rem);
-                }
-                ptr += ret;
-                rem -= ret;
-            break;
-
-        case WANDDER_TAG_IPPACKET:
-                ret = encode_identifier(class, idnum, ptr, rem);
-                ptr += ret;
-                rem -= ret;
-                
-                if(class & 1){
-                    ret = encode_length_indefinite(ptr, rem);
-                }
-                else {
-                    ret = encode_length(vallen, ptr, rem);
-                }
-                ptr += ret;
-                rem -= ret;
-                memset(ptr, 0, vallen); //should this bea  memcpy? 
-                //memcpy(ptr, valptr, vallen);
-                ptr+=vallen;
-                rem-=vallen;
-            break;
-
-        default:
-            fprintf(stderr, "Encode error: unable to encode tag type %d\n",
-                    encodeas);
-            assert(0);
-    }
-
-    assert(rem >= 0);
-    return itembuf;
-}
-
-
-uint32_t build_inplace(
-        uint8_t class, 
-        uint8_t idnum, 
-        uint8_t encodeas, 
-        uint8_t * valptr, //--/->combine into buf?
-        uint32_t vallen,  //-/
-        void* buf, 
-        uint32_t rem){
-
-    if (!buf){
-        printf("NULL pointer provided to build_inplace()\n");
-        assert(0);
-    }
-
-    wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, buf, rem);
-
-    return item.len;
-}
-
-wandder_buf_t * build_new_item(
-        uint8_t class, 
-        uint8_t idnum, 
-        uint8_t encodeas, 
-        uint8_t * valptr, //--/->combine into buf?
-        uint32_t vallen){
-
-    wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, NULL, 0);
-    wandder_buf_t *newitem = malloc(sizeof item);
-    memcpy(newitem, &item, sizeof item);
-
-    return newitem;
-}
-
 static uint32_t encode_oid(wandder_encode_job_t *p, void *valptr,
         uint32_t len) {
 
@@ -646,24 +352,11 @@ static uint32_t encode_oid(wandder_encode_job_t *p, void *valptr,
         return 0;
     }
 
-    //VALALLOC((len - 1), p);
-    if ((len - 1) > p->valalloced) { 
-        if ((len - 1) < 512) { 
-            p->valspace = (uint8_t *)realloc(p->valspace, 512);
-            p->valalloced = 512; 
-        } else { 
-            p->valspace = (uint8_t *)realloc(p->valspace, ((len - 1)));
-            p->valalloced = (len - 1);
-        } 
-    }
-
+    VALALLOC((len - 1), p);
     p->vallen = len - 1;
     ptr = p->valspace;
     *ptr = (40 * cast[0]) + cast[1];
     ptr += 1;
-
-
-    //0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11
 
     memcpy(ptr, cast + 2, len - 2);
     return len - 1;
@@ -689,7 +382,7 @@ static inline uint32_t encode_integer(wandder_encode_job_t *p, void *valptr,
 
     if (val < 0) {
         /* Play it safe with negative numbers (or seemingly negative ones) */
-        lenocts = len; //TODO double check result of 0xfeedbeef (leading 1)
+        lenocts = len;
     } else {
         lenocts = WANDDER_LOG256_SIZE(val);
         if (lenocts == 0) {
@@ -814,7 +507,6 @@ static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
     }
 }
 
-//append item as a pending
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen) {    
 
@@ -850,7 +542,6 @@ void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
 
 }
 
-//encode an array of jobs in to a list of pendings
 void wandder_encode_next_preencoded(wandder_encoder_t *enc,
         wandder_encode_job_t **jobs, int jobcount) {
 
@@ -892,7 +583,6 @@ void wandder_encode_next_preencoded(wandder_encoder_t *enc,
     */
 }
 
-//pre encode value, class, id into the job (only updates the provided job)
 int wandder_encode_preencoded_value(wandder_encode_job_t *job, void *valptr,
         uint32_t vallen) {
 
@@ -1163,10 +853,6 @@ wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
             x = result->len;
         }
         result->encoded = (uint8_t *)realloc(result->encoded, x);
-
-        memset(result->encoded, 0, x);////TODO THIS IS ONLY HERE TO PREVENT VALGRIND YELLING AT ME FOR MALFORMED TESTS
-        //test compares against ipcontents which is never copied inand so is uninitlized data without a memset
-
         result->alloced = x;
     }
 
@@ -1179,35 +865,264 @@ wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
     return result;
 }
 
-uint32_t ber_create_integer(
-        uint8_t itemclass, 
-        uint32_t idnum, 
-        void *valptr, 
-        uint32_t vallen,
-        wandder_buf_t * buf) {
-    
-    uint32_t ret;
-    buf->buf = malloc(MAXLENGTHOCTS + 3);
-    ret = ber_rebuild_integer(itemclass, idnum, valptr, vallen, buf->buf);
-    if (ret != (MAXLENGTHOCTS +3)){
-        //error in writing
-        free(buf->buf);
+static inline size_t encode_length_indefinite(uint8_t *buf, ptrdiff_t rem) {
+    if (rem <= 0) {
+        fprintf(stderr, "Encode error: no more space while encoding length\n");
         return 0;
     }
-    return ret;
+    *buf = 0x80; //TODO should I set a #define for this somewhere or just use "magic" value?
+    return 1;
+}
 
+static wandder_buf_t build_ber_field( //TODO split up this function (with build_inplace and build_new_item)
+        uint8_t class, 
+        uint8_t idnum, 
+        uint8_t encodeas, 
+        uint8_t * valptr, //--/->combine into buf?
+        size_t vallen,  //-/
+        void* buf, 
+        ptrdiff_t rem){
+    //first need to calculate how much space we are going to use
+    //class + id len + len len + val len
+
+    size_t idlen = 0;
+    size_t lenlen = 0;
+    size_t loglen = 0;
+    size_t totallen = 0;
+
+    if (idnum <= 30) { //idlen 
+        idlen += 1;
+    } else {
+        loglen = WANDDER_LOG128_SIZE(idnum);
+        idlen += (1 + loglen);
+    }
+
+    switch (encodeas) {
+        case WANDDER_TAG_INTEGER:
+        case WANDDER_TAG_ENUM:{
+                totallen = idlen + MAXLENGTHOCTS + 2; //integers are weird
+            }
+            break;
+
+        case WANDDER_TAG_OID:{
+                totallen = idlen + vallen; //( +1 -1 ) 
+                // first two bytes of OID are combined so -1
+                // also includ len field so +1 
+
+            }
+            break;
+        
+        default:
+            if (vallen < 128) {
+                idlen += 1;
+            } else {
+                loglen = WANDDER_LOG256_SIZE(vallen);
+                idlen += (1 + loglen);
+
+                // if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
+                //     //I think this line is a bug and should part of the idnum size 
+                //     //(bit 8 is reserved for the stop bit of the long id form)
+                //     //where as in the long form of the length, the number of octets is specfied
+                //     plen ++;
+                // }
+            }
+            totallen = idlen + vallen;
+        break;
+    }
+
+    wandder_buf_t itembuf;
+    //are we making a new buffer or using the one provided?
+    if (buf == NULL){
+        itembuf.buf = malloc(totallen);
+        rem = totallen;
+    } 
+    else {
+        if (rem > totallen){
+            itembuf.buf = buf;
+            //rem = rem; //just to show we use old value
+        }
+        else {
+            printf("not enough remaining space, want:%d, have:%d\n",totallen,rem);
+            assert(0);
+        }
+    }
+    itembuf.len = totallen;
+    
+    size_t ret = 0;
+    uint8_t * ptr = itembuf.buf;
+
+    switch(encodeas) {
+        case WANDDER_TAG_OCTETSTRING:
+        case WANDDER_TAG_UTF8STR:
+        case WANDDER_TAG_NUMERIC:
+        case WANDDER_TAG_PRINTABLE:
+        case WANDDER_TAG_IA5:
+        case WANDDER_TAG_RELATIVEOID:
+
+            ret = encode_identifier(class, idnum, ptr, rem);
+            ptr += ret;
+            rem -= ret;
+            
+            if(class & 1){ //if type is constructed use indefinite length 
+                ret = encode_length_indefinite(ptr, rem);
+            }
+            else {
+                ret = encode_length(vallen, ptr, rem);
+            }
+            ptr += ret;
+            rem -= ret;
+
+            memcpy(ptr, valptr, vallen);
+            ptr += vallen;
+            rem -= vallen;
+            break;
+
+        case WANDDER_TAG_INTEGER:
+        case WANDDER_TAG_ENUM:
+
+            ret = ber_rebuild_integer(class, idnum, valptr, vallen, ptr);
+            ptr += ret;
+            rem -= ret;
+            break;
+
+        case WANDDER_TAG_OID:
+
+            ret = encode_identifier(class, idnum, ptr, rem);
+            ptr += ret;
+            rem -= ret;
+            
+            if(class & 1){
+                ret = encode_length_indefinite(ptr, rem);
+            }
+            else {
+                ret = encode_length(vallen-1, ptr, rem);
+            }
+            ptr += ret;
+            rem -= ret;
+
+            if (vallen < 2) {
+                fprintf(stderr, "Encode error: OID is too short!\n");
+                return (wandder_buf_t){NULL, 0};
+            }
+            if ((vallen - 2) > rem) { 
+                printf("not enough space for oid\n");
+                assert(0);
+            }
+
+            *ptr = (40 * valptr[0]) + valptr[1]; //not sure why this is a thing
+            ptr += 1;
+            rem -=1;
+
+            size_t templen = vallen - 2;
+
+            memcpy(ptr, valptr + 2, templen);
+
+            ptr += templen;
+            rem -= templen;
+
+            break;
+
+
+        case WANDDER_TAG_NULL:
+                ret = encode_identifier(class, idnum, ptr, rem);
+                ptr += ret;
+                rem -= ret;
+                
+                if(class & 1){
+                    ret = encode_length_indefinite(ptr, rem);
+                }
+                else {
+                    ret = encode_length(vallen, ptr, rem);
+                }
+                ptr += ret;
+                rem -= ret;
+            break;
+
+        case WANDDER_TAG_SEQUENCE:
+        case WANDDER_TAG_SET:
+                ret = encode_identifier(class, idnum, ptr, rem);
+                ptr += ret;
+                rem -= ret;
+                
+                if(class & 1){
+                    ret = encode_length_indefinite(ptr, rem);
+                }
+                else {
+                    ret = encode_length(vallen, ptr, rem);
+                }
+                ptr += ret;
+                rem -= ret;
+            break;
+        case WANDDER_TAG_IPPACKET:
+                ret = encode_identifier(class, idnum, ptr, rem);
+                ptr += ret;
+                rem -= ret;
+                
+                if(class & 1){
+                    ret = encode_length_indefinite(ptr, rem);
+                }
+                else {
+                    ret = encode_length(vallen, ptr, rem);
+                }
+                ptr += ret;
+                rem -= ret;
+                //memset(ptr, 0, vallen); //should this bea  memcpy? 
+                memcpy(ptr, valptr, vallen);
+                ptr+=vallen;
+                rem-=vallen;
+            break;
+
+        default:
+            fprintf(stderr, "Encode error: unable to encode tag type %d\n",
+                    encodeas);
+            assert(0);
+    }
+    //assert(rem >= 0);
+    return itembuf;
+}
+
+size_t build_inplace(
+        uint8_t class, 
+        uint8_t idnum, 
+        uint8_t encodeas, 
+        uint8_t * valptr, //--/->combine into buf?
+        size_t vallen,  //-/
+        void* buf, 
+        ptrdiff_t rem){
+
+    if (!buf){
+        printf("NULL pointer provided to build_inplace()\n");
+        assert(0);
+    }
+    wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, buf, rem);
+
+    return item.len;
+}
+
+wandder_buf_t * build_new_item(
+        uint8_t class, 
+        uint8_t idnum, 
+        uint8_t encodeas, 
+        uint8_t * valptr, //--/->combine into buf?
+        size_t vallen){
+
+    wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, NULL, 0);
+    wandder_buf_t *newitem = malloc(sizeof item);
+    memcpy(newitem, &item, sizeof item);
+
+    return newitem;
 }
 
 //returns the number of bytes written (usually const unless an error)
-uint32_t ber_rebuild_integer(
+size_t ber_rebuild_integer( //TODO this method is main bottleneck
         uint8_t itemclass, 
         uint32_t idnum, 
         void *valptr, 
-        uint32_t vallen,
+        size_t vallen,
         void* buf) {
 
-    uint32_t rem = MAXLENGTHOCTS + 3;
-    uint32_t lenocts = 0;
+    size_t rem = MAXLENGTHOCTS + 3;
+    size_t lenocts = 0;
     int64_t val = 0;
     uint8_t *ptr = buf;
     if (vallen == 8) {
@@ -1241,509 +1156,30 @@ uint32_t ber_rebuild_integer(
         }
     }
 
-    int ret = encode_identifier(itemclass, idnum, ptr, rem);
-    ptr +=ret;
+    size_t ret = encode_identifier(itemclass, idnum, ptr, rem);
+    ptr += ret;
     rem -= ret;
 
     //lenocts = length of encoded value
     //lenlen  = length of length value 
     //total len = class|id(1) + lenhdr(1) + lenlen(1) + lenval(lenlen) + value(lenoctets)
 
-    uint32_t lenlen = MAXLENGTHOCTS - lenocts + 1; //length of length field 
+    size_t lenlen = MAXLENGTHOCTS - lenocts + 1; //length of length field 
 
     *ptr = 0x80;
     *ptr |= lenlen;
 
-    for (int i = 0 ; i < lenlen; i++){
+    for (ptrdiff_t i = 0 ; i < lenlen; i++){
         ptr++;
         *ptr = 0;
     }
     *ptr = lenocts;
 
-    for (int i = lenocts - 1; i >= 0; i--) {
+    for (ptrdiff_t i = lenocts - 1; i >= 0; i--) {
         ptr[i+1] = (val & 0xff);
         val = val >> 8;
     }
     return MAXLENGTHOCTS + 3;
 }
-
-uint32_t ber_build_integer_value(
-        void *valptr, 
-        uint32_t vallen,
-        void* buf,
-        uint32_t rem) {
-
-    uint32_t lenocts = 0;
-    int64_t val = 0;
-    uint8_t *ptr = buf;
-    if (vallen == 8) {
-        val = *((int64_t *)valptr);
-    } else if (vallen == 4) {
-        val = *((int32_t *)valptr);
-    } else {
-        fprintf(stderr, "Encode error: unexpected length for integer type: %u\n",
-            vallen);
-        return 0;
-    }
-
-    if (val < 0) {
-        /* Play it safe with negative numbers (or seemingly negative ones) */
-        lenocts = vallen;
-    } else {
-        lenocts = WANDDER_LOG256_SIZE(val);
-        if (lenocts == 0) {
-            lenocts = 1;
-        }
-
-        if (lenocts > 7) {
-            lenocts = vallen;
-        }
-        if (lenocts < vallen && val >= WANDDER_EXTRA_OCTET_THRESH(lenocts)) { //TODO
-            //lenocts ++;
-        }
-    }
-
-    uint32_t lenlen = MAXLENGTHOCTS - lenocts + 1; //length of length field 
-    ptr--;          //rewrite the length field of the integer
-    *ptr = 0x80; 
-    *ptr |= lenlen;
-
-    for (int i = 0 ; i < lenlen; i++){
-        ptr++;
-        *ptr = 0;
-    }
-    *ptr = lenocts;
-
-    for (int i = lenocts - 1; i >= 0; i--) {
-        ptr[i+1] = (val & 0xff);
-        val = val >> 8;
-    }
-    return MAXLENGTHOCTS;
-}
-
-static inline uint32_t encode_integer_ber(wandder_encode_job_t *p, void *valptr,
-        uint32_t len) {
-
-    int64_t val;
-    uint16_t lenocts;
-    uint8_t *ptr;
-    int i;
-
-    if (len == 8) {
-        val = *((int64_t *)valptr);
-    } else if (len == 4) {
-        val = *((int32_t *)valptr);
-    } else {
-        fprintf(stderr, "Encode error: unexpected length for integer type: %u\n",
-                len);
-        return 0;
-    }
-
-    if (val < 0) {
-        /* Play it safe with negative numbers (or seemingly negative ones) */
-        lenocts = len;
-    } else {
-        lenocts = WANDDER_LOG256_SIZE(val);
-        if (lenocts == 0) {
-            lenocts = 1;
-        }
-
-        if (lenocts > 7) {
-            lenocts = len;
-        }
-        if (lenocts < len && val >= WANDDER_EXTRA_OCTET_THRESH(lenocts)) { //TODO
-            lenocts ++;
-        }
-    }
-
-    uint32_t rem = MAXLENGTHOCTS +3;
-    p->encodedspace = calloc(rem,1); //int is always 10
-    p->encodedlen = rem;
-    uint8_t * buf = p->encodedspace;
-    int ret = encode_identifier(p->identclass, p->identifier, buf, rem);
-    buf +=ret;
-    rem -= ret;
-
-    *buf = 0x80; //len of len flag
-    *buf |= ((MAXLENGTHOCTS+1) - lenocts);
-    buf += ((MAXLENGTHOCTS+1) - lenocts);
-    *buf = lenocts;
-
-    for (i = lenocts - 1; i >= 0; i--) {
-        buf[i+1] = (val & 0xff);
-        val = val >> 8;
-    }
-
-    return p->encodedlen;
-}
-
-static inline void save_value_to_encode_ber(wandder_encode_job_t *job, void *valptr,
-        uint32_t vallen) {
-
-    switch(job->encodeas) {
-        case WANDDER_TAG_OCTETSTRING:
-        case WANDDER_TAG_UTF8STR:
-        case WANDDER_TAG_NUMERIC:
-        case WANDDER_TAG_PRINTABLE:
-        case WANDDER_TAG_IA5:
-        case WANDDER_TAG_RELATIVEOID:
-            VALALLOC(vallen, job);
-            memcpy(job->valspace, valptr, vallen);
-            job->vallen = vallen;
-            job->preamblen = calc_preamblen(job->identifier, vallen);
-            break;
-
-        case WANDDER_TAG_GENERALTIME:
-            /* Timeval to general TS */
-            if (encode_gtime(job, valptr, vallen) == 0) {
-                return;
-            }
-            job->preamblen = calc_preamblen(job->identifier, vallen);
-            break;
-        case WANDDER_TAG_INTEGER:
-        case WANDDER_TAG_ENUM:
-            /* Signed int to Integer */
-            if (encode_integer_ber(job, valptr, vallen) == 0) {
-                return;
-            }
-            job->preamblen = calc_preamblen(job->identifier, vallen);
-            break;
-
-        case WANDDER_TAG_OID:
-            /* Byte array to OID */
-            if (encode_oid(job, valptr, vallen) == 0) {
-                return;
-            }
-            job->preamblen = calc_preamblen(job->identifier, vallen);
-            break;
-
-
-        case WANDDER_TAG_NULL:
-            job->vallen = 0;
-            job->preamblen = calc_preamblen(job->identifier, vallen);
-            break;
-
-        case WANDDER_TAG_SEQUENCE:
-        case WANDDER_TAG_SET:
-            job->vallen = 0;
-            job->preamblen = 0;
-            break;
-
-        case WANDDER_TAG_IPPACKET:
-            job->vallen = vallen;
-            job->preamblen = calc_preamblen(job->identifier, vallen);
-            break;
-
-        default:
-            fprintf(stderr, "Encode error: unable to encode tag type %d\n",
-                    job->encodeas);
-            return;
-    }
-}
-
-
-
-wandber_encoder_t * init_wandber_encoder(void) {
-    wandber_encoder_t * enc = (wandber_encoder_t *)calloc(sizeof(wandber_encoder_t),1);
-
-    return enc;
-
-}
-
-void free_wandber_encoder(wandber_encoder_t *enc){
-    
-    if (enc != NULL){
-        wandber_encoder_reset(enc); //reset will walk the list and free all items
-        free(enc);
-        enc = NULL;
-    }
-}
-
-void wandber_encoder_reset(wandber_encoder_t *enc){    
-
-    wandber_item_t * temp = enc->head;
-    wandber_item_t * freetemp; 
-
-    while(temp){
-        if (temp->buf){
-            free(temp->buf);
-            temp->buf = NULL;
-        }
-        freetemp = temp;
-        temp = temp->next;
-        if (freetemp){
-            free(freetemp);
-            freetemp = NULL;
-        }
-    }
-
-    enc->totallen = 0;
-    enc->head = NULL;
-    enc->tail = NULL;
-
-}
-
-
-void wandber_encoded_release_result(wandber_encoded_result_t *res){
-    
-    if (res != NULL){
-        free(res->buf);
-        res->buf = NULL;
-        free(res);
-        res = NULL;
-    }
-}
-
-wandber_encoded_result_t *wandber_encode_finish(wandber_encoder_t *enc){
-
-    wandber_encoded_result_t *res = malloc(sizeof(wandber_encoded_result_t));
-
-    void * tempbuf = calloc(enc->totallen, 1);
-    res->buf = tempbuf;
-    res->length = enc->totallen;
-    uint8_t * ptr = res->buf;
-    
-    wandber_item_t * temp = enc->head; 
-    wandber_item_t * freetemp; 
-
-    while(temp){
-        memcpy(ptr, temp->buf, temp->length);
-        ptr+=temp->length;
-        if (temp->buf){
-            free(temp->buf);
-            temp->buf = NULL;
-        }
-        freetemp = temp;
-        temp = temp->next;
-        if(freetemp){
-            free(freetemp);
-            freetemp = NULL;
-        }
-    }
-
-    enc->totallen = 0;
-    enc->head = NULL;
-    enc->tail = NULL;
-    return res;
-}
-
-int _wandber_encode_endseq(wandber_encoder_t * enc){
-
-    uint32_t length = 2;
-    wandber_item_t *item = malloc(sizeof(wandber_item_t));
-    uint8_t *bufstart = calloc(sizeof(uint8_t), length);
-    item->buf = bufstart;
-    item->length = length;
-    item->next = NULL;
-    if(enc->head == NULL){ 
-        //this should really not be the case, (but still possible)
-        //represents an empty ASN1 encoding (1 element of tag 0, size 0 with no value)
-        //root item
-        enc->head = item;
-        enc->tail = item;
-    }else {
-        //not first item
-        enc->tail->next = item;
-        enc->tail = item;
-    }
-    
-    //printf("%3d:d=%-2d hl=%d  l=%4d\n", enc->totallen, enc->current_depth, length, 0);
-
-    enc->totallen += item->length;
-    return 1;
-}
-
-void wandber_encode_endseq_repeat(wandber_encoder_t * enc, int repeats){
-    int i;
-
-    for (i = 0; i < repeats; i++) {
-        if (_wandber_encode_endseq(enc) == -1) {
-            break;
-        }
-    }
-}
-
-void wandber_encode_endseq(wandber_encoder_t * enc){
-    _wandber_encode_endseq(enc);
-}
-
-//renders job as an item and appends to linked list in encoder
-static void wandber_encode_next_pre(wandber_encoder_t *enc, uint8_t encodeas,
-        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen) {
-
-
-    //build the TLV from provided inputs and add to enc
-    wandber_item_t *item = malloc(sizeof(wandber_item_t));
-    item->next = NULL;
-    if (enc->head == NULL) {
-        /* First item */
-        enc->head = item;
-        enc->tail = item;
-    } else {
-        enc->tail->next = item;
-        enc->tail = item;
-    }
-
-    //item is in correct place, now just need to define it 
-
-    uint32_t ret;
-    uint32_t rem = calc_preamblen(idnum,  ((itemclass & 1) ? 0 : vallen)) + vallen; //work out total length of encoded TLV    (preable len + vallen)
-    item->buf = malloc(rem);
-    uint8_t * buf = item->buf;
-
-    ret = encode_identifier(itemclass, idnum, buf, rem);
-    buf += ret;
-    rem -= ret;
-    
-    if(itemclass & 1){
-        ret = encode_length_indefinite(buf, rem);
-    }
-    else {
-        ret = encode_length(vallen, buf, rem);
-    }
-    buf += ret;
-    rem -= ret;
-
-    memcpy(buf, valptr, vallen);
-    buf += vallen;
-    rem -= vallen;
-
-    //assert(rem == 0); //
-
-    item->length = (buf-item->buf);
-    enc->totallen += item->length;
-}
-
-void wandber_encode_next(wandber_encoder_t *enc, uint8_t encodeas,
-        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen) {
-
-
-    //build the TLV from provided inputs and add to enc
-    wandber_item_t *item = malloc(sizeof(wandber_item_t));
-    item->next = NULL;
-    if (enc->head == NULL) {
-        /* First item */
-        enc->head = item;
-        enc->tail = item;
-    } else {
-        enc->tail->next = item;
-        enc->tail = item;
-    }
-
-    //item is in correct place, now just need to define it
-    //create job and use save_value
-
-    wandder_encode_job_t *job = calloc(sizeof(wandder_encode_job_t), 1);
-    job->identclass = itemclass;
-    job->identifier = idnum;
-    job->encodeas = encodeas;
-    job->valspace = NULL;
-    job->vallen = 0;
-    save_value_to_encode_ber(job, valptr, vallen);
-    if(job->encodedlen){
-        item->buf = job->encodedspace;
-        item->length = job->encodedlen;
-        enc->totallen += item->length;
-        free(job);
-        return;
-    }
-
-    vallen = job->vallen;
-    //free(valptr);
-    valptr = job->valspace;
-
-
-
-    uint32_t ret;
-    uint32_t rem = calc_preamblen(idnum,  ((itemclass & 1) ? 0 : vallen)) + vallen; //work out total length of encoded TLV    (preable len + vallen)
-    item->buf = malloc(rem);
-    uint8_t * buf = item->buf;
-
-    ret = encode_identifier(itemclass, idnum, buf, rem);
-    buf += ret;
-    rem -= ret;
-    
-    if(itemclass & 1){
-        ret = encode_length_indefinite(buf, rem);
-    }
-    else {
-        ret = encode_length(vallen, buf, rem);
-    }
-    buf += ret;
-    rem -= ret;
-
-    memcpy(buf, valptr, vallen);
-    buf += vallen;
-    rem -= vallen;
-
-    //assert(rem == 0);
-
-    item->length = (buf-item->buf);
-    enc->totallen += item->length;
-
-    free(job);
-}
-
-void wandber_encode_next_preencoded(wandber_encoder_t *enc,
-        wandder_encode_job_t **jobs, int jobcount){
-
-    //here
-    for (int i = 0; i< jobcount; i++){
-
-        wandber_encode_next_pre(enc, 
-            jobs[i]->encodeas,
-            jobs[i]->identclass, jobs[i]->identifier,
-            jobs[i]->valspace, jobs[i]->vallen);
-    }
-}
-
-wandber_encoded_result_t *wandber_encode_consolidate(wandber_encoder_t *enc){
-    wandber_encoded_result_t *result = NULL;
-
-    
-
-    return result;
-}
-
-wandder_encoded_result_t *wandder_encode_finish_ber(wandder_encoder_t *enc) {
-
-    wandder_encoded_result_t *result = NULL;
-
-    if (enc->freeresults && pthread_mutex_trylock(&(enc->mutex)) == 0) {
-        result = enc->freeresults;
-        enc->freeresults = result->next;
-        pthread_mutex_unlock(&(enc->mutex));
-    } else {
-        result = (wandder_encoded_result_t *)calloc(1,
-                sizeof(wandder_encoded_result_t));
-        result->encoded = NULL;
-        result->len = 0;
-        result->alloced = 0;
-    }
-
-    result->encoder = enc;
-    result->next = NULL;
-    result->len = enc->pendlist->childrensize + enc->pendlist->thisjob.preamblen;
-    //printf("final size=%d %d %d\n", result->len, enc->pendlist->childrensize,
-    //        enc->pendlist->thisjob.preamblen);
-    if (result->alloced < result->len) {
-        uint32_t x = 512;
-        if (x < result->len) {
-            x = result->len;
-        }
-        result->encoded = (uint8_t *)realloc(result->encoded, x);
-        result->alloced = x;
-    }
-
-    if (encode_r(enc->pendlist, result->encoded, result->len) == 0) {
-        fprintf(stderr, "Failed to encode wandder structure\n");
-        wandder_release_encoded_result(enc, result);
-        return NULL;
-    }
-
-    return result;
-}
-
-
 
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :
