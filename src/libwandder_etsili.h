@@ -28,8 +28,13 @@
 #define LIBWANDDER_ETSILI_H_
 
 #include <libwandder.h>
+#include <stdint.h>
 
 #define WANDDER_ETSILI_PSDOMAINID (etsi_lipsdomainid)
+
+#define MEMCPYPREENCODE(ptr, itembuf) {memcpy(ptr, itembuf->buf, itembuf->len); ptr+=itembuf->len;}
+
+#define ENDCONSTRUCTEDBLOCK(ptr,num) memset(ptr, 0, num*2);ptr+=num*2;
 
 extern const uint8_t etsi_lipsdomainid[9];
 
@@ -85,6 +90,101 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
 } wandder_etsispec_t;
 
+typedef enum wandber_body_type {
+    WANDDER_ETSILI_EMPTY,
+    WANDDER_ETSILI_IPCC,
+    WANDDER_ETSILI_IPMMCC,
+    WANDDER_ETSILI_IPIRI,
+    WANDDER_ETSILI_IPMMIRI,
+} wandber_body_type_t;
+
+typedef enum {
+    WANDDER_ETSILI_IRI_BEGIN = 1,
+    WANDDER_ETSILI_IRI_END = 2,
+    WANDDER_ETSILI_IRI_CONTINUE = 3,
+    WANDDER_ETSILI_IRI_REPORT = 4
+} wandber_etsili_iri_type_t;
+
+typedef struct wandber_pshdr {
+    uint8_t* cin;
+    uint8_t* seqno;
+    uint8_t* sec;
+    uint8_t* usec;
+    uint8_t* end;
+} wandber_pshdr_t;
+
+typedef struct wandber_ipcc_body {
+    uint8_t* dir;
+    uint8_t* ipcontent;
+} wandber_ipcc_body_t;
+
+typedef struct wandber_ipmmcc_body {
+    uint8_t* dir;
+    uint8_t* ipcontent;
+} wandber_ipmmcc_body_t;
+
+typedef struct wandber_ipiri_body {
+    uint8_t* iritype;
+    uint8_t* params;
+} wandber_ipiri_body_t;
+
+typedef struct wandber_ipmmiri_body {
+    uint8_t* iritype;
+    uint8_t* ipcontent;
+} wandber_ipmmiri_body_t;
+
+typedef struct wandber_etsili_top {
+    uint8_t* buf;
+    size_t len;
+    size_t alloc_len;
+    wandber_pshdr_t header;
+    wandber_body_type_t body_type;
+    union {
+        wandber_ipcc_body_t ipcc;
+        wandber_ipmmcc_body_t ipmmcc;
+        wandber_ipmmiri_body_t ipmmiri;
+        wandber_ipiri_body_t ipiri;
+    } body;
+} wandber_etsili_top_t;
+
+
+typedef enum {
+    WANDBER_PREENCODE_USEQUENCE,
+    WANDBER_PREENCODE_CSEQUENCE_0,
+    WANDBER_PREENCODE_CSEQUENCE_1,
+    WANDBER_PREENCODE_CSEQUENCE_2,
+    WANDBER_PREENCODE_CSEQUENCE_3,
+    WANDBER_PREENCODE_CSEQUENCE_7,	/* Microsecond timestamp */
+    WANDBER_PREENCODE_CSEQUENCE_11,  /* IPMMIRI */
+    WANDBER_PREENCODE_CSEQUENCE_12,  /* IPMMCC */
+    WANDBER_PREENCODE_PSDOMAINID,
+    WANDBER_PREENCODE_LIID,
+    WANDBER_PREENCODE_AUTHCC,
+    WANDBER_PREENCODE_OPERATORID,
+    WANDBER_PREENCODE_NETWORKELEMID,
+    WANDBER_PREENCODE_DELIVCC,
+    WANDBER_PREENCODE_INTPOINTID,
+    WANDBER_PREENCODE_TVCLASS,
+    WANDBER_PREENCODE_IPMMIRIOID,
+    WANDBER_PREENCODE_IPCCOID,
+    WANDBER_PREENCODE_IPIRIOID,
+    WANDBER_PREENCODE_IPMMCCOID,
+    WANDBER_PREENCODE_DIRFROM,
+    WANDBER_PREENCODE_DIRTO,
+    WANDBER_PREENCODE_DIRUNKNOWN,
+    WANDBER_PREENCODE_LAST
+
+} wandber_preencode_index_t;
+
+typedef struct wandber_etsili_intercept_details {
+    char *liid;
+    char *authcc;
+    char *delivcc;
+    char *intpointid;
+    char *operatorid;
+    char *networkelemid;
+} wandber_etsili_intercept_details_t;
+
 enum {
     WANDDER_IRI_CONTENT_IP,
     WANDDER_IRI_CONTENT_SIP,
@@ -112,6 +212,34 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *dec);
 int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec);
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
+
+
+
+
+void wandber_encode_etsi_ipcc(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
+        wandber_etsili_top_t *top);
+void wandber_encode_etsi_ipmmcc(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
+        wandber_etsili_top_t *top);
+
+void wandber_encode_etsi_ipmmiri(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, wandber_etsili_iri_type_t iritype,
+        wandber_etsili_top_t *top);
+
+void wandber_encode_etsi_ipiri(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void* params, wandber_etsili_iri_type_t iritype,
+        wandber_etsili_top_t *top);
+
+void wandber_etsili_preencode_static_fields_ber(
+        wandder_buf_t **pendarray, wandber_etsili_intercept_details_t *details);
+void wandber_etsili_clear_preencoded_fields_ber(wandder_buf_t **pendarray);
+
+
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

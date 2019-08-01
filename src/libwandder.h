@@ -28,6 +28,7 @@
 #define LIBWANDDER_H_
 
 #include <inttypes.h>
+#include <stddef.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <sys/time.h>
@@ -154,6 +155,7 @@ struct wandder_item {
     wandder_item_t *cachednext;
     wandder_item_t *cachedchildren;
     uint8_t descend;
+    uint8_t indefform;
 };
 
 
@@ -239,7 +241,6 @@ typedef struct wandder_encode_job {
     uint32_t encodedlen;
 } wandder_encode_job_t;
 
-
 struct wandder_pending {
     wandder_encode_job_t thisjob;
     uint32_t childrensize;
@@ -261,6 +262,14 @@ struct wandder_encoded_result {
     uint32_t alloced;
     wandder_encoded_result_t *next;
 };
+
+typedef struct wandder_buf wandder_buf_t;
+struct wandder_buf {
+    void * buf;
+    size_t len;
+};
+
+
 
 /* The encoder manages the overall encoder process. It simply maintains the
  * full hierarchy of pending items and will encode them all once the user
@@ -286,6 +295,16 @@ struct wandder_encoder {
 /* Encoding API
  * ----------------------------------------------------
  */
+//BER encoder
+size_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, size_t vallen, void* buf); //ber_rebuild_integer
+
+//TODO seperate these methods more
+size_t build_inplace(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_inplace
+        uint8_t * valptr, size_t vallen, void* buf, ptrdiff_t rem);
+wandder_buf_t * build_new_item(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_new_item
+        uint8_t * valptr, size_t vallen);
+/////////////////////////////////////////////////
+//DER encoder
 wandder_encoder_t *init_wandder_encoder();
 void reset_wandder_encoder(wandder_encoder_t *enc);
 void free_wandder_encoder(wandder_encoder_t *enc);
@@ -293,9 +312,9 @@ void free_wandder_encoder(wandder_encoder_t *enc);
 void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen);
 int wandder_encode_preencoded_value(wandder_encode_job_t *p, void *valptr,
-        uint32_t vallen);
+        uint32_t vallen);                                                   //create a preencoded value
 void wandder_encode_next_preencoded(wandder_encoder_t *enc,
-        wandder_encode_job_t **jobs, int jobcount);
+        wandder_encode_job_t **jobs, int jobcount);                         //add array of preencoded values
 void wandder_encode_endseq(wandder_encoder_t *enc);
 void wandder_encode_endseq_repeat(wandder_encoder_t *enc, int repeats);
 wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc);
