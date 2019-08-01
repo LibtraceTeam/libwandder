@@ -269,8 +269,6 @@ struct wandder_buf {
     size_t len;
 };
 
-
-
 /* The encoder manages the overall encoder process. It simply maintains the
  * full hierarchy of pending items and will encode them all once the user
  * indicates that all fields have been pushed to the encoder.
@@ -296,12 +294,11 @@ struct wandder_encoder {
  * ----------------------------------------------------
  */
 //BER encoder
-size_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, size_t vallen, void* buf); //ber_rebuild_integer
 
 //TODO seperate these methods more
-size_t build_inplace(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_inplace
+size_t wandder_encode_inplace_ber(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_inplace
         uint8_t * valptr, size_t vallen, void* buf, ptrdiff_t rem);
-wandder_buf_t * build_new_item(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_new_item
+wandder_buf_t * wandder_encode_new_ber(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_new_item
         uint8_t * valptr, size_t vallen);
 /////////////////////////////////////////////////
 //DER encoder

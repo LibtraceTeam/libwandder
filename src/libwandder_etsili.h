@@ -215,29 +215,29 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 
 
-
-void wandber_encode_etsi_ipcc(
+void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandber_etsili_top_t *top);
+void wandder_encode_etsi_ipcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top);
-void wandber_encode_etsi_ipmmcc(
+void wandder_encode_etsi_ipmmcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top);
 
-void wandber_encode_etsi_ipmmiri(
+void wandder_encode_etsi_ipmmiri_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, wandber_etsili_iri_type_t iritype,
         wandber_etsili_top_t *top);
 
-void wandber_encode_etsi_ipiri(
+void wandder_encode_etsi_ipiri_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void* params, wandber_etsili_iri_type_t iritype,
         wandber_etsili_top_t *top);
 
-void wandber_etsili_preencode_static_fields_ber(
+void wandder_etsili_preencode_static_fields_ber(
         wandder_buf_t **pendarray, wandber_etsili_intercept_details_t *details);
-void wandber_etsili_clear_preencoded_fields_ber(wandder_buf_t **pendarray);
+void wandder_etsili_clear_preencoded_fields_ber(wandder_buf_t **pendarray);
 
 
 

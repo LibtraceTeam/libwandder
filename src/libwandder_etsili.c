@@ -35,6 +35,7 @@
 #include <time.h>
 #include <assert.h>
 #include <math.h>
+#include "wandder_internal.h"
 #include "libwandder_etsili.h"
 
 const uint8_t etsi_lipsdomainid[9] = {
@@ -44,16 +45,6 @@ uint8_t etsi_ipccoid[4] = {0x05, 0x03, 0x0a, 0x02};
 uint8_t etsi_ipirioid[4] = {0x05, 0x03, 0x0a, 0x01};
 uint8_t etsi_ipmmccoid[4] = {0x05, 0x05, 0x06, 0x02};
 uint8_t etsi_ipmmirioid[4] = {0x05, 0x05, 0x06, 0x01};
-
-static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
-    if (x < 256) return 1;
-    if (x < 65536) return 2;
-    if (x < 16777216) return 3;
-    if (x < 4294967296) return 4;
-    if (x < 1099511627776) return 5;
-    if (x < 281474976710656) return 6;
-    return floor((log(x) / log(256)) + 1);
-}
 
 static void init_dumpers(wandder_etsispec_t *dec);
 static void free_dumpers(wandder_etsispec_t *dec);
@@ -2168,7 +2159,7 @@ static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *i
             top->body.ipcc.dir);
     }
     uint8_t * ptr = top->body.ipcc.ipcontent;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2259,7 +2250,7 @@ static inline void init_ipcc_body(
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipcc.ipcontent = ptr;
 
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2272,7 +2263,7 @@ static inline void init_ipcc_body(
 
 }
 
-void wandber_encode_etsi_ipcc(
+void wandder_encode_etsi_ipcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top) {
@@ -2291,6 +2282,12 @@ void wandber_encode_etsi_ipcc(
     else {
         wandder_ipcc_body_update(precomputed, ipcontents, iplen, dir, top);
     }
+}
+
+void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandber_etsili_top_t *top){
+    struct timeval tv;
+    init_pshdr_pc_ber(precomputed, 0, 0, &tv, top);
+    top->body_type = WANDDER_ETSILI_EMPTY;
 }
 
 static inline void wandder_ipmmiri_body_update(wandder_buf_t **precomputed, void *ipcontent,
@@ -2348,7 +2345,7 @@ static inline void wandder_ipmmiri_body_update(wandder_buf_t **precomputed, void
         top->body.ipmmiri.iritype);
 
     uint8_t * ptr = top->body.ipmmiri.ipcontent;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2430,7 +2427,7 @@ static inline void init_ipmmiri_body(
     MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipcc.ipcontent = ptr;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2441,7 +2438,7 @@ static inline void init_ipmmiri_body(
     top->len = ptr - top->buf;
 }
 
-void wandber_encode_etsi_ipmmiri(
+void wandder_encode_etsi_ipmmiri_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, wandber_etsili_iri_type_t iritype,
         wandber_etsili_top_t *top) {
@@ -2517,7 +2514,7 @@ static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *
 
     uint8_t * ptr = top->body.ipiri.params;
     //TODO copy in all the params in sorted order here
-    // ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    // ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
     //         0,
     //         WANDDER_TAG_IPPACKET,
     //         params, 
@@ -2600,7 +2597,7 @@ static inline void init_ipiri_body(
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipiri.params = ptr;
     //TODO copy in all params here in sorted order
-    // ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    // ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
     //         0,
     //         WANDDER_TAG_IPPACKET,
     //         params, 
@@ -2611,7 +2608,7 @@ static inline void init_ipiri_body(
     top->len = ptr - top->buf;
 }
 
-void wandber_encode_etsi_ipiri(
+void wandder_encode_etsi_ipiri_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void * params, wandber_etsili_iri_type_t iritype,
         wandber_etsili_top_t *top) {
@@ -2708,7 +2705,7 @@ static inline void init_ipmmcc_body(
     MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_IPMMCCOID]);
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipmmcc.ipcontent = ptr;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2791,7 +2788,7 @@ void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
             top->body.ipmmcc.dir);
     }
     uint8_t * ptr = top->body.ipmmcc.ipcontent;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2806,7 +2803,7 @@ void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
     top->len = totallen;
 }
 
-void wandber_encode_etsi_ipmmcc(
+void wandder_encode_etsi_ipmmcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandber_etsili_top_t *top) {
@@ -2827,7 +2824,7 @@ void wandber_encode_etsi_ipmmcc(
     }
 }
 
-void wandber_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
+void wandder_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
 
     wandber_preencode_index_t i;
 
@@ -2839,7 +2836,7 @@ void wandber_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
     }
 }
 
-void wandber_etsili_preencode_static_fields_ber(
+void wandder_etsili_preencode_static_fields_ber(
         wandder_buf_t **pendarray, wandber_etsili_intercept_details_t *details) {
 
     wandder_buf_t *p;
@@ -2848,56 +2845,56 @@ void wandber_etsili_preencode_static_fields_ber(
 
     memset(pendarray, 0, sizeof(p) * WANDBER_PREENCODE_LAST);
 
-    pendarray[WANDBER_PREENCODE_USEQUENCE] = build_new_item(
+    pendarray[WANDBER_PREENCODE_USEQUENCE] = wandder_encode_new_ber(
             WANDDER_CLASS_UNIVERSAL_CONSTRUCT, 
             WANDDER_TAG_SEQUENCE,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_0] =  build_new_item(
+    pendarray[WANDBER_PREENCODE_CSEQUENCE_0] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             0,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_1] =  build_new_item(
+    pendarray[WANDBER_PREENCODE_CSEQUENCE_1] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             1,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_2] =  build_new_item(
+    pendarray[WANDBER_PREENCODE_CSEQUENCE_2] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             2,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_3] =  build_new_item(
+    pendarray[WANDBER_PREENCODE_CSEQUENCE_3] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             3,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_7] =  build_new_item(
+    pendarray[WANDBER_PREENCODE_CSEQUENCE_7] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             7,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_11] =  build_new_item(
+    pendarray[WANDBER_PREENCODE_CSEQUENCE_11] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             11,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_12] =  build_new_item(
+    pendarray[WANDBER_PREENCODE_CSEQUENCE_12] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             12,
             WANDDER_TAG_SEQUENCE,
@@ -2905,42 +2902,42 @@ void wandber_etsili_preencode_static_fields_ber(
             0);
 
     //TODO i dont think this is 100% correct but i cant see anything wrong
-    pendarray[WANDBER_PREENCODE_PSDOMAINID] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_PSDOMAINID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_OID,
             (uint8_t *)WANDDER_ETSILI_PSDOMAINID, 
             sizeof WANDDER_ETSILI_PSDOMAINID);
 
-    pendarray[WANDBER_PREENCODE_LIID] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_LIID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             1,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->liid, 
             strlen(details->liid));
 
-    pendarray[WANDBER_PREENCODE_AUTHCC] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_AUTHCC] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             2,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->authcc, 
             strlen(details->authcc));
 
-    pendarray[WANDBER_PREENCODE_OPERATORID] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_OPERATORID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->operatorid, 
             strlen(details->operatorid));
 
-    pendarray[WANDBER_PREENCODE_NETWORKELEMID] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_NETWORKELEMID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             1,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->networkelemid, 
             strlen(details->networkelemid));
 
-    pendarray[WANDBER_PREENCODE_DELIVCC] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_DELIVCC] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             2,
             WANDDER_TAG_OCTETSTRING,
@@ -2948,63 +2945,63 @@ void wandber_etsili_preencode_static_fields_ber(
             strlen(details->delivcc));
 
     //either build the field or set it NULL
-    pendarray[WANDBER_PREENCODE_INTPOINTID] =  (details->intpointid) ? build_new_item( 
+    pendarray[WANDBER_PREENCODE_INTPOINTID] =  (details->intpointid) ? wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             6,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->intpointid, 
             strlen(details->intpointid)) : NULL;
 
-    pendarray[WANDBER_PREENCODE_TVCLASS] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_TVCLASS] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             8,
             WANDDER_TAG_ENUM,
             (uint8_t *)(&tvclass), 
             sizeof tvclass);
 
-    pendarray[WANDBER_PREENCODE_IPMMIRIOID] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_IPMMIRIOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
             etsi_ipmmirioid, 
             sizeof etsi_ipmmirioid);
 
-    pendarray[WANDBER_PREENCODE_IPCCOID] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_IPCCOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
             etsi_ipccoid, 
             sizeof etsi_ipccoid);
 
-    pendarray[WANDBER_PREENCODE_IPIRIOID] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_IPIRIOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
             etsi_ipirioid, 
             sizeof etsi_ipirioid);
 
-    pendarray[WANDBER_PREENCODE_IPMMCCOID] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_IPMMCCOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
             etsi_ipmmccoid, 
             sizeof etsi_ipmmccoid);
 
-    pendarray[WANDBER_PREENCODE_DIRFROM] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_DIRFROM] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_ENUM,
             (uint8_t *)(&dirin), 
             sizeof dirin);
 
-    pendarray[WANDBER_PREENCODE_DIRTO] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_DIRTO] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_ENUM,
             (uint8_t *)(&dirout), 
             sizeof dirout);
 
-    pendarray[WANDBER_PREENCODE_DIRUNKNOWN] =  build_new_item( 
+    pendarray[WANDBER_PREENCODE_DIRUNKNOWN] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_ENUM,

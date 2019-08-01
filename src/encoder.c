@@ -32,6 +32,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <math.h>
+#include "wandder_internal.h"
 #include "src/libwandder.h"
 
 #define MAXLENGTHOCTS 6
@@ -192,16 +193,6 @@ static inline uint32_t WANDDER_LOG128_SIZE(uint64_t x) {
     if (x < 128) return 1;
     if (x < 16383) return 2;
     return floor((log(x) / log(128)) + 1);
-}
-
-static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
-    if (x < 256) return 1;
-    if (x < 65536) return 2;
-    if (x < 16777216) return 3;
-    if (x < 4294967296) return 4;
-    if (x < 1099511627776) return 5;
-    if (x < 281474976710656) return 6;
-    return floor((log(x) / log(256)) + 1);
 }
 
 static inline int64_t WANDDER_EXTRA_OCTET_THRESH(uint8_t lenocts) {
@@ -874,7 +865,7 @@ static inline size_t encode_length_indefinite(uint8_t *buf, ptrdiff_t rem) {
     return 1;
 }
 
-static wandder_buf_t build_ber_field( //TODO split up this function (with build_inplace and build_new_item)
+static wandder_buf_t build_ber_field( //TODO split up this function (with wandder_encode_inplace_ber and wandder_encode_new_ber)
         uint8_t class, 
         uint8_t idnum, 
         uint8_t encodeas, 
@@ -1081,7 +1072,7 @@ static wandder_buf_t build_ber_field( //TODO split up this function (with build_
     return itembuf;
 }
 
-size_t build_inplace(
+size_t wandder_encode_inplace_ber(
         uint8_t class, 
         uint8_t idnum, 
         uint8_t encodeas, 
@@ -1091,7 +1082,7 @@ size_t build_inplace(
         ptrdiff_t rem){
 
     if (!buf){
-        printf("NULL pointer provided to build_inplace()\n");
+        printf("NULL pointer provided to wandder_encode_inplace_ber()\n");
         assert(0);
     }
     wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, buf, rem);
@@ -1099,7 +1090,7 @@ size_t build_inplace(
     return item.len;
 }
 
-wandder_buf_t * build_new_item(
+wandder_buf_t * wandder_encode_new_ber(
         uint8_t class, 
         uint8_t idnum, 
         uint8_t encodeas, 
