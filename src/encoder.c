@@ -1031,8 +1031,8 @@ static inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encod
                 ptr += ret;
                 rem -= ret;
 
-                //memset(ptr, 0, vallen); //should this bea memcpy? 
-                memcpy(ptr, valptr, vallen);
+                memset(ptr, 0, vallen); //should this bea memcpy? 
+                //memcpy(ptr, valptr, vallen);
                 ptr+=vallen;
                 rem-=vallen;
 
