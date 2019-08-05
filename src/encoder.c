@@ -1181,7 +1181,7 @@ static inline ptrdiff_t rem_grow_check(wandder_encoder_ber_t *enc_ber, size_t to
 
     ptrdiff_t rem = enc_ber->alloc_len - enc_ber->len;
     if (totallen > rem){
-        size_t new_alloc = enc_ber->len + (totallen - rem) + enc_ber->increment;
+        size_t new_alloc = enc_ber->len + totallen + enc_ber->increment;
         uint8_t *new_buf = realloc(enc_ber->buf, new_alloc);
         if (new_buf == NULL){
             //TODO, handle mem fail
