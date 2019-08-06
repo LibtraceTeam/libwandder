@@ -2105,9 +2105,12 @@ static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *i
     //vallen is iplen 
     //just need lenlen
     size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
-    if (iplen > 127){  //if iplen > 127, long form must be used
+    if (iplen > 127){  //if iplen > 127, long form must be used        
+        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
+            lenlen ++; 
+        }
         lenlen++;
-    }
+    } 
     size_t iptotalen = 1 + lenlen + iplen;
     size_t totallen = (top->body.ipcc.ipcontent - top->buf) + iptotalen + (7 * 2);
     //                  (size up to variable part) + (lenght of variable part) + (size of footer)
@@ -2733,8 +2736,11 @@ static inline void init_ipmmcc_body(
 void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
         uint32_t iplen, uint8_t dir, wandder_etsili_top_t * top) {
 
-    uint32_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
-    if (iplen > 127){  //if iplen > 127, long form must be used
+    size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
+    if (iplen > 127){  //if iplen > 127, long form must be used        
+        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
+            lenlen ++; 
+        }
         lenlen++;
     }
     uint32_t iptotalen = 1 + lenlen + iplen;
