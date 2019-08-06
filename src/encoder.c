@@ -195,17 +195,6 @@ static inline uint32_t WANDDER_LOG128_SIZE(uint64_t x) {
     return floor((log(x) / log(128)) + 1);
 }
 
-static inline int64_t WANDDER_EXTRA_OCTET_THRESH(uint8_t lenocts) {
-
-    if (lenocts == 1) return 128;
-    if (lenocts == 2) return 32768;
-    if (lenocts == 3) return 8388608;
-    if (lenocts == 4) return 2147483648;
-    if (lenocts == 5) return 549755813888;
-    if (lenocts == 6) return 140737488355328;
-    return 36028797018963968;
-}
-
 static inline uint32_t calc_preamblen(uint32_t identifier, uint32_t len) {
     uint32_t plen = 0;
     uint32_t loglen = 0;
@@ -309,11 +298,10 @@ static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     }
 
     lenocts = WANDDER_LOG256_SIZE(len);
-    // if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) { 
-    //     lenocts ++; 
-    //     //I cant see a reason for this and it jsut adds an extra empty octet, ~Tyler
-    // }
-
+    if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) { 
+        lenocts ++; 
+    }
+    
     *buf = lenocts | 0x80;
 
     buf += 1;
@@ -896,19 +884,18 @@ static inline size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t enco
         
         default:
             if (vallen < 128) {
-                idlen += 1;
+                lenlen = 1;
             } else {
                 loglen = WANDDER_LOG256_SIZE(vallen);
-                idlen += (1 + loglen);
-
-                // if (vallen > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
-                //     //I think this line is a bug and should part of the idnum size 
-                //     //(bit 8 is reserved for the stop bit of the long id form)
-                //     //where as in the long form of the length, the number of octets is specfied
-                //     idlen ++;
-                // }
+                if (vallen > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
+                    loglen++;
+                }
+                lenlen = loglen +1;
             }
-            totallen = idlen + vallen;
+
+
+
+            totallen = idlen + lenlen + vallen;
         break;
     }
 

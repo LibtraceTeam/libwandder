@@ -45,4 +45,15 @@ static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
     if (x < 281474976710656) return 6;
     return floor((log(x) / log(256)) + 1);
 }
+
+static inline int64_t WANDDER_EXTRA_OCTET_THRESH(uint8_t lenocts) {
+
+    if (lenocts == 1) return 128;
+    if (lenocts == 2) return 32768;
+    if (lenocts == 3) return 8388608;
+    if (lenocts == 4) return 2147483648;
+    if (lenocts == 5) return 549755813888;
+    if (lenocts == 6) return 140737488355328;
+    return 36028797018963968;
+}
 #endif
