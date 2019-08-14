@@ -399,7 +399,7 @@ static inline int _decode_next(wandder_decoder_t *dec) {
     /* if current is a constructed type, the next item is the first child 
      * of current */
     if ((IS_CONSTRUCTED(dec->current))) {
-        ret = decode(dec, dec->nextitem, dec->current);
+        ret = decode(dec, dec->nextitem, dec->current); 
     } else {
         /* if current is not a constructed type, use current's parent */
         ret = decode(dec, dec->nextitem, dec->current->parent);
@@ -473,10 +473,15 @@ int wandder_decode_skip(wandder_decoder_t *dec) {
         return -1;
     }
 
-    dec->current->descend = 0;
     if (dec->current->indefform){
         dec->nextitem = dec->current->valptr;
+        while(*dec->nextitem != 0 || *(dec->nextitem+1) !=0 ){
+            _decode_next(dec);
+        }
+        _decode_next(dec); //dec->nextitem+=2;
+
     }else {
+        dec->current->descend = 0;
         dec->nextitem = dec->current->valptr + dec->current->length;
     }
     return dec->current->length;
