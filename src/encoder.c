@@ -32,6 +32,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <math.h>
+#include "wandder_internal.h"
 #include "src/libwandder.h"
 
 #define MAXLENGTHOCTS 6
@@ -194,27 +195,6 @@ static inline uint32_t WANDDER_LOG128_SIZE(uint64_t x) {
     return floor((log(x) / log(128)) + 1);
 }
 
-static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
-    if (x < 256) return 1;
-    if (x < 65536) return 2;
-    if (x < 16777216) return 3;
-    if (x < 4294967296) return 4;
-    if (x < 1099511627776) return 5;
-    if (x < 281474976710656) return 6;
-    return floor((log(x) / log(256)) + 1);
-}
-
-static inline int64_t WANDDER_EXTRA_OCTET_THRESH(uint8_t lenocts) {
-
-    if (lenocts == 1) return 128;
-    if (lenocts == 2) return 32768;
-    if (lenocts == 3) return 8388608;
-    if (lenocts == 4) return 2147483648;
-    if (lenocts == 5) return 549755813888;
-    if (lenocts == 6) return 140737488355328;
-    return 36028797018963968;
-}
-
 static inline uint32_t calc_preamblen(uint32_t identifier, uint32_t len) {
     uint32_t plen = 0;
     uint32_t loglen = 0;
@@ -318,10 +298,10 @@ static inline uint32_t encode_length(uint32_t len, uint8_t *buf, uint32_t rem) {
     }
 
     lenocts = WANDDER_LOG256_SIZE(len);
-    if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) {
-        lenocts ++;
+    if (len > WANDDER_EXTRA_OCTET_THRESH(lenocts)) { 
+        lenocts ++; 
     }
-
+    
     *buf = lenocts | 0x80;
 
     buf += 1;
@@ -874,17 +854,7 @@ static inline size_t encode_length_indefinite(uint8_t *buf, ptrdiff_t rem) {
     return 1;
 }
 
-static wandder_buf_t build_ber_field( //TODO split up this function (with build_inplace and build_new_item)
-        uint8_t class, 
-        uint8_t idnum, 
-        uint8_t encodeas, 
-        uint8_t * valptr, //--/->combine into buf?
-        size_t vallen,  //-/
-        void* buf, 
-        ptrdiff_t rem){
-    //first need to calculate how much space we are going to use
-    //class + id len + len len + val len
-
+static inline size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t encodeas, size_t vallen){
     size_t idlen = 0;
     size_t lenlen = 0;
     size_t loglen = 0;
@@ -914,43 +884,29 @@ static wandder_buf_t build_ber_field( //TODO split up this function (with build_
         
         default:
             if (vallen < 128) {
-                idlen += 1;
+                lenlen = 1;
             } else {
                 loglen = WANDDER_LOG256_SIZE(vallen);
-                idlen += (1 + loglen);
-
-                // if (len > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
-                //     //I think this line is a bug and should part of the idnum size 
-                //     //(bit 8 is reserved for the stop bit of the long id form)
-                //     //where as in the long form of the length, the number of octets is specfied
-                //     plen ++;
-                // }
+                if (vallen > WANDDER_EXTRA_OCTET_THRESH(loglen)) {
+                    loglen++;
+                }
+                lenlen = loglen +1;
             }
-            totallen = idlen + vallen;
+
+
+
+            totallen = idlen + lenlen + vallen;
         break;
     }
 
-    wandder_buf_t itembuf;
-    //are we making a new buffer or using the one provided?
-    if (buf == NULL){
-        itembuf.buf = malloc(totallen);
-        rem = totallen;
-    } 
-    else {
-        if (rem > totallen){
-            itembuf.buf = buf;
-            //rem = rem; //just to show we use old value
-        }
-        else {
-            printf("not enough remaining space, want:%d, have:%d\n",totallen,rem);
-            assert(0);
-        }
-    }
-    itembuf.len = totallen;
+    return totallen;
+}
+
+static inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas, uint8_t* valptr, size_t vallen, uint8_t* ptr, ptrdiff_t rem){
     
     size_t ret = 0;
-    uint8_t * ptr = itembuf.buf;
-
+    uint8_t* init_ptr = ptr;
+    
     switch(encodeas) {
         case WANDDER_TAG_OCTETSTRING:
         case WANDDER_TAG_UTF8STR:
@@ -1002,11 +958,11 @@ static wandder_buf_t build_ber_field( //TODO split up this function (with build_
 
             if (vallen < 2) {
                 fprintf(stderr, "Encode error: OID is too short!\n");
-                return (wandder_buf_t){NULL, 0};
+                return 0;
             }
             if ((vallen - 2) > rem) { 
                 printf("not enough space for oid\n");
-                assert(0);
+                return 0;
             }
 
             *ptr = (40 * valptr[0]) + valptr[1]; //not sure why this is a thing
@@ -1058,18 +1014,15 @@ static wandder_buf_t build_ber_field( //TODO split up this function (with build_
                 ptr += ret;
                 rem -= ret;
                 
-                if(class & 1){
-                    ret = encode_length_indefinite(ptr, rem);
-                }
-                else {
-                    ret = encode_length(vallen, ptr, rem);
-                }
+                ret = encode_length(vallen, ptr, rem);
                 ptr += ret;
                 rem -= ret;
-                //memset(ptr, 0, vallen); //should this bea  memcpy? 
+
+                //memset(ptr, 0, vallen); //should this bea memcpy? 
                 memcpy(ptr, valptr, vallen);
                 ptr+=vallen;
                 rem-=vallen;
+
             break;
 
         default:
@@ -1077,40 +1030,68 @@ static wandder_buf_t build_ber_field( //TODO split up this function (with build_
                     encodeas);
             assert(0);
     }
-    //assert(rem >= 0);
-    return itembuf;
+
+    return ptr - init_ptr;
 }
 
-size_t build_inplace(
+size_t wandder_encode_inplace_ber( //TODO is only used by libwander_etsili
         uint8_t class, 
         uint8_t idnum, 
         uint8_t encodeas, 
-        uint8_t * valptr, //--/->combine into buf?
-        size_t vallen,  //-/
+        uint8_t * valptr,
+        size_t vallen,
         void* buf, 
         ptrdiff_t rem){
 
-    if (!buf){
-        printf("NULL pointer provided to build_inplace()\n");
+    size_t totallen = calculate_length(idnum, class, encodeas, vallen);
+
+    if (totallen > rem){
+        printf("not enough room\n");
+        return 0;
+    }
+
+    size_t ret = 0;
+
+    uint8_t * ptr = buf;
+
+    ret = encode_here_ber(idnum, class, encodeas, valptr, vallen, ptr, rem);
+
+    if(ret != totallen){
+        printf("calc length:%4d, real length:%4d\n", totallen, ret);
         assert(0);
     }
-    wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, buf, rem);
 
-    return item.len;
+    return ret;
 }
 
-wandder_buf_t * build_new_item(
+wandder_buf_t * wandder_encode_new_ber(
         uint8_t class, 
         uint8_t idnum, 
         uint8_t encodeas, 
-        uint8_t * valptr, //--/->combine into buf?
+        uint8_t * valptr,
         size_t vallen){
 
-    wandder_buf_t item = build_ber_field(class, idnum, encodeas, valptr, vallen, NULL, 0);
-    wandder_buf_t *newitem = malloc(sizeof item);
-    memcpy(newitem, &item, sizeof item);
+    size_t totallen = calculate_length(idnum, class, encodeas, vallen);
 
-    return newitem;
+    wandder_buf_t* itembuf = malloc(sizeof *itembuf);
+
+    itembuf->buf = malloc(totallen);
+    itembuf->len  = totallen;
+    ptrdiff_t rem = totallen;  
+
+    size_t ret = 0;
+
+    uint8_t * ptr = itembuf->buf;
+
+    ret = encode_here_ber(idnum, class, encodeas, valptr, vallen, ptr, rem);
+    itembuf->len = ret;
+
+    if(ret != totallen){
+        printf("calc length:%4d, real length:%4d\n", totallen, ret);
+        assert(0);
+    }
+
+    return itembuf;
 }
 
 //returns the number of bytes written (usually const unless an error)
@@ -1180,6 +1161,120 @@ size_t ber_rebuild_integer( //TODO this method is main bottleneck
         val = val >> 8;
     }
     return MAXLENGTHOCTS + 3;
+}
+
+
+static inline ptrdiff_t rem_grow_check(wandder_encoder_ber_t *enc_ber, size_t totallen){
+
+    ptrdiff_t rem = enc_ber->alloc_len - enc_ber->len;
+    if (totallen > rem){
+        size_t new_alloc = enc_ber->len + totallen + enc_ber->increment;
+        uint8_t *new_buf = realloc(enc_ber->buf, new_alloc);
+        if (new_buf == NULL){
+            //TODO, handle mem fail
+            printf("realloc failed\n");
+            assert(0);
+        }
+        enc_ber->alloc_len = new_alloc;
+        if (new_buf != enc_ber->buf){
+            ptrdiff_t offset = new_buf - enc_ber->buf;
+
+            enc_ber->buf += offset;
+            enc_ber->ptr += offset;
+        }
+        rem = enc_ber->alloc_len - enc_ber->len;
+    }
+
+    return rem;
+}
+
+wandder_encoder_ber_t* wandder_init_encoder_ber(size_t init_alloc, size_t increment){
+
+    wandder_encoder_ber_t* enc_ber = calloc(1, sizeof *enc_ber);
+
+    enc_ber->buf = malloc(init_alloc);
+    enc_ber->ptr = enc_ber->buf;
+    enc_ber->alloc_len = init_alloc;
+    enc_ber->increment = increment;
+
+    return enc_ber;
+}
+
+void wandder_encode_next_ber(wandder_encoder_ber_t *enc_ber, uint8_t encodeas,
+        uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen){
+
+    size_t totallen = calculate_length(idnum, itemclass, encodeas, vallen);
+
+    ptrdiff_t rem = rem_grow_check(enc_ber, totallen);
+
+    size_t ret = encode_here_ber(idnum, itemclass, encodeas, valptr, vallen, enc_ber->ptr, rem);
+
+    enc_ber->ptr += ret;
+    enc_ber->len += ret;
+}
+
+wandder_encoded_result_ber_t* wandder_encode_finish_ber(wandder_encoder_ber_t *enc_ber){
+
+    wandder_encoded_result_ber_t* res = malloc(sizeof *res);
+    res->buf = malloc(enc_ber->len);
+    res->len = enc_ber->len;
+    memcpy(res->buf, enc_ber->buf, enc_ber->len);
+    return res;
+
+}
+
+void wandder_encode_endseq_ber(wandder_encoder_ber_t *enc_ber, uint32_t depth){
+
+    depth *=2; //an ENDSEQ is 2 bytes each
+
+    ptrdiff_t rem = rem_grow_check(enc_ber, depth);
+
+    memset(enc_ber->ptr, 0, depth);
+    
+    enc_ber->ptr +=depth;
+    enc_ber->len +=depth;
+    
+}
+
+void wandder_reset_encoder_ber(wandder_encoder_ber_t* enc_ber){
+
+    enc_ber->ptr = enc_ber->buf;
+    enc_ber->len = 0;
+
+}
+
+void wandder_free_encoder_ber(wandder_encoder_ber_t* enc_ber){
+
+    if(enc_ber){
+        if(enc_ber->buf){
+            free(enc_ber->buf);
+        }
+        free(enc_ber);
+        return;
+    }
+    printf("Can't free NULL\n");
+}
+
+void wandder_free_encoded_result_ber(wandder_encoded_result_ber_t* res_ber){
+
+    if(res_ber){
+        if(res_ber->buf){
+            free(res_ber->buf);
+        }
+        free(res_ber);
+        return;
+    }
+    printf("Can't free NULL\n");
+}
+
+void wandder_append_preencoded_ber(wandder_encoder_ber_t* enc_ber, wandder_buf_t* item_buf){
+
+    ptrdiff_t rem = rem_grow_check(enc_ber, item_buf->len);
+
+    memcpy(enc_ber->ptr, item_buf->buf, item_buf->len);
+    enc_ber->ptr += item_buf->len;
+    enc_ber->len += item_buf->len;
+
 }
 
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

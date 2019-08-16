@@ -145,7 +145,7 @@ struct wandder_item {
     wandder_item_t *parent;
     uint32_t identifier;
     uint32_t preamblelen;
-    uint32_t length;
+    uint64_t length;
     uint16_t level;
     uint8_t identclass;
     uint8_t *valptr;
@@ -269,7 +269,20 @@ struct wandder_buf {
     size_t len;
 };
 
+typedef struct wandder_encoder_ber wandder_encoder_ber_t;
+struct wandder_encoder_ber {
+    uint8_t* buf;
+    uint8_t* ptr;
+    size_t len;
+    size_t alloc_len;
+    size_t increment;
+};
 
+typedef struct wandder_encoded_result_ber wandder_encoded_result_ber_t;
+struct wandder_encoded_result_ber {
+    uint8_t* buf;
+    size_t len;
+};
 
 /* The encoder manages the overall encoder process. It simply maintains the
  * full hierarchy of pending items and will encode them all once the user
@@ -296,13 +309,36 @@ struct wandder_encoder {
  * ----------------------------------------------------
  */
 //BER encoder
-size_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, size_t vallen, void* buf); //ber_rebuild_integer
+//allocs a new encoder_ber with the provided initial buffer size 
+//and default increment size
+wandder_encoder_ber_t* wandder_init_encoder_ber(
+        size_t init_alloc, size_t increment);
+//resets enc_ber to inital conditions to reuse the buffer
+void wandder_reset_encoder_ber(wandder_encoder_ber_t* enc_ber);
+void wandder_free_encoder_ber(wandder_encoder_ber_t* enc_ber);
 
-//TODO seperate these methods more
-size_t build_inplace(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_inplace
-        uint8_t * valptr, size_t vallen, void* buf, ptrdiff_t rem);
-wandder_buf_t * build_new_item(uint8_t class, uint8_t idnum, uint8_t encodeas,  //build_new_item
+void wandder_encode_next_ber(
+        wandder_encoder_ber_t* enc_ber, uint8_t encodeas,
+        uint8_t itemclass, uint32_t idnum, void *valptr,
+        uint32_t vallen);
+
+//create new preencoded item (wandder_buf)
+wandder_buf_t * wandder_encode_new_ber(
+        uint8_t class, uint8_t idnum, uint8_t encodeas,
         uint8_t * valptr, size_t vallen);
+
+//copy preencoded item (wandder_buf) to end of enc_buf
+void wandder_append_preencoded_ber(wandder_encoder_ber_t* enc_ber, wandder_buf_t* item_buf);
+
+//append depth number of ENDSEQ items to the end of the buffer
+void wandder_encode_endseq_ber(wandder_encoder_ber_t* enc_ber, uint32_t depth);
+
+//copys the current enc_ber buffer into a new encoded_result_ber 
+wandder_encoded_result_ber_t* wandder_encode_finish_ber(wandder_encoder_ber_t *enc_ber);
+//encodes the next item into the buffer 
+
+void wandder_free_encoded_result_ber(wandder_encoded_result_ber_t* res_ber);
+
 /////////////////////////////////////////////////
 //DER encoder
 wandder_encoder_t *init_wandder_encoder();

@@ -35,6 +35,7 @@
 #include <time.h>
 #include <assert.h>
 #include <math.h>
+#include "wandder_internal.h"
 #include "libwandder_etsili.h"
 
 const uint8_t etsi_lipsdomainid[9] = {
@@ -44,16 +45,6 @@ uint8_t etsi_ipccoid[4] = {0x05, 0x03, 0x0a, 0x02};
 uint8_t etsi_ipirioid[4] = {0x05, 0x03, 0x0a, 0x01};
 uint8_t etsi_ipmmccoid[4] = {0x05, 0x05, 0x06, 0x02};
 uint8_t etsi_ipmmirioid[4] = {0x05, 0x05, 0x06, 0x01};
-
-static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
-    if (x < 256) return 1;
-    if (x < 65536) return 2;
-    if (x < 16777216) return 3;
-    if (x < 4294967296) return 4;
-    if (x < 1099511627776) return 5;
-    if (x < 281474976710656) return 6;
-    return floor((log(x) / log(256)) + 1);
-}
 
 static void init_dumpers(wandder_etsispec_t *dec);
 static void free_dumpers(wandder_etsispec_t *dec);
@@ -1964,7 +1955,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
 }
 
 void wandder_pshdr_update(int64_t cin,
-        int64_t seqno, struct timeval *tv, wandber_etsili_top_t * top) {
+        int64_t seqno, struct timeval *tv, wandder_etsili_top_t * top) {
 
     ber_rebuild_integer(
         WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -1999,7 +1990,7 @@ void wandder_pshdr_update(int64_t cin,
 //the header leaves pointers to the spaces which will require updating
 //return value has been malloc'd
 static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
-        int64_t seqno, struct timeval *tv, wandber_etsili_top_t *top) {
+        int64_t seqno, struct timeval *tv, wandder_etsili_top_t *top) {
 
     /* hdrdata should be pretty static for each ETSI LI record, so
      * you can populate it once and repeatedly use it.
@@ -2008,35 +1999,35 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
      */
 
     uint32_t totallen = //this can probably just be generously be estimated, dont need the actual value
-        precomputed[WANDBER_PREENCODE_USEQUENCE]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_1]->len+
-        precomputed[WANDBER_PREENCODE_PSDOMAINID]->len+
-        precomputed[WANDBER_PREENCODE_LIID]->len+
-        precomputed[WANDBER_PREENCODE_AUTHCC]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_3]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_0]->len+
-        precomputed[WANDBER_PREENCODE_OPERATORID]->len+
-        precomputed[WANDBER_PREENCODE_NETWORKELEMID]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_PSDOMAINID]->len+
+        precomputed[WANDDER_PREENCODE_LIID]->len+
+        precomputed[WANDDER_PREENCODE_AUTHCC]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_3]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
+        precomputed[WANDDER_PREENCODE_OPERATORID]->len+
+        precomputed[WANDDER_PREENCODE_NETWORKELEMID]->len+
         2 + //endseq
         //THIS CAN BE ANY INTEGER just need to obtain the size, which is the same for all integers
-        precomputed[WANDBER_PREENCODE_DIRUNKNOWN]->len+ //Integer
-        precomputed[WANDBER_PREENCODE_DELIVCC]->len+
+        precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len+ //Integer
+        precomputed[WANDDER_PREENCODE_DELIVCC]->len+
         2 + //endseq
-        precomputed[WANDBER_PREENCODE_DIRUNKNOWN]->len+ //Integer
+        precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len+ //Integer
         (
-            (precomputed[WANDBER_PREENCODE_INTPOINTID]) ? 
+            (precomputed[WANDDER_PREENCODE_INTPOINTID]) ? 
                 (
-                    precomputed[WANDBER_PREENCODE_INTPOINTID]->len +
-                    precomputed[WANDBER_PREENCODE_CSEQUENCE_7]->len
+                    precomputed[WANDDER_PREENCODE_INTPOINTID]->len +
+                    precomputed[WANDDER_PREENCODE_CSEQUENCE_7]->len
                 ): 
                 (
-                    precomputed[WANDBER_PREENCODE_CSEQUENCE_7]->len
+                    precomputed[WANDDER_PREENCODE_CSEQUENCE_7]->len
                 ) 
         )+ 
-        precomputed[WANDBER_PREENCODE_DIRUNKNOWN]->len+ //Integer
-        precomputed[WANDBER_PREENCODE_DIRUNKNOWN]->len+ //Integer
+        precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len+ //Integer
+        precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len+ //Integer
         2 + //endseq
-        precomputed[WANDBER_PREENCODE_TVCLASS]->len+
+        precomputed[WANDDER_PREENCODE_TVCLASS]->len+
         2; //endseq
 
     
@@ -2046,15 +2037,15 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
     
 
     //////////////////////////////////////////////////////////////// block 0
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_USEQUENCE]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_PSDOMAINID]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_LIID]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_AUTHCC]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_3]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_0]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_OPERATORID]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_NETWORKELEMID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_PSDOMAINID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_LIID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_AUTHCC]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_3]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_OPERATORID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_NETWORKELEMID]);
     ENDCONSTRUCTEDBLOCK(ptr,1) //endseq
     //////////////////////////////////////////////////////////////// cin
     top->header.cin = ptr;
@@ -2065,7 +2056,7 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
         sizeof cin,
         ptr);
     //////////////////////////////////////////////////////////////// block 1
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_DELIVCC]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DELIVCC]);
     ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
     //////////////////////////////////////////////////////////////// seqno
     top->header.seqno = ptr;
@@ -2076,10 +2067,10 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
         sizeof seqno,
         ptr);
     //////////////////////////////////////////////////////////////// block 2
-    if (precomputed[WANDBER_PREENCODE_INTPOINTID]){
-        MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_INTPOINTID]);
+    if (precomputed[WANDDER_PREENCODE_INTPOINTID]){
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_INTPOINTID]);
     }
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_7]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_7]);
     //////////////////////////////////////////////////////////////// sec
     top->header.sec = ptr;
     ptr+= ber_rebuild_integer(
@@ -2098,14 +2089,14 @@ static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
         ptr);
     //////////////////////////////////////////////////////////////// block 3
     ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_TVCLASS]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_TVCLASS]);
     ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
 
     top->len = ptr - top->buf;
 }
 
 static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
-        uint32_t iplen, uint8_t dir, wandber_etsili_top_t * top) {
+        uint32_t iplen, uint8_t dir, wandder_etsili_top_t * top) {
 
     //tab space
 
@@ -2114,9 +2105,12 @@ static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *i
     //vallen is iplen 
     //just need lenlen
     size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
-    if (iplen > 127){  //if iplen > 127, long form must be used
+    if (iplen > 127){  //if iplen > 127, long form must be used        
+        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
+            lenlen ++; 
+        }
         lenlen++;
-    }
+    } 
     size_t iptotalen = 1 + lenlen + iplen;
     size_t totallen = (top->body.ipcc.ipcontent - top->buf) + iptotalen + (7 * 2);
     //                  (size up to variable part) + (lenght of variable part) + (size of footer)
@@ -2154,11 +2148,11 @@ static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *i
 
     //can maybe reduce this down to a single ber_rebuild_integer() (dirfrom/to/unknowen are just differnt ints)
     if (dir == 0) {
-        memcpy(top->body.ipcc.dir, precomputed[WANDBER_PREENCODE_DIRFROM]->buf, precomputed[WANDBER_PREENCODE_DIRFROM]->len);
+        memcpy(top->body.ipcc.dir, precomputed[WANDDER_PREENCODE_DIRFROM]->buf, precomputed[WANDDER_PREENCODE_DIRFROM]->len);
     } else if (dir == 1) {
-        memcpy(top->body.ipcc.dir, precomputed[WANDBER_PREENCODE_DIRTO]->buf, precomputed[WANDBER_PREENCODE_DIRTO]->len);
+        memcpy(top->body.ipcc.dir, precomputed[WANDDER_PREENCODE_DIRTO]->buf, precomputed[WANDDER_PREENCODE_DIRTO]->len);
     } else if (dir == 2) {
-        memcpy(top->body.ipcc.dir, precomputed[WANDBER_PREENCODE_DIRUNKNOWN]->buf, precomputed[WANDBER_PREENCODE_DIRUNKNOWN]->len);
+        memcpy(top->body.ipcc.dir, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->buf, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len);
     } else {
         ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -2168,7 +2162,7 @@ static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *i
             top->body.ipcc.dir);
     }
     uint8_t * ptr = top->body.ipcc.ipcontent;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2186,19 +2180,19 @@ static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *i
 static inline void init_ipcc_body(
         wandder_buf_t **precomputed, void *ipcontent,
         uint32_t iplen, uint8_t dir,
-        wandber_etsili_top_t * top) {
+        wandder_etsili_top_t * top) {
 
     //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
 
     size_t totallen = 
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_1]->len+
-        precomputed[WANDBER_PREENCODE_USEQUENCE]->len+
-        precomputed[WANDBER_PREENCODE_DIRFROM]->len+ //just need any Integer size
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_IPCCOID]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_IPCCOID]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
         32 + iplen + //id field and length of ipcontents //overcompensate length to avoid calculating
         (2 * 7); //7 endseq items
 
@@ -2232,17 +2226,17 @@ static inline void init_ipcc_body(
     uint8_t* ptr = top->header.end;
 
     //////////////////////////////////////////////////////////////// block 0
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_USEQUENCE]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
     //////////////////////////////////////////////////////////////// dir
     top->body.ipcc.dir = ptr;
     if (dir == 0) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_DIRFROM]);
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRFROM]);
     } else if (dir == 1) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_DIRTO]);
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRTO]);
     } else if (dir == 2) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_DIRUNKNOWN]);
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]);
     } else {
         ptr += ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -2252,14 +2246,14 @@ static inline void init_ipcc_body(
             ptr);
     }
     //////////////////////////////////////////////////////////////// block 1
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_IPCCOID]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPCCOID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipcc.ipcontent = ptr;
 
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2272,10 +2266,10 @@ static inline void init_ipcc_body(
 
 }
 
-void wandber_encode_etsi_ipcc(
+void wandder_encode_etsi_ipcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
-        wandber_etsili_top_t *top) {
+        wandder_etsili_top_t *top) {
 
     if (top->buf){
         wandder_pshdr_update(cin, seqno, tv, top);
@@ -2293,8 +2287,14 @@ void wandber_encode_etsi_ipcc(
     }
 }
 
+void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandder_etsili_top_t *top){
+    struct timeval tv;
+    init_pshdr_pc_ber(precomputed, 0, 0, &tv, top);
+    top->body_type = WANDDER_ETSILI_EMPTY;
+}
+
 static inline void wandder_ipmmiri_body_update(wandder_buf_t **precomputed, void *ipcontent,
-        size_t iplen, wandber_etsili_iri_type_t iritype, wandber_etsili_top_t * top) {
+        size_t iplen, wandder_etsili_iri_type_t iritype, wandder_etsili_top_t * top) {
 
     //tab space
 
@@ -2348,7 +2348,7 @@ static inline void wandder_ipmmiri_body_update(wandder_buf_t **precomputed, void
         top->body.ipmmiri.iritype);
 
     uint8_t * ptr = top->body.ipmmiri.ipcontent;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2365,20 +2365,20 @@ static inline void wandder_ipmmiri_body_update(wandder_buf_t **precomputed, void
 
 static inline void init_ipmmiri_body(
         wandder_buf_t **precomputed, void *ipcontent,
-        uint32_t iplen, wandber_etsili_iri_type_t iritype,
-        wandber_etsili_top_t * top) {
+        uint32_t iplen, wandder_etsili_iri_type_t iritype,
+        wandder_etsili_top_t * top) {
 
     //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
 
     uint32_t totallen = 
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_0]->len+
-        precomputed[WANDBER_PREENCODE_USEQUENCE]->len+
-        precomputed[WANDBER_PREENCODE_DIRFROM]->len+ //just need any Integer size (iritype)
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_1]->len+
-        precomputed[WANDBER_PREENCODE_IPMMIRIOID]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size (iritype)
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_IPMMIRIOID]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
         32 + iplen + //id field and length of ipcontents //overcompensate length to avoid calculating
         (2 * 7); //7 endseq items
 
@@ -2412,9 +2412,9 @@ static inline void init_ipmmiri_body(
     uint8_t* ptr = top->header.end;
 
     //////////////////////////////////////////////////////////////// block 0
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_0]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_USEQUENCE]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
     //////////////////////////////////////////////////////////////// dir
     top->body.ipmmiri.iritype = ptr;
     ptr += ber_rebuild_integer(
@@ -2424,13 +2424,13 @@ static inline void init_ipmmiri_body(
         sizeof iritype,
         ptr);
     //////////////////////////////////////////////////////////////// block 1
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_IPMMIRIOID]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMIRIOID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipcc.ipcontent = ptr;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2441,10 +2441,10 @@ static inline void init_ipmmiri_body(
     top->len = ptr - top->buf;
 }
 
-void wandber_encode_etsi_ipmmiri(
+void wandder_encode_etsi_ipmmiri_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, size_t iplen, wandber_etsili_iri_type_t iritype,
-        wandber_etsili_top_t *top) {
+        struct timeval *tv, void *ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype,
+        wandder_etsili_top_t *top) {
 
     if (top->buf){
         wandder_pshdr_update(cin, seqno, tv, top);
@@ -2464,7 +2464,7 @@ void wandber_encode_etsi_ipmmiri(
 
 /////////////////////////
 static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *params,
-        wandber_etsili_iri_type_t iritype, wandber_etsili_top_t * top) {
+        wandder_etsili_iri_type_t iritype, wandder_etsili_top_t * top) {
 
     //tab space
 
@@ -2517,7 +2517,7 @@ static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *
 
     uint8_t * ptr = top->body.ipiri.params;
     //TODO copy in all the params in sorted order here
-    // ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    // ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
     //         0,
     //         WANDDER_TAG_IPPACKET,
     //         params, 
@@ -2534,20 +2534,20 @@ static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *
 
 static inline void init_ipiri_body(
         wandder_buf_t **precomputed, void *params,
-        wandber_etsili_iri_type_t iritype,
-        wandber_etsili_top_t * top) {
+        wandder_etsili_iri_type_t iritype,
+        wandder_etsili_top_t * top) {
 
     //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
 
     uint32_t totallen = 
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_0]->len+
-        precomputed[WANDBER_PREENCODE_USEQUENCE]->len+
-        precomputed[WANDBER_PREENCODE_DIRFROM]->len+ //just need any Integer size (iritype)
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_IPIRIOID]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size (iritype)
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_IPIRIOID]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
         // totalsize of params +
         (2 * 7); //7 endseq items
 
@@ -2581,9 +2581,9 @@ static inline void init_ipiri_body(
     uint8_t* ptr = top->header.end;
 
     //////////////////////////////////////////////////////////////// block 0
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_0]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_USEQUENCE]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
     //////////////////////////////////////////////////////////////// dir
     top->body.ipiri.iritype = ptr;
     ptr += ber_rebuild_integer(
@@ -2593,14 +2593,14 @@ static inline void init_ipiri_body(
         sizeof iritype,
         ptr);
     //////////////////////////////////////////////////////////////// block 1
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_IPMMIRIOID]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMIRIOID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipiri.params = ptr;
     //TODO copy in all params here in sorted order
-    // ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    // ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
     //         0,
     //         WANDDER_TAG_IPPACKET,
     //         params, 
@@ -2611,10 +2611,10 @@ static inline void init_ipiri_body(
     top->len = ptr - top->buf;
 }
 
-void wandber_encode_etsi_ipiri(
+void wandder_encode_etsi_ipiri_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void * params, wandber_etsili_iri_type_t iritype,
-        wandber_etsili_top_t *top) {
+        struct timeval *tv, void * params, wandder_etsili_iri_type_t iritype,
+        wandder_etsili_top_t *top) {
 
     if (top->buf){
         wandder_pshdr_update(cin, seqno, tv, top);
@@ -2636,22 +2636,22 @@ void wandber_encode_etsi_ipiri(
 static inline void init_ipmmcc_body(
         wandder_buf_t **precomputed, void *ipcontent,
         uint32_t iplen, uint8_t dir,
-        wandber_etsili_top_t * top) {
+        wandder_etsili_top_t * top) {
 
     uint32_t frametype = 0;
     uint32_t mmccproto = 0;
 
     uint32_t totallen = 
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_1]->len+
-        precomputed[WANDBER_PREENCODE_USEQUENCE]->len+
-        precomputed[WANDBER_PREENCODE_DIRFROM]->len+ //just need any Integer size
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDBER_PREENCODE_CSEQUENCE_12]->len+
-        precomputed[WANDBER_PREENCODE_IPMMCCOID]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_12]->len+
+        precomputed[WANDDER_PREENCODE_IPMMCCOID]->len+
         32 + iplen + //id field and length of ipcontents //overcompensate length 
-        precomputed[WANDBER_PREENCODE_DIRFROM]->len+//just need an int length (frametype)
-        precomputed[WANDBER_PREENCODE_DIRFROM]->len+//just need an int length (mmccproto)
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+//just need an int length (frametype)
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+//just need an int length (mmccproto)
         (2 * 6); //6 endseq items
 
     top->header.end = top->buf + top->len;
@@ -2683,17 +2683,17 @@ static inline void init_ipmmcc_body(
     
 
     //////////////////////////////////////////////////////////////// block 0
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_1]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_USEQUENCE]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
     //////////////////////////////////////////////////////////////// dir
     top->body.ipmmcc.dir = ptr;
     if (dir == 0) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_DIRFROM]);
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRFROM]);
     } else if (dir == 1) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_DIRTO]);
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRTO]);
     } else if (dir == 2) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_DIRUNKNOWN]);
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]);
     } else {
         ptr += ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -2703,12 +2703,12 @@ static inline void init_ipmmcc_body(
             ptr);
     }
     //////////////////////////////////////////////////////////////// block 1
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_CSEQUENCE_12]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDBER_PREENCODE_IPMMCCOID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_12]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMCCOID]);
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipmmcc.ipcontent = ptr;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2734,10 +2734,13 @@ static inline void init_ipmmcc_body(
 }
 
 void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
-        uint32_t iplen, uint8_t dir, wandber_etsili_top_t * top) {
+        uint32_t iplen, uint8_t dir, wandder_etsili_top_t * top) {
 
-    uint32_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
-    if (iplen > 127){  //if iplen > 127, long form must be used
+    size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
+    if (iplen > 127){  //if iplen > 127, long form must be used        
+        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
+            lenlen ++; 
+        }
         lenlen++;
     }
     uint32_t iptotalen = 1 + lenlen + iplen;
@@ -2777,11 +2780,11 @@ void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
 
     //can maybe reduce this down to a single ber_rebuild_integer() (dirfrom/to/unknowen are just differnt ints)
     if (dir == 0) {
-        memcpy(top->body.ipmmcc.dir, precomputed[WANDBER_PREENCODE_DIRFROM]->buf, precomputed[WANDBER_PREENCODE_DIRFROM]->len);
+        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRFROM]->buf, precomputed[WANDDER_PREENCODE_DIRFROM]->len);
     } else if (dir == 1) {
-        memcpy(top->body.ipmmcc.dir, precomputed[WANDBER_PREENCODE_DIRTO]->buf, precomputed[WANDBER_PREENCODE_DIRTO]->len);
+        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRTO]->buf, precomputed[WANDDER_PREENCODE_DIRTO]->len);
     } else if (dir == 2) {
-        memcpy(top->body.ipmmcc.dir, precomputed[WANDBER_PREENCODE_DIRUNKNOWN]->buf, precomputed[WANDBER_PREENCODE_DIRUNKNOWN]->len);
+        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->buf, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len);
     } else {
         ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -2791,7 +2794,7 @@ void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
             top->body.ipmmcc.dir);
     }
     uint8_t * ptr = top->body.ipmmcc.ipcontent;
-    ptr += build_inplace(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_IPPACKET,
             ipcontent, 
@@ -2806,10 +2809,10 @@ void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
     top->len = totallen;
 }
 
-void wandber_encode_etsi_ipmmcc(
+void wandder_encode_etsi_ipmmcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
-        wandber_etsili_top_t *top) {
+        wandder_etsili_top_t *top) {
 
     if (top->buf){
         wandder_pshdr_update(cin, seqno, tv, top);
@@ -2827,11 +2830,11 @@ void wandber_encode_etsi_ipmmcc(
     }
 }
 
-void wandber_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
+void wandder_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
 
-    wandber_preencode_index_t i;
+    wandder_preencode_index_t i;
 
-    for (i = 0; i < WANDBER_PREENCODE_LAST; i++) {
+    for (i = 0; i < WANDDER_PREENCODE_LAST; i++) {
         if (pendarray[i]) {
             free(pendarray[i]->buf);
             free(pendarray[i]);
@@ -2839,65 +2842,65 @@ void wandber_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
     }
 }
 
-void wandber_etsili_preencode_static_fields_ber(
-        wandder_buf_t **pendarray, wandber_etsili_intercept_details_t *details) {
+void wandder_etsili_preencode_static_fields_ber(
+        wandder_buf_t **pendarray, wandder_etsili_intercept_details_t *details) {
 
     wandder_buf_t *p;
     int tvclass = 1;
     uint32_t dirin = 0, dirout = 1, dirunk = 2;
 
-    memset(pendarray, 0, sizeof(p) * WANDBER_PREENCODE_LAST);
+    memset(pendarray, 0, sizeof(p) * WANDDER_PREENCODE_LAST);
 
-    pendarray[WANDBER_PREENCODE_USEQUENCE] = build_new_item(
+    pendarray[WANDDER_PREENCODE_USEQUENCE] = wandder_encode_new_ber(
             WANDDER_CLASS_UNIVERSAL_CONSTRUCT, 
             WANDDER_TAG_SEQUENCE,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_0] =  build_new_item(
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_0] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             0,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_1] =  build_new_item(
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_1] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             1,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_2] =  build_new_item(
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_2] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             2,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_3] =  build_new_item(
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_3] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             3,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_7] =  build_new_item(
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_7] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             7,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_11] =  build_new_item(
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_11] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             11,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
 
-    pendarray[WANDBER_PREENCODE_CSEQUENCE_12] =  build_new_item(
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_12] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             12,
             WANDDER_TAG_SEQUENCE,
@@ -2905,42 +2908,42 @@ void wandber_etsili_preencode_static_fields_ber(
             0);
 
     //TODO i dont think this is 100% correct but i cant see anything wrong
-    pendarray[WANDBER_PREENCODE_PSDOMAINID] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_PSDOMAINID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_OID,
             (uint8_t *)WANDDER_ETSILI_PSDOMAINID, 
             sizeof WANDDER_ETSILI_PSDOMAINID);
 
-    pendarray[WANDBER_PREENCODE_LIID] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_LIID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             1,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->liid, 
             strlen(details->liid));
 
-    pendarray[WANDBER_PREENCODE_AUTHCC] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_AUTHCC] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             2,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->authcc, 
             strlen(details->authcc));
 
-    pendarray[WANDBER_PREENCODE_OPERATORID] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_OPERATORID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->operatorid, 
             strlen(details->operatorid));
 
-    pendarray[WANDBER_PREENCODE_NETWORKELEMID] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_NETWORKELEMID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             1,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->networkelemid, 
             strlen(details->networkelemid));
 
-    pendarray[WANDBER_PREENCODE_DELIVCC] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_DELIVCC] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             2,
             WANDDER_TAG_OCTETSTRING,
@@ -2948,63 +2951,63 @@ void wandber_etsili_preencode_static_fields_ber(
             strlen(details->delivcc));
 
     //either build the field or set it NULL
-    pendarray[WANDBER_PREENCODE_INTPOINTID] =  (details->intpointid) ? build_new_item( 
+    pendarray[WANDDER_PREENCODE_INTPOINTID] =  (details->intpointid) ? wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             6,
             WANDDER_TAG_OCTETSTRING,
             (uint8_t *)details->intpointid, 
             strlen(details->intpointid)) : NULL;
 
-    pendarray[WANDBER_PREENCODE_TVCLASS] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_TVCLASS] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             8,
             WANDDER_TAG_ENUM,
             (uint8_t *)(&tvclass), 
             sizeof tvclass);
 
-    pendarray[WANDBER_PREENCODE_IPMMIRIOID] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_IPMMIRIOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
             etsi_ipmmirioid, 
             sizeof etsi_ipmmirioid);
 
-    pendarray[WANDBER_PREENCODE_IPCCOID] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_IPCCOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
             etsi_ipccoid, 
             sizeof etsi_ipccoid);
 
-    pendarray[WANDBER_PREENCODE_IPIRIOID] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_IPIRIOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
             etsi_ipirioid, 
             sizeof etsi_ipirioid);
 
-    pendarray[WANDBER_PREENCODE_IPMMCCOID] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_IPMMCCOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
             etsi_ipmmccoid, 
             sizeof etsi_ipmmccoid);
 
-    pendarray[WANDBER_PREENCODE_DIRFROM] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_DIRFROM] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_ENUM,
             (uint8_t *)(&dirin), 
             sizeof dirin);
 
-    pendarray[WANDBER_PREENCODE_DIRTO] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_DIRTO] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_ENUM,
             (uint8_t *)(&dirout), 
             sizeof dirout);
 
-    pendarray[WANDBER_PREENCODE_DIRUNKNOWN] =  build_new_item( 
+    pendarray[WANDDER_PREENCODE_DIRUNKNOWN] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_ENUM,
