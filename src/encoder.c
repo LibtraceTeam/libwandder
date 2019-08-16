@@ -825,8 +825,7 @@ wandder_encoded_result_t *wandder_encode_finish(wandder_encoder_t *enc) {
     result->encoder = enc;
     result->next = NULL;
     result->len = enc->pendlist->childrensize + enc->pendlist->thisjob.preamblen;
-    //printf("final size=%d %d %d\n", result->len, enc->pendlist->childrensize,
-    //        enc->pendlist->thisjob.preamblen);
+
     if (result->alloced < result->len) {
         uint32_t x = 512;
         if (x < result->len) {
@@ -961,7 +960,7 @@ static inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encod
                 return 0;
             }
             if ((vallen - 2) > rem) { 
-                printf("not enough space for oid\n");
+                fprintf(stderr, "Encode error: Not enough space for OID!\n");
                 return 0;
             }
 
@@ -1034,7 +1033,7 @@ static inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encod
     return ptr - init_ptr;
 }
 
-size_t wandder_encode_inplace_ber( //TODO is only used by libwander_etsili
+size_t wandder_encode_inplace_ber(
         uint8_t class, 
         uint8_t idnum, 
         uint8_t encodeas, 
@@ -1046,7 +1045,7 @@ size_t wandder_encode_inplace_ber( //TODO is only used by libwander_etsili
     size_t totallen = calculate_length(idnum, class, encodeas, vallen);
 
     if (totallen > rem){
-        printf("not enough room\n");
+        fprintf(stderr, "Encode error: not enough room\n");
         return 0;
     }
 
@@ -1095,7 +1094,7 @@ wandder_buf_t * wandder_encode_new_ber(
 }
 
 //returns the number of bytes written (usually const unless an error)
-size_t ber_rebuild_integer( //TODO this method is main bottleneck
+size_t ber_rebuild_integer(
         uint8_t itemclass, 
         uint32_t idnum, 
         void *valptr, 
@@ -1133,7 +1132,7 @@ size_t ber_rebuild_integer( //TODO this method is main bottleneck
             lenocts = vallen;
         }
         if (lenocts < vallen && val >= WANDDER_EXTRA_OCTET_THRESH(lenocts)) { //TODO
-            //lenocts ++;
+            lenocts ++; //this is to ensure a positive number with the MSB set is not negitive
         }
     }
 
@@ -1170,7 +1169,7 @@ static inline ptrdiff_t rem_grow_check(wandder_encoder_ber_t *enc_ber, size_t to
     if (totallen > rem){
         size_t new_alloc = enc_ber->len + totallen + enc_ber->increment;
         uint8_t *new_buf = realloc(enc_ber->buf, new_alloc);
-        if (new_buf == NULL){
+                if (new_buf == NULL){
             //TODO, handle mem fail
             printf("realloc failed\n");
             assert(0);
@@ -1252,7 +1251,6 @@ void wandder_free_encoder_ber(wandder_encoder_ber_t* enc_ber){
         free(enc_ber);
         return;
     }
-    printf("Can't free NULL\n");
 }
 
 void wandder_free_encoded_result_ber(wandder_encoded_result_ber_t* res_ber){
@@ -1264,7 +1262,6 @@ void wandder_free_encoded_result_ber(wandder_encoded_result_ber_t* res_ber){
         free(res_ber);
         return;
     }
-    printf("Can't free NULL\n");
 }
 
 void wandder_append_preencoded_ber(wandder_encoder_ber_t* enc_ber, wandder_buf_t* item_buf){

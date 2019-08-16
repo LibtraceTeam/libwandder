@@ -473,18 +473,26 @@ int wandder_decode_skip(wandder_decoder_t *dec) {
         return -1;
     }
 
+    int skipped = 0;
+
     if (dec->current->indefform){
         dec->nextitem = dec->current->valptr;
         while(*dec->nextitem != 0 || *(dec->nextitem+1) !=0 ){
-            _decode_next(dec);
+            skipped += _decode_next(dec);
+
+            if (dec->current->indefform){
+                skipped += wandder_decode_skip(dec); 
+                //not certian if recursive soloution should be used
+                //but it works
+            }
         }
-        _decode_next(dec); //dec->nextitem+=2;
+        skipped += _decode_next(dec); //dec->nextitem+=2;
 
     }else {
         dec->current->descend = 0;
         dec->nextitem = dec->current->valptr + dec->current->length;
     }
-    return dec->current->length;
+    return dec->current->length + skipped;
 }
 
 const char *wandder_get_tag_string(wandder_decoder_t *dec) {

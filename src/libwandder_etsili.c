@@ -163,18 +163,24 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
                 "wandder_attach_etsili_buffer() first!\n");
         return 0;
     }
-    /* Easy, reset the decoder then grab the length of the first element */
+    /* Easy, reset the decoder then grab the length of the first element 
+    (provided it is not indefinite)*/
     wandder_reset_decoder(etsidec->dec);
 
     if (wandder_decode_next(etsidec->dec) <= 0) {
         return 0;
     }
 
+    int preamble = etsidec->dec->current->preamblelen;
     /* Don't forget to include the preamble length so the caller can skip
      * over the entire PDU if desired.
      */
-    return wandder_get_itemlen(etsidec->dec) +
-            etsidec->dec->current->preamblelen;
+    if (etsidec->dec->current->indefform){
+        return wandder_decode_skip(etsidec->dec) + preamble;
+    }
+    else {
+        return wandder_get_itemlen(etsidec->dec) + preamble;
+    }
 }
 
 static inline void push_stack(wandder_etsi_stack_t *stack,
@@ -2663,9 +2669,9 @@ static inline void init_ipmmcc_body(
         new = realloc(top->buf, top->alloc_len);
 
         if (new == NULL){
-            printf("unable to alloc mem\n");
-            assert(0);
-        }
+                printf("unable to alloc mem\n");
+                assert(0);
+            }
         
         //update all refrences
         if (new != top->buf){
