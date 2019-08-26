@@ -241,6 +241,7 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 
 void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandder_etsili_top_t *top);
+void wandder_free_top(wandder_etsili_top_t *top);
 void wandder_encode_etsi_ipcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
