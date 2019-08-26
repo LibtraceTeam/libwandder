@@ -2995,6 +2995,15 @@ void wandder_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
     }
 }
 
+void wandder_free_top(wandder_etsili_top_t *top){
+    if(top){
+        if (top->buf){
+            free(top->buf);
+        }
+        free(top);
+    }
+}
+
 void wandder_etsili_preencode_static_fields_ber(
         wandder_buf_t **pendarray, wandder_etsili_intercept_details_t *details) {
 
