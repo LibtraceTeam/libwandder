@@ -3175,6 +3175,7 @@ void wandder_etsili_preencode_static_fields_ber(
             WANDDER_TAG_ENUM,
             (uint8_t *)(&dirunk), 
             sizeof dirunk);
+    pendarray[WANDDER_PREENCODE_LIID_LEN] = (void *)((size_t)strlen(details->liid));
 
 }
 
