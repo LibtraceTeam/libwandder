@@ -2309,11 +2309,15 @@ static inline void wandder_ipmmiri_body_update(wandder_buf_t **precomputed, void
     //vallen is iplen 
     //just need lenlen
     size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
-    if (iplen > 127){  //if iplen > 127, long form must be used
+    if (iplen > 127){  //if iplen > 127, long form must be used        
+        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
+            lenlen ++; 
+        }
         lenlen++;
-    }
+    } 
     size_t iptotalen = 1 + lenlen + iplen;
-    size_t totallen = (top->body.ipcc.ipcontent - top->buf) + iptotalen + (7 * 2);
+
+    size_t totallen = (top->body.ipmmiri.ipcontent - top->buf) + iptotalen + (7 * 2);
     //                  (size up to variable part) + (lenght of variable part) + (size of footer)
 
     //if new length is larger
@@ -2575,6 +2579,7 @@ static inline void init_ipmmiri_body(
     MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
     ptr += encode_ipaddress(ptr, top->alloc_len - (top->buf - ptr), &encipdst);
     ENDCONSTRUCTEDBLOCK(ptr,2)
+    top->body.ipmmiri.ipcontent = ptr;
     ptr += wandder_encode_inplace_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             2,
@@ -2896,8 +2901,8 @@ void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
         }
         lenlen++;
     }
-    uint32_t iptotalen = 1 + lenlen + iplen;
-    uint32_t totallen = (top->body.ipmmcc.ipcontent - top->buf) + iptotalen + (7 * 2);
+    size_t iptotalen = 1 + lenlen + iplen;
+    size_t totallen = (top->body.ipmmcc.ipcontent - top->buf) + iptotalen + (7 * 2);
     //                  (size up to variable part) + (lenght of variable part) + (size of footer)
 
     //if new length is larger
@@ -2987,7 +2992,7 @@ void wandder_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
 
     wandder_preencode_index_t i;
 
-    for (i = 0; i < WANDDER_PREENCODE_LAST; i++) {
+    for (i = 0; i < WANDDER_PREENCODE_LAST -1; i++) {
         if (pendarray[i]) {
             free(pendarray[i]->buf);
             free(pendarray[i]);
