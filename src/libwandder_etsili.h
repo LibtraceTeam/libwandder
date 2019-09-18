@@ -172,6 +172,7 @@ typedef enum {
     WANDDER_PREENCODE_DIRFROM,
     WANDDER_PREENCODE_DIRTO,
     WANDDER_PREENCODE_DIRUNKNOWN,
+    WANDDER_PREENCODE_LIID_LEN,
     WANDDER_PREENCODE_LAST
 
 } wandder_preencode_index_t;
@@ -188,6 +189,31 @@ typedef struct wandder_etsili_intercept_details {
 enum {
     WANDDER_IRI_CONTENT_IP,
     WANDDER_IRI_CONTENT_SIP,
+};
+
+typedef struct wandder_etsili_ipaddress {
+    uint8_t iptype;
+    uint8_t assignment;
+    uint8_t v6prefixlen;
+    uint32_t v4subnetmask;
+
+    uint8_t valtype;
+    uint8_t *ipvalue;
+} wandder_etsili_ipaddress_t;
+
+enum {
+    WANDDER_IPADDRESS_REP_BINARY = 1,
+    WANDDER_IPADDRESS_REP_TEXT = 2,
+};
+
+enum {
+    WANDDER_IPADDRESS_ASSIGNED_STATIC = 1,
+    WANDDER_IPADDRESS_ASSIGNED_DYNAMIC = 2,
+    WANDDER_IPADDRESS_ASSIGNED_UNKNOWN = 3,
+};
+enum {
+    WANDDER_IPADDRESS_VERSION_4 = 0,
+    WANDDER_IPADDRESS_VERSION_6 = 1,
 };
 
 wandder_etsispec_t *wandder_create_etsili_decoder(void);
@@ -216,6 +242,7 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 
 void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandder_etsili_top_t *top);
+void wandder_free_top(wandder_etsili_top_t *top);
 void wandder_encode_etsi_ipcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
@@ -228,6 +255,7 @@ void wandder_encode_etsi_ipmmcc_ber(
 void wandder_encode_etsi_ipmmiri_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype,
+        uint8_t *ipsrc, uint8_t *ipdest, int ipfamily,
         wandder_etsili_top_t *top);
 
 void wandder_encode_etsi_ipiri_ber(
