@@ -325,7 +325,6 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
                 if (item != dec->current) {
                     free_item(item);
                 }
-                exit(0);
                 return -1;
             }
             ptr ++;
