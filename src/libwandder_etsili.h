@@ -28,8 +28,13 @@
 #define LIBWANDDER_ETSILI_H_
 
 #include <libwandder.h>
+#include <stdint.h>
 
 #define WANDDER_ETSILI_PSDOMAINID (etsi_lipsdomainid)
+
+#define MEMCPYPREENCODE(ptr, itembuf) {memcpy(ptr, itembuf->buf, itembuf->len); ptr+=itembuf->len;}
+
+#define ENDCONSTRUCTEDBLOCK(ptr,num) memset(ptr, 0, num*2);ptr+=num*2;
 
 extern const uint8_t etsi_lipsdomainid[9];
 
@@ -85,9 +90,130 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
 } wandder_etsispec_t;
 
+typedef enum wandder_body_type {
+    WANDDER_ETSILI_EMPTY,
+    WANDDER_ETSILI_IPCC,
+    WANDDER_ETSILI_IPMMCC,
+    WANDDER_ETSILI_IPIRI,
+    WANDDER_ETSILI_IPMMIRI,
+} wandder_body_type_t;
+
+typedef enum {
+    WANDDER_ETSILI_IRI_BEGIN = 1,
+    WANDDER_ETSILI_IRI_END = 2,
+    WANDDER_ETSILI_IRI_CONTINUE = 3,
+    WANDDER_ETSILI_IRI_REPORT = 4
+} wandder_etsili_iri_type_t;
+
+typedef struct wandder_pshdr {
+    uint8_t* cin;
+    uint8_t* seqno;
+    uint8_t* sec;
+    uint8_t* usec;
+    uint8_t* end;
+} wandder_pshdr_t;
+
+typedef struct wandder_ipcc_body {
+    uint8_t* dir;
+    uint8_t* ipcontent;
+} wandder_ipcc_body_t;
+
+typedef struct wandder_ipmmcc_body {
+    uint8_t* dir;
+    uint8_t* ipcontent;
+} wandder_ipmmcc_body_t;
+
+typedef struct wandder_ipiri_body {
+    uint8_t* iritype;
+    uint8_t* params;
+} wandder_ipiri_body_t;
+
+typedef struct wandder_ipmmiri_body {
+    uint8_t* iritype;
+    uint8_t* ipcontent;
+} wandder_ipmmiri_body_t;
+
+typedef struct wandder_etsili_top {
+    uint8_t* buf;
+    size_t len;
+    size_t alloc_len;
+    wandder_pshdr_t header;
+    wandder_body_type_t body_type;
+    union {
+        wandder_ipcc_body_t ipcc;
+        wandder_ipmmcc_body_t ipmmcc;
+        wandder_ipmmiri_body_t ipmmiri;
+        wandder_ipiri_body_t ipiri;
+    } body;
+} wandder_etsili_top_t;
+
+
+typedef enum {
+    WANDDER_PREENCODE_USEQUENCE,
+    WANDDER_PREENCODE_CSEQUENCE_0,
+    WANDDER_PREENCODE_CSEQUENCE_1,
+    WANDDER_PREENCODE_CSEQUENCE_2,
+    WANDDER_PREENCODE_CSEQUENCE_3,
+    WANDDER_PREENCODE_CSEQUENCE_7,	/* Microsecond timestamp */
+    WANDDER_PREENCODE_CSEQUENCE_11,  /* IPMMIRI */
+    WANDDER_PREENCODE_CSEQUENCE_12,  /* IPMMCC */
+    WANDDER_PREENCODE_PSDOMAINID,
+    WANDDER_PREENCODE_LIID,
+    WANDDER_PREENCODE_AUTHCC,
+    WANDDER_PREENCODE_OPERATORID,
+    WANDDER_PREENCODE_NETWORKELEMID,
+    WANDDER_PREENCODE_DELIVCC,
+    WANDDER_PREENCODE_INTPOINTID,
+    WANDDER_PREENCODE_TVCLASS,
+    WANDDER_PREENCODE_IPMMIRIOID,
+    WANDDER_PREENCODE_IPCCOID,
+    WANDDER_PREENCODE_IPIRIOID,
+    WANDDER_PREENCODE_IPMMCCOID,
+    WANDDER_PREENCODE_DIRFROM,
+    WANDDER_PREENCODE_DIRTO,
+    WANDDER_PREENCODE_DIRUNKNOWN,
+    WANDDER_PREENCODE_LIID_LEN,
+    WANDDER_PREENCODE_LAST
+
+} wandder_preencode_index_t;
+
+typedef struct wandder_etsili_intercept_details {
+    char *liid;
+    char *authcc;
+    char *delivcc;
+    char *intpointid;
+    char *operatorid;
+    char *networkelemid;
+} wandder_etsili_intercept_details_t;
+
 enum {
     WANDDER_IRI_CONTENT_IP,
     WANDDER_IRI_CONTENT_SIP,
+};
+
+typedef struct wandder_etsili_ipaddress {
+    uint8_t iptype;
+    uint8_t assignment;
+    uint8_t v6prefixlen;
+    uint32_t v4subnetmask;
+
+    uint8_t valtype;
+    uint8_t *ipvalue;
+} wandder_etsili_ipaddress_t;
+
+enum {
+    WANDDER_IPADDRESS_REP_BINARY = 1,
+    WANDDER_IPADDRESS_REP_TEXT = 2,
+};
+
+enum {
+    WANDDER_IPADDRESS_ASSIGNED_STATIC = 1,
+    WANDDER_IPADDRESS_ASSIGNED_DYNAMIC = 2,
+    WANDDER_IPADDRESS_ASSIGNED_UNKNOWN = 3,
+};
+enum {
+    WANDDER_IPADDRESS_VERSION_4 = 0,
+    WANDDER_IPADDRESS_VERSION_6 = 1,
 };
 
 wandder_etsispec_t *wandder_create_etsili_decoder(void);
@@ -112,6 +238,36 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *dec);
 int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec);
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
+
+
+
+void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandder_etsili_top_t *top);
+void wandder_free_top(wandder_etsili_top_t *top);
+void wandder_encode_etsi_ipcc_ber(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
+        wandder_etsili_top_t *top);
+void wandder_encode_etsi_ipmmcc_ber(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
+        wandder_etsili_top_t *top);
+
+void wandder_encode_etsi_ipmmiri_ber(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype,
+        uint8_t *ipsrc, uint8_t *ipdest, int ipfamily,
+        wandder_etsili_top_t *top);
+
+void wandder_encode_etsi_ipiri_ber(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void* params, wandder_etsili_iri_type_t iritype,
+        wandder_etsili_top_t *top);
+
+void wandder_etsili_preencode_static_fields_ber(
+        wandder_buf_t **pendarray, wandder_etsili_intercept_details_t *details);
+void wandder_etsili_clear_preencoded_fields_ber(wandder_buf_t **pendarray);
+
+
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :
