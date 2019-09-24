@@ -145,6 +145,7 @@ struct wandder_item {
     wandder_item_t *parent;
     uint32_t identifier;
     uint32_t preamblelen;
+    uint32_t trailing;
     uint64_t length;
     uint16_t level;
     uint8_t identclass;
