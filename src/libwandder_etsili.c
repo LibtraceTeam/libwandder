@@ -176,7 +176,7 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
      * over the entire PDU if desired.
      */
     if (etsidec->dec->current->indefform){
-        return wandder_decode_skip(etsidec->dec) + preamble;
+        return wandder_decode_skip(etsidec->dec);
     }
     else {
         return wandder_get_itemlen(etsidec->dec) + preamble;
