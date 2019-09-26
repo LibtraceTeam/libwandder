@@ -1,3 +1,12 @@
+Version 1.2.0
+=============
+ * Added experimental support for encoding using BER, with fixed-length
+   integer fields that allow for easier templating of encoded records to
+   improve encoding performance.
+ * Updated decoder to properly decode indefinite-length fields.
+ * Added API functions for BER-encoding specific ETSI-LI message types
+   into libwandder_etsili.h.
+
 Version 1.1.3
 =============
 Decoding:
