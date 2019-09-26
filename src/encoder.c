@@ -35,10 +35,7 @@
 #include "wandder_internal.h"
 #include "src/libwandder.h"
 
-#define MAXLENGTHOCTS 6
-//ideally this value is 9 to support 64 bit ints
-//is currently 6 so that i can use https://lapo.it/asn1js 
-//to view encodings
+#define MAXLENGTHOCTS 9
 
 #define VALALLOC(x, p) \
     if (x > p->valalloced) { \
