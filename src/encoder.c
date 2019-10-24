@@ -1143,6 +1143,8 @@ size_t ber_rebuild_integer(
     size_t lenocts = 0;
     int64_t val = 0;
     uint8_t *ptr = buf;
+    ptrdiff_t i;
+
     if (vallen == 8) {
         val = *((int64_t *)valptr);
     } else if (vallen == 4) {
@@ -1187,13 +1189,13 @@ size_t ber_rebuild_integer(
     *ptr = 0x80;
     *ptr |= lenlen;
 
-    for (ptrdiff_t i = 0 ; i < lenlen; i++){
+    for (i = 0 ; i < lenlen; i++){
         ptr++;
         *ptr = 0;
     }
     *ptr = lenocts;
 
-    for (ptrdiff_t i = lenocts - 1; i >= 0; i--) {
+    for (i = lenocts - 1; i >= 0; i--) {
         ptr[i+1] = (val & 0xff);
         val = val >> 8;
     }
