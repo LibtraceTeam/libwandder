@@ -255,6 +255,9 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (strcmp(curr->members[ident].name, "iPPackets") == 0) {
                     return NULL;
                 }
+                if (strcmp(curr->members[ident].name, "uMTSCC") == 0) {
+                    return NULL;
+                }
                 return wandder_etsili_get_next_fieldstr(etsidec, space,
                         spacelen);
             }
@@ -340,10 +343,10 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
                 "wandder_attach_etsili_buffer() first!\n");
         return NULL;
     }
-    /* Find IPCCContents or IPMMCCContents*/
+    /* Find IPCCContents or IPMMCCContents or uMTSCC */
     wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
-    wandder_target_t cctgts[2];
+    wandder_target_t cctgts[3];
 
     cctgts[0].parent = &etsidec->ipcccontents;
     cctgts[0].itemid = 0;
@@ -353,8 +356,12 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
     cctgts[1].itemid = 1;
     cctgts[1].found = false;
 
+    cctgts[2].parent = &etsidec->cccontents;
+    cctgts[2].itemid = 4;
+    cctgts[2].found = false;
+
     *len = 0;
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 2,
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 3,
                 &found, 1) > 0) {
         *len = found->list[0].item->length;
         vp = found->list[0].item->valptr;
@@ -363,6 +370,8 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
             strncpy(name, etsidec->ipcccontents.members[0].name, namelen);
         } else if (found->list[0].targetid == 1) {
             strncpy(name, etsidec->ipmmcc.members[1].name, namelen);
+        } else if (found->list[0].targetid == 2) {
+            strncpy(name, etsidec->cccontents.members[4].name, namelen);
         }
         wandder_free_found(found);
     }
@@ -1348,7 +1357,12 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->cccontents.members[3] = WANDDER_NOACTION;
-    dec->cccontents.members[4] = WANDDER_NOACTION;
+    dec->cccontents.members[4] =
+        (struct wandder_dump_action) {
+                .name = "uMTSCC",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_IPPACKET
+        };
     dec->cccontents.members[5] = WANDDER_NOACTION;
     dec->cccontents.members[6] = WANDDER_NOACTION;
     dec->cccontents.members[7] = WANDDER_NOACTION;
