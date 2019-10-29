@@ -2210,6 +2210,7 @@ static inline void init_ipcc_body(
     if (top->len > top->alloc_len){
         top->alloc_len = top->len;
         new = realloc(top->buf, top->alloc_len);
+        printf("realloced size\n");
 
         if (new == NULL){
             printf("unable to alloc mem\n");
@@ -2781,8 +2782,8 @@ void wandder_encode_etsi_ipiri_ber(
         init_pshdr_pc_ber(precomputed, cin, seqno, tv, top);
     }
 
-    if (top->body_type != WANDDER_ETSILI_IPMMIRI){
-        top->body_type = WANDDER_ETSILI_IPMMIRI;
+    if (top->body_type != WANDDER_ETSILI_IPIRI){
+        top->body_type = WANDDER_ETSILI_IPIRI;
         init_ipiri_body(precomputed, params, iritype, top);
     }
     else {

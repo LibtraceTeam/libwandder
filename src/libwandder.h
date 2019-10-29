@@ -339,6 +339,21 @@ wandder_encoded_result_ber_t* wandder_encode_finish_ber(wandder_encoder_ber_t *e
 
 void wandder_free_encoded_result_ber(wandder_encoded_result_ber_t* res_ber);
 
+size_t ber_rebuild_integer( //TODO remove this later
+        uint8_t itemclass, 
+        uint32_t idnum, 
+        void *valptr, 
+        size_t vallen,
+        void* buf);
+        
+size_t wandder_encode_inplace_ber(  //TODO remove this later
+        uint8_t class, 
+        uint8_t idnum, 
+        uint8_t encodeas, 
+        uint8_t * valptr,
+        size_t vallen,
+        void* buf, 
+        ptrdiff_t rem);
 /////////////////////////////////////////////////
 //DER encoder
 wandder_encoder_t *init_wandder_encoder();

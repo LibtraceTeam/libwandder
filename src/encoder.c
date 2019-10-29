@@ -1215,9 +1215,10 @@ void wandder_encode_next_ber(wandder_encoder_ber_t *enc_ber, uint8_t encodeas,
 wandder_encoded_result_ber_t* wandder_encode_finish_ber(wandder_encoder_ber_t *enc_ber){
 
     wandder_encoded_result_ber_t* res = malloc(sizeof *res);
-    res->buf = malloc(enc_ber->len);
+    res->buf = enc_ber->buf; //malloc(enc_ber->len);
     res->len = enc_ber->len;
-    memcpy(res->buf, enc_ber->buf, enc_ber->len);
+    enc_ber->buf = NULL;
+    //memcpy(res->buf, enc_ber->buf, enc_ber->len);
     return res;
 
 }
