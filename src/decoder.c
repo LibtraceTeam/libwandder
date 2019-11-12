@@ -931,6 +931,13 @@ uint32_t stringify_gentime(uint8_t *start, uint32_t length, char *space,
     return stringify_octet_string(start, length, space, spacerem);
 }
 
+uint32_t stringify_utctime(uint8_t *start, uint32_t length, char *space,
+        uint16_t spacerem) {
+
+    /* TODO maybe parse this and print it a bit nicer? */
+    return stringify_octet_string(start, length, space, spacerem);
+}
+
 char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
         uint8_t interpretas) {
 
@@ -1001,12 +1008,17 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
             }
             break;
 
+        case WANDDER_TAG_UTCTIME:
+            if (stringify_utctime(c->valptr, c->length, space, len) == 0) {
+                return NULL;
+            }
+            break;
+
         case WANDDER_TAG_BOOLEAN:
         case WANDDER_TAG_BITSTRING:
         case WANDDER_TAG_OBJDESC:
         case WANDDER_TAG_REAL:
         case WANDDER_TAG_NUMERIC:
-        case WANDDER_TAG_UTCTIME:
         default:
             fprintf(stderr, "No stringify support for type %u just yet...\n",
                     datatype);
