@@ -133,6 +133,11 @@ typedef struct wandder_ipmmiri_body {
     uint8_t* ipcontent;
 } wandder_ipmmiri_body_t;
 
+typedef struct wandder_generic_body {
+    uint8_t* meta;
+    uint8_t* data;
+} wandder_generic_body_t;
+
 typedef struct wandder_etsili_top {
     uint8_t* buf;
     size_t len;
@@ -144,6 +149,7 @@ typedef struct wandder_etsili_top {
         wandder_ipmmcc_body_t ipmmcc;
         wandder_ipmmiri_body_t ipmmiri;
         wandder_ipiri_body_t ipiri;
+        wandder_generic_body_t generic;
     } body;
 } wandder_etsili_top_t;
 

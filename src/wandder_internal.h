@@ -31,10 +31,26 @@
 #include "libwandder.h"
 
 
-size_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, size_t vallen, void* buf);
+size_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, 
+        size_t vallen, void* buf);
 
-size_t wandder_encode_inplace_ber(uint8_t class, uint8_t idnum, uint8_t encodeas,
-        uint8_t* valptr, size_t vallen, void* buf, ptrdiff_t rem);
+size_t wandder_encode_inplace_ber(uint8_t class, uint8_t idnum, 
+        uint8_t encodeas, uint8_t* valptr, size_t vallen, void* buf, 
+        ptrdiff_t rem);
+
+size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t encodeas, 
+        size_t vallen);
+
+size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas, 
+        uint8_t* valptr, size_t vallen, uint8_t* ptr, ptrdiff_t rem);
+
+typedef struct estili_pshdr_diff {    
+    ptrdiff_t cin_diff;
+    ptrdiff_t seqno_diff;
+    ptrdiff_t sec_diff;
+    ptrdiff_t usec_diff;
+    ptrdiff_t end_diff;
+}   estili_pshdr_diff_t;
 
 static inline uint32_t WANDDER_LOG256_SIZE(uint64_t x) {
     if (x < 256) return 1;

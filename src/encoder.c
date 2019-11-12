@@ -853,7 +853,7 @@ static inline size_t encode_length_indefinite(uint8_t *buf, ptrdiff_t rem) {
     return 1;
 }
 
-static inline size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t encodeas, size_t vallen){
+inline size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t encodeas, size_t vallen){
     size_t idlen = 0;
     size_t lenlen = 0;
     size_t loglen = 0;
@@ -901,7 +901,8 @@ static inline size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t enco
     return totallen;
 }
 
-static inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas, uint8_t* valptr, size_t vallen, uint8_t* ptr, ptrdiff_t rem){
+inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas, 
+        uint8_t* valptr, size_t vallen, uint8_t* ptr, ptrdiff_t rem){
     
     size_t ret = 0;
     uint8_t* init_ptr = ptr;
@@ -1042,7 +1043,7 @@ size_t wandder_encode_inplace_ber(
         void* buf, 
         ptrdiff_t rem){
 
-    size_t totallen = calculate_length(idnum, class, encodeas, vallen);
+    ptrdiff_t totallen = calculate_length(idnum, class, encodeas, vallen);
 
     if (totallen > rem){
         fprintf(stderr, "Encode error: not enough room\n");
