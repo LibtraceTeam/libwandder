@@ -2853,272 +2853,7 @@ void wandder_encode_etsi_ipiri_ber(
 }
 /////////////////////////////////
 
-static inline void init_ipmmcc_body(
-        wandder_buf_t **precomputed, void *ipcontent,
-        uint32_t iplen, uint8_t dir,
-        wandder_etsili_top_t * top) {
 
-    uint32_t frametype = 0;
-    uint32_t mmccproto = 0;
-
-    uint32_t totallen = 
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
-        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
-        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_12]->len+
-        precomputed[WANDDER_PREENCODE_IPMMCCOID]->len+
-        32 + iplen + //id field and length of ipcontents //overcompensate length 
-        precomputed[WANDDER_PREENCODE_DIRFROM]->len+//just need an int length (frametype)
-        precomputed[WANDDER_PREENCODE_DIRFROM]->len+//just need an int length (mmccproto)
-        (2 * 6); //6 endseq items
-
-    top->header.end = top->buf + top->len;
-
-    top->len += totallen;
-    uint8_t * new;
-    if (top->len > top->alloc_len){
-        top->alloc_len = top->len;
-        new = realloc(top->buf, top->alloc_len);
-
-        if (new == NULL){
-                printf("unable to alloc mem\n");
-                assert(0);
-            }
-        
-        //update all refrences
-        if (new != top->buf){
-            ptrdiff_t offset = new - top->buf;
-            //need to readjust all the pointers into top
-            top->buf            += offset; //base pointer
-            top->header.cin     += offset; //cin pointer
-            top->header.seqno   += offset; //seqno pointer
-            top->header.sec     += offset; //sec pointer
-            top->header.usec    += offset; //usec pointer
-            top->header.end    += offset; //current pointer 
-        }
-    }
-    uint8_t *ptr = top->header.end;
-    
-
-    //////////////////////////////////////////////////////////////// block 0
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
-    //////////////////////////////////////////////////////////////// dir
-    top->body.ipmmcc.dir = ptr;
-    if (dir == 0) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRFROM]);
-    } else if (dir == 1) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRTO]);
-    } else if (dir == 2) {
-        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]);
-    } else {
-        ptr += ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            0, 
-            &(dir), 
-            sizeof dir,
-            ptr);
-    }
-    //////////////////////////////////////////////////////////////// block 1
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_12]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMCCOID]);
-    //////////////////////////////////////////////////////////////// ipcontents
-    top->body.ipmmcc.ipcontent = ptr;
-    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            1,
-            WANDDER_TAG_IPPACKET,
-            ipcontent, 
-            iplen,
-            ptr,
-            top->alloc_len - (ptr - top->buf));    
-    //////////////////////////////////////////////////////////////// block 2
-    ptr += ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            2, 
-            &(frametype), 
-            sizeof frametype,
-            ptr);
-    ptr += ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            4, 
-            &(mmccproto), 
-            sizeof mmccproto,
-            ptr);
-            
-    ENDCONSTRUCTEDBLOCK(ptr,6) //endseq
-    top->len= ptr - top->buf;
-}
-
-void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
-        uint32_t iplen, uint8_t dir, wandder_etsili_top_t * top) {
-
-    uint32_t frametype = 0;
-    uint32_t mmccproto = 0;
-
-    size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
-    if (iplen > 127){  //if iplen > 127, long form must be used        
-        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
-            lenlen ++; 
-        }
-        lenlen++;
-    }
-    size_t iptotalen = 1 + lenlen + iplen;
-    size_t totallen = (top->body.ipmmcc.ipcontent - top->buf) + iptotalen + 
-            (7 * 2) + (2* precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len);
-    //                  (size up to variable part) + (lenght of variable part) + 
-    //                  (size of footer) + (2 * ints)
-
-    //if new length is larger
-    uint8_t * new;
-    if (totallen > top->len){ //if new content length is larger than old content length
-
-        top->len = totallen;
-
-        if (top->len > top->alloc_len){
-            top->alloc_len = top->len;
-            new = realloc(top->buf, top->alloc_len);
-            
-            if (new == NULL){
-                printf("unable to alloc mem\n");
-                assert(0);
-            }
-            
-            //update all refrences
-            if (new != top->buf){
-                ptrdiff_t offset = (new - top->buf);            //TODO is this *valid* C code? 
-                //need to readjust all the pointers in top to the realloc'd location
-                top->buf            += offset; //base pointer
-                top->header.cin     += offset; //cin pointer
-                top->header.seqno   += offset; //seqno pointer
-                top->header.sec     += offset; //sec pointer
-                top->header.usec    += offset; //usec pointer
-                top->header.end     += offset; //start pointer
-                top->body.ipmmcc.dir       += offset; //dir pointer
-                top->body.ipmmcc.ipcontent += offset; //ipcontent pointer
-            }
-        }
-    }
-
-    //can maybe reduce this down to a single ber_rebuild_integer() (dirfrom/to/unknowen are just differnt ints)
-    if (dir == 0) {
-        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRFROM]->buf, precomputed[WANDDER_PREENCODE_DIRFROM]->len);
-    } else if (dir == 1) {
-        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRTO]->buf, precomputed[WANDDER_PREENCODE_DIRTO]->len);
-    } else if (dir == 2) {
-        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->buf, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len);
-    } else {
-        ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            0, 
-            &(dir), 
-            sizeof dir,
-            top->body.ipmmcc.dir);
-    }
-    uint8_t * ptr = top->body.ipmmcc.ipcontent;
-    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            1,
-            WANDDER_TAG_IPPACKET,
-            ipcontent, 
-            iplen,
-            top->body.ipmmcc.ipcontent,
-            top->alloc_len - (ptr - top->buf));
-
-    ptr += ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            2, 
-            &(frametype), 
-            sizeof frametype,
-            ptr);
-    ptr += ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            4, 
-            &(mmccproto), 
-            sizeof mmccproto,
-            ptr);
-
-    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
-
-    assert((ptr - top->buf) ==  totallen);
-
-    top->len = totallen;
-}
-
-void wandder_encode_etsi_ipmmcc_ber(
-        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
-        wandder_etsili_top_t *top) {
-
-    if (top->buf){
-        wandder_pshdr_update(cin, seqno, tv, top);
-        
-    } else {
-        init_pshdr_pc_ber(precomputed, cin, seqno, tv, top);
-    }
-
-    if (top->body_type != WANDDER_ETSILI_IPMMCC){
-        top->body_type = WANDDER_ETSILI_IPMMCC;
-        init_ipmmcc_body(precomputed, ipcontents, iplen, dir, top);
-    }
-    else {
-        wandder_ipmmcc_body_update(precomputed, ipcontents, iplen, dir, top);
-    }
-}
-
-ptrdiff_t check_top_size(wandder_etsili_top_t* top, size_t totallen) {
-    uint8_t* new;
-    ptrdiff_t offset = 0;
-    top->len = totallen;
-
-    if (top->len > top->alloc_len){
-        top->alloc_len = top->len;
-        new = realloc(top->buf, top->alloc_len);
-        if (new == NULL){
-            //TODO handle realloc fail
-            printf("unable to alloc mem\n");
-            assert(0);
-        }
-        
-        //update all refrences
-        if (new != top->buf){
-            offset = (new - top->buf); //TODO is this *valid* C code?
-            //need to readjust all the pointers in top to the realloc'd location
-            top->buf            += offset; //base pointer
-            top->header.cin     += offset; //cin pointer
-            top->header.seqno   += offset; //seqno pointer
-            top->header.sec     += offset; //sec pointer
-            top->header.usec    += offset; //usec pointer
-            top->header.end     += offset; //start pointer
-            top->body.generic.meta += offset; //dir/iritpye pointer
-            top->body.generic.data += offset; //cc,iri pointer
-            return offset;
-        }
-    }
-    return offset;
-}
-
-static uint8_t* wandder_encode_body_data_ber(
-        wandder_etsili_top_t* top,
-        uint8_t class, 
-        uint8_t idnum, 
-        uint8_t encodeas, 
-        uint8_t * valptr,
-        size_t vallen){
-
-    ptrdiff_t currlen = calculate_length(idnum, class, encodeas, vallen); 
-
-    check_top_size(top, currlen + (top->body.ipcc.ipcontent - top->buf));
-
-    ptrdiff_t rem = top->alloc_len - (top->body.ipcc.ipcontent - top->buf);
-
-    size_t ret = encode_here_ber(idnum, class, encodeas, valptr, vallen, 
-            top->body.generic.data, rem);
-
-    return ret + top->body.ipcc.ipcontent;
-}
 
 void wandder_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
 
@@ -3316,6 +3051,58 @@ void wandder_etsili_preencode_static_fields_ber(
 
 }
 
+ptrdiff_t check_top_size(wandder_etsili_top_t* top, size_t totallen) {
+    uint8_t* new;
+    ptrdiff_t offset = 0;
+    top->len = totallen;
+
+    if (top->len > top->alloc_len){
+        top->alloc_len = top->len;
+        new = realloc(top->buf, top->alloc_len);
+        if (new == NULL){
+            //TODO handle realloc fail
+            printf("unable to alloc mem\n");
+            assert(0);
+        }
+        
+        //update all refrences
+        if (new != top->buf){
+            offset = (new - top->buf); //TODO is this *valid* C code?
+            //need to readjust all the pointers in top to the realloc'd location
+            top->buf            += offset; //base pointer
+            top->header.cin     += offset; //cin pointer
+            top->header.seqno   += offset; //seqno pointer
+            top->header.sec     += offset; //sec pointer
+            top->header.usec    += offset; //usec pointer
+            top->header.end     += offset; //start pointer
+            top->body.generic.meta += offset; //dir/iritpye pointer
+            top->body.generic.data += offset; //cc,iri pointer
+            return offset;
+        }
+    }
+    return offset;
+}
+
+static uint8_t* wandder_encode_body_data_ber(
+        wandder_etsili_top_t* top,
+        uint8_t class, 
+        uint8_t idnum, 
+        uint8_t encodeas, 
+        uint8_t * valptr,
+        size_t vallen){
+
+    ptrdiff_t currlen = calculate_length(idnum, class, encodeas, vallen); 
+
+    check_top_size(top, currlen + (top->body.ipcc.ipcontent - top->buf));
+
+    ptrdiff_t rem = top->alloc_len - (top->body.ipcc.ipcontent - top->buf);
+
+    size_t ret = encode_here_ber(idnum, class, encodeas, valptr, vallen, 
+            top->body.generic.data, rem);
+
+    return ret + top->body.ipcc.ipcontent;
+}
+
 
 
 static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber, 
@@ -3510,4 +3297,145 @@ void wandder_encode_etsi_ipcc_ber (
     }
 }
 
+static void update_estili_ipmmcc(wandder_buf_t** preencoded_ber,
+        void* ipcontents, size_t iplen, uint8_t dir, 
+        wandder_etsili_top_t* top) {
+
+    uint32_t frametype = 0; //TODO these are hard coded to 0? 
+    uint32_t mmccproto = 0; //at least they are in etsili_core.c in OpenLI
+
+    if (dir == 0) {
+        memcpy(top->body.ipcc.dir, 
+                preencoded_ber[WANDDER_PREENCODE_DIRFROM]->buf, 
+                preencoded_ber[WANDDER_PREENCODE_DIRFROM]->len);
+    } else if (dir == 1) {
+        memcpy(top->body.ipcc.dir, 
+                preencoded_ber[WANDDER_PREENCODE_DIRTO]->buf, 
+                preencoded_ber[WANDDER_PREENCODE_DIRTO]->len);
+    } else if (dir == 2) {
+        memcpy(top->body.ipcc.dir, 
+                preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
+                preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->len);
+    } else {
+        ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0, 
+            &(dir), 
+            sizeof dir,
+            top->body.ipcc.dir);
+    }
+
+    uint8_t* ptr = wandder_encode_body_data_ber(
+            top,
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            1,
+            WANDDER_TAG_IPPACKET,
+            ipcontents, 
+            iplen);
+
+    //ensure there is enough space for the last section
+    ptr += check_top_size(top, (ptr - top->buf) + 
+            (7*2) + (preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->len *2));
+
+    ptr += ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            2, 
+            &(frametype), 
+            sizeof frametype,
+            ptr);
+
+    ptr += ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            4, 
+            &(mmccproto), 
+            sizeof mmccproto,
+            ptr);
+    
+    ENDCONSTRUCTEDBLOCK(ptr,6) //endseq
+}
+
+static void init_estili_ipmmcc(wandder_buf_t** preencoded_ber,
+        wandder_encoder_ber_t* enc_ber,
+        void* ipcontents, size_t iplen, uint8_t dir,
+        wandder_etsili_top_t* top,
+        estili_pshdr_diff_t* pshdr_diff) {
+
+    uint32_t frametype = 0;
+    uint32_t mmccproto = 0;
+
+    wandder_encoded_result_ber_t* res_ber;
+    
+    wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+    wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_USEQUENCE]);
+
+    ptrdiff_t dir_diff = enc_ber->ptr - enc_ber->buf;
+    if (dir == 0) {
+        wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_DIRFROM]);
+    } else if (dir == 1) {
+        wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_DIRTO]);
+    } else if (dir == 2) {
+        wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]);
+    } else {
+        wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
+                WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, &dir,
+                sizeof dir);
+    }
+
+    wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_12]);
+    wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_IPMMCCOID]);
+
+    ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 1, ipcontents, iplen);
+
+    ptrdiff_t frametype_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
+                WANDDER_CLASS_CONTEXT_PRIMITIVE, 2, &frametype,
+                sizeof frametype);
+
+    ptrdiff_t mmccproto_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
+                WANDDER_CLASS_CONTEXT_PRIMITIVE, 4, &mmccproto,
+                sizeof mmccproto);
+
+    wandder_encode_endseq_ber(enc_ber, 6);
+
+    res_ber = wandder_encode_finish_ber(enc_ber);
+
+    top->buf                    = res_ber->buf;
+    top->header.cin             = res_ber->buf + pshdr_diff->cin_diff;
+    top->header.seqno           = res_ber->buf + pshdr_diff->seqno_diff;
+    top->header.sec             = res_ber->buf + pshdr_diff->sec_diff;
+    top->header.usec            = res_ber->buf + pshdr_diff->usec_diff;
+    top->body.ipcc.dir          = res_ber->buf + dir_diff;
+    top->body.ipcc.ipcontent    = res_ber->buf + ipcontent_diff;
+    top->len                    = res_ber->len;
+    top->alloc_len              = res_ber->len;
+
+    free(res_ber);
+}
+
+void wandder_encode_etsi_ipmmcc_ber (
+        wandder_buf_t** preencoded_ber, int64_t cin, int64_t seqno,
+        struct timeval* tv, void* ipcontents, size_t iplen, uint8_t dir,
+        wandder_etsili_top_t* top) {
+    
+    estili_pshdr_diff_t pshdr_diff;
+
+    if (top->buf){
+        update_etsili_pshdr_pc(top, cin, seqno, tv);
+        update_estili_ipmmcc(preencoded_ber, ipcontents, iplen, dir, top);
+    } else {
+        wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(10, 20);
+
+        init_etsili_pshdr_pc(enc_ber, preencoded_ber, cin, seqno,
+                tv, &pshdr_diff);
+        init_estili_ipmmcc(preencoded_ber, enc_ber, ipcontents,
+                iplen, dir, top, &pshdr_diff);
+
+        wandder_free_encoder_ber(enc_ber);
+    }
+}
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :
