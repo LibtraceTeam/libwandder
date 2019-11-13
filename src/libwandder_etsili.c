@@ -2218,13 +2218,6 @@ static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *
 
     uint8_t * ptr = top->body.ipiri.params;
     //TODO copy in all the params in sorted order here
-    // ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-    //         0,
-    //         WANDDER_TAG_IPPACKET,
-    //         params, 
-    //         iplen,
-    //         top->body.ipcc.params,
-    //         top->alloc_len - (ptr - top->buf));
 
     ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
 
@@ -2301,93 +2294,6 @@ static inline void init_ipiri_body(
     //////////////////////////////////////////////////////////////// ipcontents
     top->body.ipiri.params = ptr;
     //TODO copy in all params here in sorted order
-    // int ret = 0;
-    // HASH_SRT(hh, params, sort_etsili_generic);
-
-    // HASH_ITER(hh, params, p, tmp) {
-    //     switch(p->itemnum) {
-    //         case IPIRI_CONTENTS_ACCESS_EVENT_TYPE:
-    //         case IPIRI_CONTENTS_INTERNET_ACCESS_TYPE:
-    //         case IPIRI_CONTENTS_IPVERSION:
-    //         case IPIRI_CONTENTS_ENDREASON:
-    //         case IPIRI_CONTENTS_AUTHENTICATION_TYPE:
-
-    //             ret = wandder_encode_inplace_ber(
-    //                     WANDDER_CLASS_CONTEXT_PRIMITIVE,
-    //                     3,
-    //                     WANDDER_TAG_ENUM,
-    //                     (uint8_t*)&(assign),
-    //                     sizeof assign,
-    //                     ptr,
-    //                     rem);
-    //             ptr += ret;
-    //             rem -= ret;
-    //             total += ret;
-    //             // wandder_encode_next(encoder, WANDDER_TAG_ENUM,
-    //             //         WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
-    //             //         p->itemptr, p->itemlen);
-    //             break;
-
-    //         case IPIRI_CONTENTS_TARGET_USERNAME:
-    //         case IPIRI_CONTENTS_RAW_AAA_DATA:
-    //             wandder_encode_next(encoder, WANDDER_TAG_OCTETSTRING,
-    //                     WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
-    //                     p->itemptr, p->itemlen);
-    //             break;
-
-    //         case IPIRI_CONTENTS_TARGET_IPADDRESS:
-    //         case IPIRI_CONTENTS_POP_IPADDRESS:
-    //         case IPIRI_CONTENTS_ADDITIONAL_IPADDRESS:
-    //             ENC_CSEQUENCE(encoder, p->itemnum);
-    //             encode_ipaddress(encoder, (etsili_ipaddress_t *)(p->itemptr));
-    //             END_ENCODED_SEQUENCE(encoder, 1);
-    //             break;
-
-    //         case IPIRI_CONTENTS_POP_IDENTIFIER:
-    //             ENC_CSEQUENCE(encoder, p->itemnum);
-    //             encode_ipiri_id(encoder, (ipiri_id_t *)(p->itemptr));
-    //             break;
-
-    //         case IPIRI_CONTENTS_NATIONAL_IPIRI_PARAMETERS:
-    //             /* TODO NationalIPIRIParameters */
-    //             break;
-
-    //         case IPIRI_CONTENTS_OTHER_TARGET_IDENTIFIERS:
-    //             /* TODO */
-    //             break;
-
-    //         case IPIRI_CONTENTS_POP_PORTNUMBER:
-    //         case IPIRI_CONTENTS_OCTETS_RECEIVED:
-    //         case IPIRI_CONTENTS_OCTETS_TRANSMITTED:
-    //             wandder_encode_next(encoder, WANDDER_TAG_INTEGER,
-    //                     WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
-    //                     p->itemptr, p->itemlen);
-    //             break;
-
-    //         case IPIRI_CONTENTS_STARTTIME:
-    //         case IPIRI_CONTENTS_ENDTIME:
-    //         case IPIRI_CONTENTS_EXPECTED_ENDTIME:
-    //             if (p->itemlen != sizeof(struct timeval)) {
-    //                 return;
-    //             }
-    //             wandder_encode_next(encoder, WANDDER_TAG_GENERALTIME,
-    //                     WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
-    //                     p->itemptr, p->itemlen);
-    //             break;
-
-    //         case IPIRI_CONTENTS_TARGET_NETWORKID:
-    //         case IPIRI_CONTENTS_TARGET_CPEID:
-    //         case IPIRI_CONTENTS_TARGET_LOCATION:
-    //         case IPIRI_CONTENTS_CALLBACK_NUMBER:
-    //         case IPIRI_CONTENTS_POP_PHONENUMBER:
-    //             /* TODO enforce max string lens */
-    //             wandder_encode_next(encoder, WANDDER_TAG_UTF8STR,
-    //                     WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
-    //                     p->itemptr, p->itemlen);
-    //             break;
-
-    //     }
-    // }
 
     ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
     top->len = ptr - top->buf;
@@ -2661,7 +2567,7 @@ static uint8_t* wandder_encode_body_data_ber(
     size_t ret = encode_here_ber(idnum, class, encodeas, valptr, vallen, 
             top->body.generic.data, rem);
 
-    return ret + top->body.ipcc.ipcontent;
+    return ret + top->body.generic.data;
 }
 
 static void update_etsili_pshdr_pc(wandder_etsili_top_t* top, int64_t cin,
@@ -2780,7 +2686,7 @@ static void update_etsili_ipcc(wandder_buf_t** preencoded_ber,
             iplen);
 
     ptr += check_top_size(top, (ptr - top->buf) + (7*2));
-    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
+    ENDCONSTRUCTEDBLOCK(ptr,7)
 }
 
 static void init_etsili_ipcc(wandder_buf_t** preencoded_ber,
@@ -2896,7 +2802,7 @@ static void update_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
 
     //ensure there is enough space for the last section
     ptr += check_top_size(top, (ptr - top->buf) + 
-            (7*2) + (preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->len *2));
+            (6*2) + (preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->len *2));
 
     ptr += ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 

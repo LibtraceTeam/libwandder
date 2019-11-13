@@ -34,10 +34,6 @@
 size_t ber_rebuild_integer(uint8_t itemclass, uint32_t idnum, void *valptr, 
         size_t vallen, void* buf);
 
-size_t wandder_encode_inplace_ber(uint8_t class, uint8_t idnum, 
-        uint8_t encodeas, uint8_t* valptr, size_t vallen, void* buf, 
-        ptrdiff_t rem);
-
 size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t encodeas, 
         size_t vallen);
 
