@@ -151,6 +151,7 @@ typedef struct wandder_etsili_top {
         wandder_ipiri_body_t ipiri;
         wandder_generic_body_t generic;
     } body;
+    size_t increment_len;
 } wandder_etsili_top_t;
 
 

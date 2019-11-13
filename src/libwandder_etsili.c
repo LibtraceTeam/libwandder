@@ -38,6 +38,9 @@
 #include "wandder_internal.h"
 #include "libwandder_etsili.h"
 
+#define INITIAL_ENCODER_SIZE 2048
+#define INCREMENT_ENCODER_SIZE 512
+
 const uint8_t etsi_lipsdomainid[9] = {
         0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11};
 
@@ -2615,7 +2618,7 @@ ptrdiff_t check_top_size(wandder_etsili_top_t* top, size_t totallen) {
     top->len = totallen;
 
     if (top->len > top->alloc_len){
-        top->alloc_len = top->len;
+        top->alloc_len = top->len + top->increment_len;
         new = realloc(top->buf, top->alloc_len);
         if (new == NULL){
             //TODO handle realloc fail
@@ -2842,13 +2845,15 @@ void wandder_encode_etsi_ipcc_ber (
         update_etsili_pshdr_pc(top, cin, seqno, tv);
         update_etsili_ipcc(preencoded_ber, ipcontents, iplen, dir, top);
     } else {
-        wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(10, 20);
+        wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
+                INITIAL_ENCODER_SIZE, 
+                INCREMENT_ENCODER_SIZE);
 
         init_etsili_pshdr_pc(enc_ber, preencoded_ber, cin, seqno,
                 tv, &pshdr_diff);
         init_etsili_ipcc(preencoded_ber, enc_ber, ipcontents,
                 iplen, dir, top, &pshdr_diff);
-
+        top->increment_len = INCREMENT_ENCODER_SIZE;
         wandder_free_encoder_ber(enc_ber);
     }
 }
@@ -2984,13 +2989,15 @@ void wandder_encode_etsi_ipmmcc_ber (
         update_etsili_pshdr_pc(top, cin, seqno, tv);
         update_etsili_ipmmcc(preencoded_ber, ipcontents, iplen, dir, top);
     } else {
-        wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(10, 20);
+        wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
+                INITIAL_ENCODER_SIZE,
+                INCREMENT_ENCODER_SIZE);
 
         init_etsili_pshdr_pc(enc_ber, preencoded_ber, cin, seqno,
                 tv, &pshdr_diff);
         init_etsili_ipmmcc(preencoded_ber, enc_ber, ipcontents,
                 iplen, dir, top, &pshdr_diff);
-
+        top->increment_len = INCREMENT_ENCODER_SIZE;
         wandder_free_encoder_ber(enc_ber);
     }
 }
@@ -3063,7 +3070,6 @@ static void init_etsili_ipmmiri(wandder_buf_t** preencoded_ber,
     wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, &iritype,
             sizeof iritype);
-    
 
     wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_11]);
@@ -3117,13 +3123,15 @@ void wandder_encode_etsi_ipmmiri_ber (
         update_etsili_pshdr_pc(top, cin, seqno, tv);
         update_etsili_ipmmiri(preencoded_ber, ipcontents, iplen, iritype, top);
     } else {
-        wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(10, 20);
+        wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
+                INITIAL_ENCODER_SIZE,
+                INCREMENT_ENCODER_SIZE);
 
         init_etsili_pshdr_pc(enc_ber, preencoded_ber, cin, seqno,
                 tv, &pshdr_diff);
         init_etsili_ipmmiri(preencoded_ber, enc_ber, ipcontents,
                 iplen, iritype, ipsrc, ipdest, ipfamily, top, &pshdr_diff);
-
+        top->increment_len = INCREMENT_ENCODER_SIZE;
         wandder_free_encoder_ber(enc_ber);
     }
 }
