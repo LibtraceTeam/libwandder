@@ -381,6 +381,8 @@ const char *wandder_get_tag_string(wandder_decoder_t *dec);
 
 struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
         char *gts, int len);
+struct timeval wandder_utcts_to_timeval(wandder_decoder_t *dec, char *gts,
+        int len);
 int64_t wandder_get_integer_value(wandder_item_t *c, uint32_t *intlen);
 int wandder_timeval_to_generalizedts(struct timeval tv, char *gts, int space);
 int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,
