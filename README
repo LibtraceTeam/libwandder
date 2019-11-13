@@ -1,6 +1,6 @@
 libwandder -- C library for DER encoding and decoding.
 
-Current Stable Version: 1.1.2
+Current Stable Version: 1.2.0
 
 ---------------------------------------------------------------------------
 Copyright (c) 2017-2019 The University of Waikato, Hamilton, New Zealand.
@@ -48,7 +48,7 @@ appending the --prefix=<new location> option to ./configure.
 API
 ===
 
-There are two APIs included within libwandder: the generic DER API and the
+There are two APIs included within libwandder: the generic API and the
 ETSILI-specific API. Both APIs are extremely under-documented right now, but
 hopefully this can be addressed sometime soon.
 
@@ -57,6 +57,11 @@ This API can be used to sequentially decode each field in an encoded message,
 giving the user access to the tag, class, length and values for each decoded
 field. If the message only uses universal types, the API can also convert
 the tags and values into printable strings.
+
+The generic API has now been extended to support BER encoding, so that
+users can take advantage of some of the liberties in BER (compared with DER)
+to gain better encoding performance. Indefinite-length encoding is used for
+strings, structures and sequences.
 
 The ETSILI API can be accessed by including the header file
 "libwandder_etsili.h". This API can be used to search for certain ETSI-LI
