@@ -1011,7 +1011,6 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
             break;
 
         case WANDDER_TAG_GENERALTIME:
-        case WANDDER_TAG_UTCTIME:
             if (stringify_gentime(c->valptr, c->length, space, len) == 0) {
                 return NULL;
             }
