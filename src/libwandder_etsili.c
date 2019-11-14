@@ -343,7 +343,7 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
                 "wandder_attach_etsili_buffer() first!\n");
         return NULL;
     }
-    /* Find IPCCContents or IPMMCCContents or uMTSCC */
+    /* Find IPCCContents or IPMMCCContents or UMTSCC */
     wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
     wandder_target_t cctgts[3];
