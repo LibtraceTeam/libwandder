@@ -52,6 +52,16 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         wandder_dumper_t *curr, char *valstr, int len);
 static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_3gimei(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_domain_name(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_tai(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_ecgi(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 
 #define QUICK_DECODE(fail) \
     ret = wandder_decode_next(etsidec->dec); \
@@ -278,7 +288,53 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                             etsidec->stack->current, ident);
                     return NULL;
                 }
-            } else {
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_3G_IMEI) {
+                if (stringify_3gimei(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret 3G IMEI-style field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_DOMAIN_NAME) {
+                if (stringify_domain_name(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret domain name field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_HEX_BYTES) {
+                if (stringify_bytes_as_hex(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret hex bytes field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_TAI) {
+                if (stringify_tai(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret TAI field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_ECGI) {
+                if (stringify_ecgi(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret ECGI field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else {
                 if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
                         curr->members[ident].interpretas)) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
@@ -602,6 +658,226 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
 
     res = wandder_get_integer_value(etsidec->dec->current, NULL);
     return res;
+}
+
+static char *stringify_3gimei(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = (uint8_t *)item->valptr;
+    char *nextwrite = valstr;
+    int i;
+
+    for (i = 0; i < item->length; i++) {
+        uint8_t byteval;
+
+        byteval = *ptr;
+
+        if ((byteval & 0x0f) < 10) {
+            *nextwrite = '0' + (byteval & 0x0f);
+            nextwrite ++;
+        }
+
+        if (nextwrite - valstr >= len - 1) {
+            break;
+        }
+
+        if (((byteval & 0xf0) >> 4) < 10) {
+            *nextwrite = '0' + ((byteval & 0xf0) >> 4);
+            nextwrite ++;
+        }
+
+        if (nextwrite - valstr >= len - 1) {
+            valstr[len - 1] = '\0';
+            return valstr;
+        }
+
+        ptr++;
+    }
+
+    if (nextwrite == valstr) {
+        return NULL;
+    }
+
+    *nextwrite = '\0';
+
+    return valstr;
+}
+
+static inline int stringify_lai(uint8_t *todecode, int decodelen,
+        char *valstr, int len) {
+
+    char *nextwrite = valstr;
+    int i;
+    uint8_t byteval;
+
+    if (decodelen < 3) {
+        return 0;
+    }
+
+    if (len < 9) {
+        return 0;
+    }
+
+    /* MCC */
+    byteval = *todecode;
+
+    if ((byteval & 0x0f) < 10) {
+        *nextwrite = '0' + (byteval & 0x0f);
+        nextwrite ++;
+    }
+
+    if (((byteval & 0xf0) >> 4) < 10) {
+        *nextwrite = '0' + ((byteval & 0xf0) >> 4);
+        nextwrite ++;
+    }
+
+    todecode ++;
+    byteval = *todecode;
+
+    if ((byteval & 0x0f) < 10) {
+        *nextwrite = '0' + (byteval & 0x0f);
+        nextwrite ++;
+    }
+
+    *nextwrite = '-';
+    nextwrite ++;
+
+    /* MNC */
+    if (((byteval & 0xf0) >> 4) < 10) {
+        *nextwrite = '0' + ((byteval & 0xf0) >> 4);
+        nextwrite ++;
+    }
+
+    todecode ++;
+    byteval = *todecode;
+
+    if ((byteval & 0x0f) < 10) {
+        *nextwrite = '0' + (byteval & 0x0f);
+        nextwrite ++;
+    }
+
+    if (((byteval & 0xf0) >> 4) < 10) {
+        *nextwrite = '0' + ((byteval & 0xf0) >> 4);
+        nextwrite ++;
+    }
+
+    *nextwrite = '-';
+    nextwrite ++;
+    return nextwrite - valstr;
+}
+
+static char *stringify_tai(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    char *nextwrite;
+    int used = 0;
+    char tac[24];
+
+    memset(valstr, 0, len);
+
+    used = stringify_lai(item->valptr + 1, item->length - 1, valstr, len);
+
+    if (used == 0 || used >= len) {
+        return NULL;
+    }
+
+    nextwrite = valstr + used;
+    snprintf(tac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 4))));
+
+    if (strlen(tac) > len - used) {
+        return NULL;
+    }
+
+    memcpy(nextwrite, tac, strlen(tac));
+    return valstr;
+}
+
+static char *stringify_ecgi(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    char *nextwrite;
+    int used = 0;
+    char eci[24];
+
+    memset(valstr, 0, len);
+
+    used = stringify_lai(item->valptr + 1, item->length - 1, valstr, len);
+
+    if (used == 0 || used >= len) {
+        return NULL;
+    }
+
+    nextwrite = valstr + used;
+    snprintf(eci, 24, "%u", ntohl(*((uint32_t *)(item->valptr + 4))));
+
+    if (strlen(eci) > len - used) {
+        return NULL;
+    }
+
+    memcpy(nextwrite, eci, strlen(eci));
+    return valstr;
+}
+
+static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    int i;
+    char *nextwrite;
+
+    if (len <= 4) {
+        return NULL;
+    }
+
+    memset(valstr, 0, len);
+    memcpy(valstr, "0x", 2);
+
+    nextwrite = valstr + 2;
+
+    for (i = 0; i < item->length; i++) {
+        char staged[3];
+
+        snprintf(staged, 3, "%02x", (unsigned int) *(((uint8_t *)(item->valptr)) + i));
+        memcpy(nextwrite, staged, 2);
+        nextwrite += 2;
+        if (nextwrite - valstr >= len - 2) {
+            break;
+        }
+    }
+
+    return valstr;
+
+}
+
+static char *stringify_domain_name(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    int eos, indx;
+    memset(valstr, 0, len);
+
+    /* TODO handle compressed name segments */
+
+    /* length - 1 because we're skipping the first byte
+     * len - 1 because we need to save room for a null byte
+     */
+    if (item->length - 1 > len - 1) {
+        memcpy(valstr, item->valptr + 1, len - 1);
+        eos = len - 1;
+    } else {
+        memcpy(valstr, item->valptr + 1, item->length - 1);
+        eos = item->length - 1;
+    }
+
+    indx = (*((uint8_t *)item->valptr));
+
+    while (indx < eos) {
+        uint8_t next = (uint8_t)(valstr[indx]);
+
+        valstr[indx] = '.';
+        indx += (1 + next);
+    }
+
+    return valstr;
+
 }
 
 static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
@@ -949,6 +1225,120 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
+    else if (item->identifier == 4 && curr == &(etsidec->umtsiri_params)) {
+        /* initiator for uMTSIRI */
+        switch(enumval) {
+            case 0:
+                name = "not-Available";
+                break;
+            case 1:
+                name = "originating-Target";
+                break;
+            case 2:
+                name = "terminating-Target";
+                break;
+        }
+    }
+    else if (item->identifier == 23 && curr == &(etsidec->umtsiri_params)) {
+        /* iRIversion for uMTSIRI */
+        switch(enumval) {
+            case 2:
+                name = "version2";
+                break;
+            case 3:
+                name = "version3";
+                break;
+            case 4:
+                name = "version4";
+                break;
+            case 6:
+                name = "version6";
+                break;
+            case 8:
+                name = "lastVersion";
+                break;
+        }
+    }
+    else if (item->identifier == 20 && curr == &(etsidec->umtsiri_params)) {
+        /* gPRSevent for uMTSIRI */
+        switch (enumval) {
+            case 1:
+                name = "pDPContextActivation";
+                break;
+            case 2:
+                name = "startOfInterceptionWithPDPContextActive";
+                break;
+            case 4:
+                name = "pDPContextDeactivation";
+                break;
+            case 5:
+                name = "gPRSAttach";
+                break;
+            case 6:
+                name = "gPRSDetach";
+                break;
+            case 10:
+                name = "locationInfoUpdate";
+                break;
+            case 11:
+                name = "sMS";
+                break;
+            case 13:
+                name = "pDPContextModification";
+                break;
+            case 14:
+                name = "servingSystem";
+                break;
+            case 15:
+                name = "startOfInterceptionWithMSAttached";
+                break;
+            case 16:
+                name = "packetDataHeaderInformation";
+                break;
+            case 17:
+                name = "hSS-Subscriber-Record-Change";
+                break;
+            case 18:
+                name = "registration-Termination";
+                break;
+            case 19:
+                name = "location-Up-Date";
+                break;
+            case 20:
+                name = "cancel-Location";
+                break;
+            case 21:
+                name = "register-Location";
+                break;
+            case 22:
+                name = "location-Information-Request";
+                break;
+        }
+    }
+    else if (item->identifier == 1 && curr == &(etsidec->localtimestamp)) {
+        /* winterSummerIndication from localTimestamp */
+        switch(enumval) {
+            case 0:
+                name = "notProvided";
+                break;
+            case 1:
+                name = "winterTime";
+                break;
+            case 2:
+                name = "summerTime";
+                break;
+        }
+    }
+    else if (item->identifier == 0 && curr == &(etsidec->partyinfo)) {
+        /* party-Qualifier for partyInformation */
+        /* strangely, there's only one valid value for this enum */
+        switch(enumval) {
+            case 3:
+                name = "gPRS-Target";
+                break;
+        }
+    }
+
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
         return name;
@@ -959,18 +1349,27 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
 
 static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipvalue.members);
+    free(dec->timestamp.members);
+    free(dec->localtimestamp.members);
     free(dec->h323content.members);
     free(dec->h323message.members);
     free(dec->nationalipmmiri.members);
     free(dec->sipmessage.members);
     free(dec->ipmmiricontents.members);
     free(dec->ipmmiri.members);
+    free(dec->datanodeaddress.members);
     free(dec->ipaddress.members);
     free(dec->ipcccontents.members);
     free(dec->ipmmcc.members);
     free(dec->ipcc.members);
     free(dec->netelid.members);
-    free(dec->netid.members);
+    free(dec->linetid.members);
+    free(dec->networkidentifier.members);
+    free(dec->location.members);
+    free(dec->partyinfo.members);
+    free(dec->partyidentity.members);
+    free(dec->servicesdatainfo.members);
+    free(dec->gprsparams.members);
     free(dec->cid.members);
     free(dec->msts.members);
     free(dec->cccontents.members);
@@ -984,6 +1383,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipiriid.members);
     free(dec->ipiricontents.members);
     free(dec->ipiri.members);
+    free(dec->umtsiri.members);
+    free(dec->umtsiri_params.members);
     free(dec->iricontents.members);
     free(dec->iripayload.members);
     free(dec->payload.members);
@@ -1046,6 +1447,18 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->ipaddress.sequence = WANDDER_NOACTION;
 
+    dec->datanodeaddress.membercount = 3;
+    ALLOC_MEMBERS(dec->datanodeaddress);
+    dec->datanodeaddress.members[0] = WANDDER_NOACTION;
+    dec->datanodeaddress.members[1] =
+        (struct wandder_dump_action) {
+                .name = "ipAddress",
+                .descend = &(dec->ipaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->datanodeaddress.members[2] = WANDDER_NOACTION;
+    dec->datanodeaddress.sequence = WANDDER_NOACTION;
+
     dec->nationalipmmiri.membercount = 1;
     ALLOC_MEMBERS(dec->nationalipmmiri);
     dec->nationalipmmiri.members[0] =
@@ -1055,6 +1468,38 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_PRINTABLE
         };
     dec->nationalipmmiri.sequence = WANDDER_NOACTION;
+
+    dec->localtimestamp.membercount = 2;
+    ALLOC_MEMBERS(dec->localtimestamp);
+    dec->localtimestamp.members[0] =
+        (struct wandder_dump_action) {
+                .name = "generalizedTime",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_GENERALTIME
+        };
+    dec->localtimestamp.members[1] =
+        (struct wandder_dump_action) {
+                .name = "winterSummerIndication",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->localtimestamp.sequence = WANDDER_NOACTION;
+
+    dec->timestamp.membercount = 2;
+    ALLOC_MEMBERS(dec->timestamp);
+    dec->timestamp.members[0] =
+        (struct wandder_dump_action) {
+                .name = "localTime",
+                .descend = &(dec->localtimestamp),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->timestamp.members[1] =
+        (struct wandder_dump_action) {
+                .name = "utcTime",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_UTCTIME
+        };
+    dec->timestamp.sequence = WANDDER_NOACTION;
 
     dec->h323content.membercount = 4;
     ALLOC_MEMBERS(dec->h323content);
@@ -1281,34 +1726,50 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
 
-    dec->netid.membercount = 3;
-    ALLOC_MEMBERS(dec->netid);
-    dec->netid.members[0] =
+    dec->linetid.membercount = 3;
+    ALLOC_MEMBERS(dec->linetid);
+    dec->linetid.members[0] =
         (struct wandder_dump_action) {
                 .name = "operatorIdentifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    dec->netid.members[1] =
+    dec->linetid.members[1] =
         (struct wandder_dump_action) {
                 .name = "networkElementIdentifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    dec->netid.members[2] =
+    dec->linetid.members[2] =
         (struct wandder_dump_action) {
                 .name = "eTSI671NEID",
                 .descend = &dec->netelid,
                 .interpretas = WANDDER_TAG_NULL
         };
-    dec->netid.sequence = WANDDER_NOACTION;
+    dec->linetid.sequence = WANDDER_NOACTION;
+
+    dec->networkidentifier.membercount = 2;
+    ALLOC_MEMBERS(dec->networkidentifier);
+    dec->networkidentifier.members[0] =
+        (struct wandder_dump_action) {
+                .name = "operator-Identifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->networkidentifier.members[1] =
+        (struct wandder_dump_action) {
+                .name = "network-Element-Identifier",
+                .descend = &(dec->netelid),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->networkidentifier.sequence = WANDDER_NOACTION;
 
     dec->cid.membercount = 3;
     ALLOC_MEMBERS(dec->cid);
     dec->cid.members[0] =
         (struct wandder_dump_action) {
                 .name = "networkIdentifier",
-                .descend = &dec->netid,
+                .descend = &dec->linetid,
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->cid.members[1] =
@@ -1608,6 +2069,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
 
+
     dec->ipiriid.membercount = 3;
     ALLOC_MEMBERS(dec->ipiriid);
     dec->ipiriid.members[0] =
@@ -1629,6 +2091,333 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->ipiriid.sequence = WANDDER_NOACTION;
+
+    dec->gprsparams.membercount = 6;
+    ALLOC_MEMBERS(dec->gprsparams);
+    dec->gprsparams.sequence = WANDDER_NOACTION;
+
+    dec->gprsparams.members[0] = WANDDER_NOACTION;
+    dec->gprsparams.members[1] =
+        (struct wandder_dump_action) {
+                .name = "pDP-address-allocated-to-the-target",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->gprsparams.members[2] =
+        (struct wandder_dump_action) {
+                .name = "aPN",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_DOMAIN_NAME
+        };
+    dec->gprsparams.members[3] =
+        (struct wandder_dump_action) {
+                .name = "pDP-type",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+    dec->gprsparams.members[4] =
+        (struct wandder_dump_action) {
+                .name = "nSAPI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->gprsparams.members[5] =
+        (struct wandder_dump_action) {
+                .name = "additionalIPaddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->servicesdatainfo.membercount = 2;
+    ALLOC_MEMBERS(dec->servicesdatainfo)
+    dec->servicesdatainfo.sequence = WANDDER_NOACTION;
+
+    dec->servicesdatainfo.members[0] = WANDDER_NOACTION;
+    dec->servicesdatainfo.members[1] =
+        (struct wandder_dump_action) {
+                .name = "gPRS-parameters",
+                .descend = &dec->gprsparams,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
+    dec->partyidentity.membercount = 12;
+    ALLOC_MEMBERS(dec->partyidentity);
+    dec->partyidentity.sequence = WANDDER_NOACTION;
+
+    dec->partyidentity.members[0] = WANDDER_NOACTION;
+    dec->partyidentity.members[1] =
+        (struct wandder_dump_action) {
+                .name = "imei",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_3G_IMEI
+        };
+    dec->partyidentity.members[2] = WANDDER_NOACTION;
+    dec->partyidentity.members[3] =
+        (struct wandder_dump_action) {
+                .name = "imsi",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_3G_IMEI
+        };
+    dec->partyidentity.members[4] = WANDDER_NOACTION;
+    dec->partyidentity.members[5] = WANDDER_NOACTION;
+    dec->partyidentity.members[6] =
+        (struct wandder_dump_action) {
+                .name = "msISDN",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_3G_IMEI
+        };
+    dec->partyidentity.members[7] =
+        (struct wandder_dump_action) {
+                .name = "e164-Format",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->partyidentity.members[8] =
+        (struct wandder_dump_action) {
+                .name = "sip-uri",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->partyidentity.members[9] =
+        (struct wandder_dump_action) {
+                .name = "tel-uri",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->partyidentity.members[10] =
+        (struct wandder_dump_action) {
+                .name = "x-3GPP-Asserted-Identity",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->partyidentity.members[11] =
+        (struct wandder_dump_action) {
+                .name = "xUI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+
+    dec->partyinfo.membercount = 5;
+    ALLOC_MEMBERS(dec->partyinfo);
+    dec->partyinfo.sequence = WANDDER_NOACTION;
+
+    dec->partyinfo.members[0] =
+        (struct wandder_dump_action) {
+                .name = "party-Qualifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->partyinfo.members[1] =
+        (struct wandder_dump_action) {
+                .name = "partyIdentity",
+                .descend = &dec->partyidentity,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->partyinfo.members[2] = WANDDER_NOACTION;
+    dec->partyinfo.members[3] = WANDDER_NOACTION;
+    dec->partyinfo.members[4] =
+        (struct wandder_dump_action) {
+                .name = "services-Data-Information",
+                .descend = &dec->servicesdatainfo,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
+    dec->location.membercount = 14;
+    ALLOC_MEMBERS(dec->location);
+    dec->location.sequence = WANDDER_NOACTION;
+
+    dec->location.members[0] = WANDDER_NOACTION;
+    dec->location.members[1] =
+        (struct wandder_dump_action) {
+                .name = "e164-Number",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[2] =
+        (struct wandder_dump_action) {
+                .name = "globalCellID",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[3] = WANDDER_NOACTION;
+    dec->location.members[4] =
+        (struct wandder_dump_action) {
+                .name = "rAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[5] = WANDDER_NOACTION;
+    dec->location.members[6] = WANDDER_NOACTION;
+    dec->location.members[7] =
+        (struct wandder_dump_action) {
+                .name = "sAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[8] =
+        (struct wandder_dump_action) {
+                .name = "oldRAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[9] =
+        (struct wandder_dump_action) {
+                .name = "tAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_TAI
+        };
+    dec->location.members[10] =
+        (struct wandder_dump_action) {
+                .name = "eCGI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ECGI
+        };
+    dec->location.members[11] = WANDDER_NOACTION;
+    dec->location.members[12] =
+        (struct wandder_dump_action) {
+                .name = "operatorSpecificInfo",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[13] =
+        (struct wandder_dump_action) {
+                .name = "uELocationTimestamp",
+                .descend = &dec->timestamp,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->umtsiri_params.membercount = 60;
+    ALLOC_MEMBERS(dec->umtsiri_params);
+    dec->umtsiri_params.sequence = WANDDER_NOACTION;
+
+    dec->umtsiri_params.members[0] =
+        (struct wandder_dump_action) {
+                .name = "hi2DomainId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OID
+        };
+    dec->umtsiri_params.members[1] =
+        (struct wandder_dump_action) {
+                .name = "lawfulInterceptionIdentifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->umtsiri_params.members[2] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[3] =
+        (struct wandder_dump_action) {
+                .name = "timeStamp",
+                .descend = &dec->timestamp,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[4] =
+        (struct wandder_dump_action) {
+                .name = "initiator",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->umtsiri_params.members[5] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[6] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[7] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[8] =
+        (struct wandder_dump_action) {
+                .name = "locationOfTheTarget",
+                .descend = &dec->location,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[9] =
+        (struct wandder_dump_action) {
+                .name = "partyInformation",
+                .descend = &dec->partyinfo,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[10] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[11] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[12] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[13] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[14] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[15] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[16] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[17] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[18] =
+        (struct wandder_dump_action) {
+                .name = "gPRSCorrelationNumber",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->umtsiri_params.members[19] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[20] =
+        (struct wandder_dump_action) {
+                .name = "gPRSevent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->umtsiri_params.members[21] =
+        (struct wandder_dump_action) {
+                .name = "sgsnAddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[22] =
+        (struct wandder_dump_action) {
+                .name = "gPRSOperationErrorCode",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->umtsiri_params.members[23] =
+        (struct wandder_dump_action) {
+                .name = "iRIversion",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->umtsiri_params.members[24] =
+        (struct wandder_dump_action) {
+                .name = "ggsnAddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[25] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[26] =
+        (struct wandder_dump_action) {
+                .name = "networkIdentifier",
+                .descend = &(dec->networkidentifier),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[27] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[28] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[29] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[30] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[31] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[32] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[33] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[34] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[35] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[36] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[37] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[38] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[39] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[40] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[41] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[42] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[43] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[44] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[45] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[46] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[47] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[48] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[49] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[50] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[51] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[52] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[53] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[54] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[55] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[56] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[57] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[58] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[59] = WANDDER_NOACTION;
 
     dec->ipiricontents.membercount = 24;
     ALLOC_MEMBERS(dec->ipiricontents);
@@ -1784,6 +2573,20 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->ipiri.sequence = WANDDER_NOACTION;
 
+    dec->umtsiri.membercount = 4;
+    ALLOC_MEMBERS(dec->umtsiri);
+    dec->umtsiri.sequence =WANDDER_NOACTION;
+
+    dec->umtsiri.members[0] =
+        (struct wandder_dump_action) {
+                .name = "iRI-Parameters",
+                .descend = &(dec->umtsiri_params),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri.members[1] = WANDDER_NOACTION;
+    dec->umtsiri.members[2] = WANDDER_NOACTION;
+    dec->umtsiri.members[3] = WANDDER_NOACTION;
+
     dec->iricontents.membercount = 16;
     ALLOC_MEMBERS(dec->iricontents);
     dec->iricontents.members[0] = WANDDER_NOACTION;
@@ -1800,7 +2603,12 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->iricontents.members[3] = WANDDER_NOACTION;
-    dec->iricontents.members[4] = WANDDER_NOACTION;
+    dec->iricontents.members[4] =
+            (struct wandder_dump_action) {
+                .name = "uMTSIRI",
+                .descend = &dec->umtsiri,
+                .interpretas = WANDDER_TAG_NULL
+            };
     dec->iricontents.members[5] = WANDDER_NOACTION;
     dec->iricontents.members[6] = WANDDER_NOACTION;
     dec->iricontents.members[7] = WANDDER_NOACTION;

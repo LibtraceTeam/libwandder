@@ -76,6 +76,12 @@ enum {
     /* Custom tag types, use only for "interpret as" values. */
     WANDDER_TAG_IPPACKET = 0x30,
     WANDDER_TAG_BINARY_IP = 0x31,
+    WANDDER_TAG_3G_IMEI = 0x32,     /* also used for imsi and msisdn */
+    WANDDER_TAG_DOMAIN_NAME=0x33,   /* domain names encoded as per RFC 1035 */
+    WANDDER_TAG_TAI = 0x34,
+    WANDDER_TAG_ECGI = 0x35,
+    WANDDER_TAG_HEX_BYTES=0x36,
+    WANDDER_TAG_CUSTOM_END,
 };
 
 /* Dumpers are used to describe hierarchy and data types for a particular
