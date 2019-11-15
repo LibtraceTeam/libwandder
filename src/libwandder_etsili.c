@@ -926,7 +926,7 @@ static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         family = AF_INET6;
         addr = &in6;
     } else {
-        fprintf(stderr, "Unexpected IP address length: %u\n", item->length);
+        fprintf(stderr, "Unexpected IP address length: %lu\n", item->length);
         return NULL;
     }
 

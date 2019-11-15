@@ -1094,7 +1094,7 @@ size_t wandder_encode_inplace_ber(
     ret = encode_here_ber(idnum, class, encodeas, valptr, vallen, ptr, rem);
 
     if(ret != totallen){
-        printf("calc length:%4d, real length:%4d\n", totallen, ret);
+        printf("calc length:%4lu, real length:%4lu\n", totallen, ret);
         assert(0);
     }
 
@@ -1124,7 +1124,7 @@ wandder_buf_t * wandder_encode_new_ber(
     itembuf->len = ret;
 
     if(ret != totallen){
-        printf("calc length:%4d, real length:%4d\n", totallen, ret);
+        printf("calc length:%4lu, real length:%4lu\n", totallen, ret);
         assert(0);
     }
 
@@ -1154,7 +1154,7 @@ size_t ber_rebuild_integer(
     } else if (vallen == 1) {
         val = *((int8_t *)valptr);
     } else {
-        fprintf(stderr, "Encode error: unexpected length for integer type: %u\n",
+        fprintf(stderr, "Encode error: unexpected length for integer type: %lu\n",
             vallen);
         return 0;
     }
