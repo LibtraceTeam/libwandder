@@ -1312,9 +1312,11 @@ void wandder_append_preencoded_ber(wandder_encoder_ber_t* enc_ber, wandder_buf_t
 
     ptrdiff_t rem = rem_grow_check(enc_ber, item_buf->len);
 
-    memcpy(enc_ber->ptr, item_buf->buf, item_buf->len);
-    enc_ber->ptr += item_buf->len;
-    enc_ber->len += item_buf->len;
+    if (rem > 0) {
+        memcpy(enc_ber->ptr, item_buf->buf, item_buf->len);
+        enc_ber->ptr += item_buf->len;
+        enc_ber->len += item_buf->len;
+    }
 
 }
 
