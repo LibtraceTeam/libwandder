@@ -54,6 +54,8 @@ static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_3gimei(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_3gcause(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_domain_name(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
@@ -294,6 +296,16 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret 3G IMEI-style field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_3G_SM_CAUSE) {
+                if (stringify_3gcause(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret 3G SM-Cause field %d:%d\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -658,6 +670,22 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
 
     res = wandder_get_integer_value(etsidec->dec->current, NULL);
     return res;
+}
+
+static char *stringify_3gcause(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = (uint8_t *)item->valptr;
+
+    switch(*ptr) {
+        case 36:
+            strncpy(valstr, "Regular Deactivation", len);
+            break;
+        default:
+            strncpy(valstr, "Unknown", len);
+            break;
+    }
+    return valstr;
 }
 
 static char *stringify_3gimei(wandder_etsispec_t *etsidec,
@@ -2364,7 +2392,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "gPRSOperationErrorCode",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_OCTETSTRING
+                .interpretas = WANDDER_TAG_3G_SM_CAUSE
         };
     dec->umtsiri_params.members[23] =
         (struct wandder_dump_action) {
