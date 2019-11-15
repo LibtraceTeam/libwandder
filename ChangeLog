@@ -6,6 +6,9 @@ Version 1.2.0
  * Updated decoder to properly decode indefinite-length fields.
  * Added API functions for BER-encoding specific ETSI-LI message types
    into libwandder_etsili.h.
+ * Added support for encoding and decoding UTCTime fields.
+ * Added decode support for the UMTSCC and UMTSIRI ETSI-LI records
+   produced by OpenLI.
 
 Version 1.1.3
 =============

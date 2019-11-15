@@ -72,7 +72,7 @@ producing human-readable strings describing each field or encapsulating
 structure.
 
 Please note that the ETSI specification implemented within the libwandder API
-is not yet complete -- standard IP and IP Multimedia Communication Contents
-and Intercept Related Information records are supported, but other
+is not yet complete -- standard IP, UMTS, and IP Multimedia Communication
+Contents and Intercept Related Information records are supported, but other
 interception types are still on the TODO list (e.g. Email, etc).
 

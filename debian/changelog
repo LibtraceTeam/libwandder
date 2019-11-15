@@ -2,6 +2,8 @@ libwandder1 (1.2.0-1) unstable; urgency=medium
 
   * Added support for BER-encoding.
   * Added ability to decode indefinite-length types.
+  * Added support for UTCTime fields.
+  * Added support to decode ETSI LI UMTSCC and UMTSIRI records.
 
  -- Shane Alcock <salcock@waikato.ac.nz>  Thu, 26 Sep 2019 16:24:20 +1200
 
