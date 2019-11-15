@@ -735,7 +735,6 @@ static inline int stringify_lai(uint8_t *todecode, int decodelen,
         char *valstr, int len) {
 
     char *nextwrite = valstr;
-    int i;
     uint8_t byteval;
 
     if (decodelen < 3) {
@@ -926,7 +925,7 @@ static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         family = AF_INET6;
         addr = &in6;
     } else {
-        fprintf(stderr, "Unexpected IP address length: %u\n", item->length);
+        fprintf(stderr, "Unexpected IP address length: %lu\n", item->length);
         return NULL;
     }
 
