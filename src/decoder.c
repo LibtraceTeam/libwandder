@@ -173,11 +173,37 @@ static inline wandder_item_t *create_new_item(wandder_decoder_t *dec) {
     return item;
 }
 
+static inline int _is_end_sequence(wandder_decoder_t *dec,
+        wandder_item_t *parent, uint8_t *ptr) {
+
+    if (parent == NULL) {
+        return 0;
+    }
+
+    if (parent->indefform == 1) {
+
+        if (dec->sourcelen - (ptr - dec->source) < 2) {
+            return 0;
+        }
+
+        if (ptr[0] == 0x00 && ptr[1] == 0x00) {
+            return 1;
+        }
+        return 0;
+    } else {
+        if (ptr >= parent->valptr + parent->length) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) {
 
     uint8_t tagbyte = *ptr;
     uint8_t shortlen;
     uint32_t prelen = 0;
+    uint32_t trailing = 0;
     int i;
     wandder_item_t *item = NULL;
     uint8_t incache = 0;
@@ -219,11 +245,16 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
         return 1;
     }
 
-
-    while (parent != NULL && ptr >= parent->valptr + parent->length) {
+    while (_is_end_sequence(dec, parent, ptr)) {
         /* Reached end of preceding sequence */
         wandder_item_t *tmp = parent;
         parent = parent->parent;
+
+        if (tmp->indefform == 1) {
+            ptr += 2;
+            trailing += 2;
+            tagbyte = *ptr;
+        }
 
         if (tmp == dec->toplevel) {
             dec->toplevel = NULL;
@@ -279,34 +310,62 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
 
     shortlen = *ptr;
     if ((shortlen & 0x80) == 0) {
+        //definite short form
+        item->indefform = 0;
         item->length = (shortlen & 0x7f);
         prelen += 1;
         ptr ++;
     } else {
         uint8_t lenoctets = (shortlen & 0x7f);
-        if (lenoctets > sizeof(item->length)) {
-            fprintf(stderr, "libwandder does not support length fields longer than %zd bytes right now\n", sizeof(item->length));
-            fprintf(stderr, "Tried to decode an item with a length field of %u bytes.\n", lenoctets);
-            if (item != dec->current) {
-                free_item(item);
+        if(lenoctets){
+            //definite long form
+            if (lenoctets > sizeof(item->length)) {
+                fprintf(stderr, "libwandder does not support length fields longer than %zd bytes right now\n", sizeof(item->length));
+                fprintf(stderr, "Tried to decode an item with a length field of %u bytes.\n", lenoctets);
+                if (item != dec->current) {
+                    free_item(item);
+                }
+                return -1;
             }
-            return -1;
-        }
-        ptr ++;
-        item->length = 0;
-        for (i = 0; i < (int)lenoctets; i++) {
-            item->length = item->length << 8;
-            item->length |= (*ptr);
             ptr ++;
+            item->length = 0;
+            for (i = 0; i < (int)lenoctets; i++) {
+                item->length = item->length << 8;
+                item->length |= (*ptr);
+                ptr ++;
 
+            }
+            prelen += (lenoctets + 1);
+            item->indefform = 0;
         }
-        prelen += (lenoctets + 1);
+        else {
+            //indfinite form
+            item->length = 0;
+            item->indefform = 1;
+            prelen += 1;
+            ptr ++;
+        }
     }
 
+    item->trailing = trailing;
     item->preamblelen = prelen;
     item->valptr = ptr;
     item->cachednext = NULL;
     item->cachedchildren = NULL;
+
+    if (item->length == 0 && item->identclass == 0 && item->identifier == 0){
+        //end of indef value
+
+        if (item->parent == NULL) {
+            /* Reached end of the top level sequence */
+            dec->current = NULL;
+            item->parent = NULL;
+            return 0;
+        }
+        else{
+            item->parent =  item->parent->parent;
+        }
+    }
 
     if (dec->current == parent && parent != NULL) {
         assert(parent->cachedchildren == NULL);
@@ -366,10 +425,14 @@ static inline int _decode_next(wandder_decoder_t *dec) {
         return first_decode(dec);
     }
 
-    /* if current is a constructed type, the next item is the first child
+    if (dec->nextitem >= dec->source + dec->sourcelen){
+        return 0; //reached end
+    }
+
+    /* if current is a constructed type, the next item is the first child 
      * of current */
     if ((IS_CONSTRUCTED(dec->current))) {
-        ret = decode(dec, dec->nextitem, dec->current);
+        ret = decode(dec, dec->nextitem, dec->current); 
     } else {
         /* if current is not a constructed type, use current's parent */
         ret = decode(dec, dec->nextitem, dec->current->parent);
@@ -378,16 +441,18 @@ static inline int _decode_next(wandder_decoder_t *dec) {
     if (ret <= 0) {
         return ret;
     }
+
     if (IS_CONSTRUCTED(dec->current)) {
         dec->current->descend = 1;
-        dec->nextitem = dec->nextitem + dec->current->preamblelen;
+        dec->nextitem = dec->nextitem + dec->current->preamblelen +
+                dec->current->trailing;
         return dec->current->preamblelen;
     } else {
         dec->current->descend = 0;
     }
 
     dec->nextitem = dec->nextitem + dec->current->length +
-            dec->current->preamblelen;
+            dec->current->preamblelen + dec->current->trailing;
 
     return dec->current->length + dec->current->preamblelen;
 }
@@ -430,6 +495,42 @@ int wandder_decode_sequence_until(wandder_decoder_t *dec, uint32_t ident) {
     return 0;
 }
 
+static int find_indef_length(wandder_decoder_t *dec) {
+
+    int skipped = 0;
+    int levels = 1;
+    int finalskip = 0;
+    uint8_t *ptr;
+
+    dec->nextitem = dec->current->valptr;
+
+    skipped = dec->current->preamblelen + dec->current->length;
+
+    ptr = dec->nextitem;
+    while (levels > 0) {
+        if (*ptr != 0 || *(ptr+1) !=0 ) {
+            skipped += _decode_next(dec);
+
+            if (dec->current->indefform) {
+                dec->nextitem = dec->current->valptr;
+                ptr = dec->nextitem;
+                levels ++;
+                continue;
+            } else {
+                dec->nextitem = dec->current->valptr + dec->current->length;
+                ptr = dec->nextitem;
+            }
+        } else {
+            levels --;
+            finalskip += 2;
+            ptr += 2;
+        }
+    }
+
+    return skipped + finalskip;
+
+}
+
 int wandder_decode_skip(wandder_decoder_t *dec) {
 
     if (dec == NULL) {
@@ -443,8 +544,12 @@ int wandder_decode_skip(wandder_decoder_t *dec) {
         return -1;
     }
 
-    dec->current->descend = 0;
-    dec->nextitem = dec->current->valptr + dec->current->length;
+    if (dec->current->indefform){
+        return find_indef_length(dec);
+    }else {
+        dec->current->descend = 0;
+        dec->nextitem = dec->current->valptr + dec->current->length;
+    }
     return dec->current->length;
 }
 
@@ -568,6 +673,9 @@ uint32_t wandder_get_itemlen(wandder_decoder_t *dec) {
     }
 
     if (dec->current) {
+        if (dec->current->indefform){
+            return 0;
+        }
         return dec->current->length;
     }
     return 0;
@@ -735,8 +843,9 @@ uint32_t stringify_roid(uint8_t *start, uint32_t length, char *space,
     return oid_to_string(start, length, space, spacerem, 0);
 }
 
-struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
-        char *gts, int len) {
+static inline struct timeval asn1ts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len, const char *fmt, int fmtlen) {
+
     struct timeval tv;
     struct tm tm, localres;
     char *nxt = NULL;
@@ -748,12 +857,12 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
     tv.tv_sec = 0;
     tv.tv_usec = 0;
 
-    if (len < 14) {
-        fprintf(stderr, "Generalized time string %s is too short!\n", gts);
+    if (len < fmtlen) {
+        fprintf(stderr, "ASN.1 time string %s is too short!\n", gts);
         return tv;
     }
 
-    nxt = gts + 14;     /* YYYYmmddHHMMSS */
+    nxt = gts + fmtlen;     /* YYYYmmddHHMMSS for generalized time */
 
     if (*nxt == '.') {
         skipto = nxt + 1;
@@ -764,7 +873,7 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
             }
 
             if (*skipto < '0' || *skipto > '9') {
-                fprintf(stderr, "Unexpected character in generalized time string %s (%c)\n", gts, *skipto);
+                fprintf(stderr, "Unexpected character in time string %s (%c)\n", gts, *skipto);
                 return tv;
             }
             ms = ms * 10 + ((*skipto) - '0');
@@ -772,14 +881,14 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
         }
     }
 
-    if (memcmp(gts, dec->prevgts, 14) == 0) {
+    if (memcmp(gts, dec->prevgts, fmtlen) == 0) {
         tv.tv_sec = dec->cachedts;
         tv.tv_usec = ms * 1000;
         return tv;
     }
 
-    if (strptime(gts, "%Y%m%d%H%M%S", &tm) == NULL) {
-        fprintf(stderr, "strptime failed to parse generalized time: %s\n", gts);
+    if (strptime(gts, fmt, &tm) == NULL) {
+        fprintf(stderr, "strptime failed to parse time: %s\n", gts);
         return tv;
     }
     /* The time is going to be interpreted as UTC, so we'll need to
@@ -811,12 +920,32 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
     tv.tv_usec = ms * 1000;
 
     dec->cachedts = tv.tv_sec;
-    memcpy(dec->prevgts, gts, 14);
-    dec->prevgts[14] = '\0';
+    memcpy(dec->prevgts, gts, fmtlen);
+    dec->prevgts[fmtlen] = '\0';
     return tv;
 }
 
+struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len) {
+
+    return asn1ts_to_timeval(dec, gts, len, "%Y%m%d%H%M%S", 14);
+}
+
+struct timeval wandder_utcts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len) {
+
+    return asn1ts_to_timeval(dec, gts, len, "%y%m%d%H%M%S", 12);
+}
+
+
 uint32_t stringify_gentime(uint8_t *start, uint32_t length, char *space,
+        uint16_t spacerem) {
+
+    /* TODO maybe parse this and print it a bit nicer? */
+    return stringify_octet_string(start, length, space, spacerem);
+}
+
+uint32_t stringify_utctime(uint8_t *start, uint32_t length, char *space,
         uint16_t spacerem) {
 
     /* TODO maybe parse this and print it a bit nicer? */
@@ -893,12 +1022,17 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
             }
             break;
 
+        case WANDDER_TAG_UTCTIME:
+            if (stringify_utctime(c->valptr, c->length, space, len) == 0) {
+                return NULL;
+            }
+            break;
+
         case WANDDER_TAG_BOOLEAN:
         case WANDDER_TAG_BITSTRING:
         case WANDDER_TAG_OBJDESC:
         case WANDDER_TAG_REAL:
         case WANDDER_TAG_NUMERIC:
-        case WANDDER_TAG_UTCTIME:
         default:
             fprintf(stderr, "No stringify support for type %u just yet...\n",
                     datatype);
@@ -1148,13 +1282,6 @@ int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,
         fprintf(stderr, "libwandder cannot decode using a NULL decoder.\n");
         return -1;
     }
-
-    /*
-    if (level != 0) {
-        printf("[%u] %u %s %u\n", wandder_get_identifier(dec),
-                wandder_get_level(dec), name, wandder_get_itemlen(dec));
-    }
-    */
 
     ret = wandder_decode_next(dec);
     if (ret <= 0) {

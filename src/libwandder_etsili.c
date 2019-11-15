@@ -26,22 +26,43 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stddef.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <time.h>
 #include <assert.h>
+#include <math.h>
+#include "wandder_internal.h"
 #include "libwandder_etsili.h"
 
 const uint8_t etsi_lipsdomainid[9] = {
         0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11};
+
+uint8_t etsi_ipccoid[4] = {0x05, 0x03, 0x0a, 0x02};
+uint8_t etsi_ipirioid[4] = {0x05, 0x03, 0x0a, 0x01};
+uint8_t etsi_ipmmccoid[4] = {0x05, 0x05, 0x06, 0x02};
+uint8_t etsi_ipmmirioid[4] = {0x05, 0x05, 0x06, 0x01};
 
 static void init_dumpers(wandder_etsispec_t *dec);
 static void free_dumpers(wandder_etsispec_t *dec);
 static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         wandder_dumper_t *curr, char *valstr, int len);
 static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_3gimei(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_3gcause(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_domain_name(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_tai(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_ecgi(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 
 #define QUICK_DECODE(fail) \
@@ -154,18 +175,24 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
                 "wandder_attach_etsili_buffer() first!\n");
         return 0;
     }
-    /* Easy, reset the decoder then grab the length of the first element */
+    /* Easy, reset the decoder then grab the length of the first element 
+    (provided it is not indefinite)*/
     wandder_reset_decoder(etsidec->dec);
 
     if (wandder_decode_next(etsidec->dec) <= 0) {
         return 0;
     }
 
+    int preamble = etsidec->dec->current->preamblelen;
     /* Don't forget to include the preamble length so the caller can skip
      * over the entire PDU if desired.
      */
-    return wandder_get_itemlen(etsidec->dec) +
-            etsidec->dec->current->preamblelen;
+    if (etsidec->dec->current->indefform){
+        return wandder_decode_skip(etsidec->dec);
+    }
+    else {
+        return wandder_get_itemlen(etsidec->dec) + preamble;
+    }
 }
 
 static inline void push_stack(wandder_etsi_stack_t *stack,
@@ -240,6 +267,9 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (strcmp(curr->members[ident].name, "iPPackets") == 0) {
                     return NULL;
                 }
+                if (strcmp(curr->members[ident].name, "uMTSCC") == 0) {
+                    return NULL;
+                }
                 return wandder_etsili_get_next_fieldstr(etsidec, space,
                         spacelen);
             }
@@ -260,7 +290,63 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                             etsidec->stack->current, ident);
                     return NULL;
                 }
-            } else {
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_3G_IMEI) {
+                if (stringify_3gimei(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret 3G IMEI-style field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_3G_SM_CAUSE) {
+                if (stringify_3gcause(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret 3G SM-Cause field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_DOMAIN_NAME) {
+                if (stringify_domain_name(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret domain name field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_HEX_BYTES) {
+                if (stringify_bytes_as_hex(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret hex bytes field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_TAI) {
+                if (stringify_tai(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret TAI field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_ECGI) {
+                if (stringify_ecgi(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret ECGI field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else {
                 if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
                         curr->members[ident].interpretas)) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
@@ -325,10 +411,10 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
                 "wandder_attach_etsili_buffer() first!\n");
         return NULL;
     }
-    /* Find IPCCContents or IPMMCCContents*/
+    /* Find IPCCContents or IPMMCCContents or UMTSCC */
     wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
-    wandder_target_t cctgts[2];
+    wandder_target_t cctgts[3];
 
     cctgts[0].parent = &etsidec->ipcccontents;
     cctgts[0].itemid = 0;
@@ -338,8 +424,12 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
     cctgts[1].itemid = 1;
     cctgts[1].found = false;
 
+    cctgts[2].parent = &etsidec->cccontents;
+    cctgts[2].itemid = 4;
+    cctgts[2].found = false;
+
     *len = 0;
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 2,
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 3,
                 &found, 1) > 0) {
         *len = found->list[0].item->length;
         vp = found->list[0].item->valptr;
@@ -348,6 +438,8 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
             strncpy(name, etsidec->ipcccontents.members[0].name, namelen);
         } else if (found->list[0].targetid == 1) {
             strncpy(name, etsidec->ipmmcc.members[1].name, namelen);
+        } else if (found->list[0].targetid == 2) {
+            strncpy(name, etsidec->cccontents.members[4].name, namelen);
         }
         wandder_free_found(found);
     }
@@ -580,6 +672,241 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
     return res;
 }
 
+static char *stringify_3gcause(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = (uint8_t *)item->valptr;
+
+    switch(*ptr) {
+        case 36:
+            strncpy(valstr, "Regular Deactivation", len);
+            break;
+        default:
+            strncpy(valstr, "Unknown", len);
+            break;
+    }
+    return valstr;
+}
+
+static char *stringify_3gimei(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = (uint8_t *)item->valptr;
+    char *nextwrite = valstr;
+    int i;
+
+    for (i = 0; i < item->length; i++) {
+        uint8_t byteval;
+
+        byteval = *ptr;
+
+        if ((byteval & 0x0f) < 10) {
+            *nextwrite = '0' + (byteval & 0x0f);
+            nextwrite ++;
+        }
+
+        if (nextwrite - valstr >= len - 1) {
+            break;
+        }
+
+        if (((byteval & 0xf0) >> 4) < 10) {
+            *nextwrite = '0' + ((byteval & 0xf0) >> 4);
+            nextwrite ++;
+        }
+
+        if (nextwrite - valstr >= len - 1) {
+            valstr[len - 1] = '\0';
+            return valstr;
+        }
+
+        ptr++;
+    }
+
+    if (nextwrite == valstr) {
+        return NULL;
+    }
+
+    *nextwrite = '\0';
+
+    return valstr;
+}
+
+static inline int stringify_lai(uint8_t *todecode, int decodelen,
+        char *valstr, int len) {
+
+    char *nextwrite = valstr;
+    uint8_t byteval;
+
+    if (decodelen < 3) {
+        return 0;
+    }
+
+    if (len < 9) {
+        return 0;
+    }
+
+    /* MCC */
+    byteval = *todecode;
+
+    if ((byteval & 0x0f) < 10) {
+        *nextwrite = '0' + (byteval & 0x0f);
+        nextwrite ++;
+    }
+
+    if (((byteval & 0xf0) >> 4) < 10) {
+        *nextwrite = '0' + ((byteval & 0xf0) >> 4);
+        nextwrite ++;
+    }
+
+    todecode ++;
+    byteval = *todecode;
+
+    if ((byteval & 0x0f) < 10) {
+        *nextwrite = '0' + (byteval & 0x0f);
+        nextwrite ++;
+    }
+
+    *nextwrite = '-';
+    nextwrite ++;
+
+    /* MNC */
+    if (((byteval & 0xf0) >> 4) < 10) {
+        *nextwrite = '0' + ((byteval & 0xf0) >> 4);
+        nextwrite ++;
+    }
+
+    todecode ++;
+    byteval = *todecode;
+
+    if ((byteval & 0x0f) < 10) {
+        *nextwrite = '0' + (byteval & 0x0f);
+        nextwrite ++;
+    }
+
+    if (((byteval & 0xf0) >> 4) < 10) {
+        *nextwrite = '0' + ((byteval & 0xf0) >> 4);
+        nextwrite ++;
+    }
+
+    *nextwrite = '-';
+    nextwrite ++;
+    return nextwrite - valstr;
+}
+
+static char *stringify_tai(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    char *nextwrite;
+    int used = 0;
+    char tac[24];
+
+    memset(valstr, 0, len);
+
+    used = stringify_lai(item->valptr + 1, item->length - 1, valstr, len);
+
+    if (used == 0 || used >= len) {
+        return NULL;
+    }
+
+    nextwrite = valstr + used;
+    snprintf(tac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 4))));
+
+    if (strlen(tac) > len - used) {
+        return NULL;
+    }
+
+    memcpy(nextwrite, tac, strlen(tac));
+    return valstr;
+}
+
+static char *stringify_ecgi(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    char *nextwrite;
+    int used = 0;
+    char eci[24];
+
+    memset(valstr, 0, len);
+
+    used = stringify_lai(item->valptr + 1, item->length - 1, valstr, len);
+
+    if (used == 0 || used >= len) {
+        return NULL;
+    }
+
+    nextwrite = valstr + used;
+    snprintf(eci, 24, "%u", ntohl(*((uint32_t *)(item->valptr + 4))));
+
+    if (strlen(eci) > len - used) {
+        return NULL;
+    }
+
+    memcpy(nextwrite, eci, strlen(eci));
+    return valstr;
+}
+
+static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    int i;
+    char *nextwrite;
+
+    if (len <= 4) {
+        return NULL;
+    }
+
+    memset(valstr, 0, len);
+    memcpy(valstr, "0x", 2);
+
+    nextwrite = valstr + 2;
+
+    for (i = 0; i < item->length; i++) {
+        char staged[3];
+
+        snprintf(staged, 3, "%02x", (unsigned int) *(((uint8_t *)(item->valptr)) + i));
+        memcpy(nextwrite, staged, 2);
+        nextwrite += 2;
+        if (nextwrite - valstr >= len - 2) {
+            break;
+        }
+    }
+
+    return valstr;
+
+}
+
+static char *stringify_domain_name(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    int eos, indx;
+    memset(valstr, 0, len);
+
+    /* TODO handle compressed name segments */
+
+    /* length - 1 because we're skipping the first byte
+     * len - 1 because we need to save room for a null byte
+     */
+    if (item->length - 1 > len - 1) {
+        memcpy(valstr, item->valptr + 1, len - 1);
+        eos = len - 1;
+    } else {
+        memcpy(valstr, item->valptr + 1, item->length - 1);
+        eos = item->length - 1;
+    }
+
+    indx = (*((uint8_t *)item->valptr));
+
+    while (indx < eos) {
+        uint8_t next = (uint8_t)(valstr[indx]);
+
+        valstr[indx] = '.';
+        indx += (1 + next);
+    }
+
+    return valstr;
+
+}
+
 static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
 
@@ -598,7 +925,7 @@ static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         family = AF_INET6;
         addr = &in6;
     } else {
-        fprintf(stderr, "Unexpected IP address length: %u\n", item->length);
+        fprintf(stderr, "Unexpected IP address length: %lu\n", item->length);
         return NULL;
     }
 
@@ -925,6 +1252,120 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
+    else if (item->identifier == 4 && curr == &(etsidec->umtsiri_params)) {
+        /* initiator for uMTSIRI */
+        switch(enumval) {
+            case 0:
+                name = "not-Available";
+                break;
+            case 1:
+                name = "originating-Target";
+                break;
+            case 2:
+                name = "terminating-Target";
+                break;
+        }
+    }
+    else if (item->identifier == 23 && curr == &(etsidec->umtsiri_params)) {
+        /* iRIversion for uMTSIRI */
+        switch(enumval) {
+            case 2:
+                name = "version2";
+                break;
+            case 3:
+                name = "version3";
+                break;
+            case 4:
+                name = "version4";
+                break;
+            case 6:
+                name = "version6";
+                break;
+            case 8:
+                name = "lastVersion";
+                break;
+        }
+    }
+    else if (item->identifier == 20 && curr == &(etsidec->umtsiri_params)) {
+        /* gPRSevent for uMTSIRI */
+        switch (enumval) {
+            case 1:
+                name = "pDPContextActivation";
+                break;
+            case 2:
+                name = "startOfInterceptionWithPDPContextActive";
+                break;
+            case 4:
+                name = "pDPContextDeactivation";
+                break;
+            case 5:
+                name = "gPRSAttach";
+                break;
+            case 6:
+                name = "gPRSDetach";
+                break;
+            case 10:
+                name = "locationInfoUpdate";
+                break;
+            case 11:
+                name = "sMS";
+                break;
+            case 13:
+                name = "pDPContextModification";
+                break;
+            case 14:
+                name = "servingSystem";
+                break;
+            case 15:
+                name = "startOfInterceptionWithMSAttached";
+                break;
+            case 16:
+                name = "packetDataHeaderInformation";
+                break;
+            case 17:
+                name = "hSS-Subscriber-Record-Change";
+                break;
+            case 18:
+                name = "registration-Termination";
+                break;
+            case 19:
+                name = "location-Up-Date";
+                break;
+            case 20:
+                name = "cancel-Location";
+                break;
+            case 21:
+                name = "register-Location";
+                break;
+            case 22:
+                name = "location-Information-Request";
+                break;
+        }
+    }
+    else if (item->identifier == 1 && curr == &(etsidec->localtimestamp)) {
+        /* winterSummerIndication from localTimestamp */
+        switch(enumval) {
+            case 0:
+                name = "notProvided";
+                break;
+            case 1:
+                name = "winterTime";
+                break;
+            case 2:
+                name = "summerTime";
+                break;
+        }
+    }
+    else if (item->identifier == 0 && curr == &(etsidec->partyinfo)) {
+        /* party-Qualifier for partyInformation */
+        /* strangely, there's only one valid value for this enum */
+        switch(enumval) {
+            case 3:
+                name = "gPRS-Target";
+                break;
+        }
+    }
+
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
         return name;
@@ -935,18 +1376,27 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
 
 static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipvalue.members);
+    free(dec->timestamp.members);
+    free(dec->localtimestamp.members);
     free(dec->h323content.members);
     free(dec->h323message.members);
     free(dec->nationalipmmiri.members);
     free(dec->sipmessage.members);
     free(dec->ipmmiricontents.members);
     free(dec->ipmmiri.members);
+    free(dec->datanodeaddress.members);
     free(dec->ipaddress.members);
     free(dec->ipcccontents.members);
     free(dec->ipmmcc.members);
     free(dec->ipcc.members);
     free(dec->netelid.members);
-    free(dec->netid.members);
+    free(dec->linetid.members);
+    free(dec->networkidentifier.members);
+    free(dec->location.members);
+    free(dec->partyinfo.members);
+    free(dec->partyidentity.members);
+    free(dec->servicesdatainfo.members);
+    free(dec->gprsparams.members);
     free(dec->cid.members);
     free(dec->msts.members);
     free(dec->cccontents.members);
@@ -960,6 +1410,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipiriid.members);
     free(dec->ipiricontents.members);
     free(dec->ipiri.members);
+    free(dec->umtsiri.members);
+    free(dec->umtsiri_params.members);
     free(dec->iricontents.members);
     free(dec->iripayload.members);
     free(dec->payload.members);
@@ -1022,6 +1474,18 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->ipaddress.sequence = WANDDER_NOACTION;
 
+    dec->datanodeaddress.membercount = 3;
+    ALLOC_MEMBERS(dec->datanodeaddress);
+    dec->datanodeaddress.members[0] = WANDDER_NOACTION;
+    dec->datanodeaddress.members[1] =
+        (struct wandder_dump_action) {
+                .name = "ipAddress",
+                .descend = &(dec->ipaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->datanodeaddress.members[2] = WANDDER_NOACTION;
+    dec->datanodeaddress.sequence = WANDDER_NOACTION;
+
     dec->nationalipmmiri.membercount = 1;
     ALLOC_MEMBERS(dec->nationalipmmiri);
     dec->nationalipmmiri.members[0] =
@@ -1031,6 +1495,38 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_PRINTABLE
         };
     dec->nationalipmmiri.sequence = WANDDER_NOACTION;
+
+    dec->localtimestamp.membercount = 2;
+    ALLOC_MEMBERS(dec->localtimestamp);
+    dec->localtimestamp.members[0] =
+        (struct wandder_dump_action) {
+                .name = "generalizedTime",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_GENERALTIME
+        };
+    dec->localtimestamp.members[1] =
+        (struct wandder_dump_action) {
+                .name = "winterSummerIndication",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->localtimestamp.sequence = WANDDER_NOACTION;
+
+    dec->timestamp.membercount = 2;
+    ALLOC_MEMBERS(dec->timestamp);
+    dec->timestamp.members[0] =
+        (struct wandder_dump_action) {
+                .name = "localTime",
+                .descend = &(dec->localtimestamp),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->timestamp.members[1] =
+        (struct wandder_dump_action) {
+                .name = "utcTime",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_UTCTIME
+        };
+    dec->timestamp.sequence = WANDDER_NOACTION;
 
     dec->h323content.membercount = 4;
     ALLOC_MEMBERS(dec->h323content);
@@ -1257,34 +1753,50 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
 
-    dec->netid.membercount = 3;
-    ALLOC_MEMBERS(dec->netid);
-    dec->netid.members[0] =
+    dec->linetid.membercount = 3;
+    ALLOC_MEMBERS(dec->linetid);
+    dec->linetid.members[0] =
         (struct wandder_dump_action) {
                 .name = "operatorIdentifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    dec->netid.members[1] =
+    dec->linetid.members[1] =
         (struct wandder_dump_action) {
                 .name = "networkElementIdentifier",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
-    dec->netid.members[2] =
+    dec->linetid.members[2] =
         (struct wandder_dump_action) {
                 .name = "eTSI671NEID",
                 .descend = &dec->netelid,
                 .interpretas = WANDDER_TAG_NULL
         };
-    dec->netid.sequence = WANDDER_NOACTION;
+    dec->linetid.sequence = WANDDER_NOACTION;
+
+    dec->networkidentifier.membercount = 2;
+    ALLOC_MEMBERS(dec->networkidentifier);
+    dec->networkidentifier.members[0] =
+        (struct wandder_dump_action) {
+                .name = "operator-Identifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->networkidentifier.members[1] =
+        (struct wandder_dump_action) {
+                .name = "network-Element-Identifier",
+                .descend = &(dec->netelid),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->networkidentifier.sequence = WANDDER_NOACTION;
 
     dec->cid.membercount = 3;
     ALLOC_MEMBERS(dec->cid);
     dec->cid.members[0] =
         (struct wandder_dump_action) {
                 .name = "networkIdentifier",
-                .descend = &dec->netid,
+                .descend = &dec->linetid,
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->cid.members[1] =
@@ -1333,7 +1845,12 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->cccontents.members[3] = WANDDER_NOACTION;
-    dec->cccontents.members[4] = WANDDER_NOACTION;
+    dec->cccontents.members[4] =
+        (struct wandder_dump_action) {
+                .name = "uMTSCC",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_IPPACKET
+        };
     dec->cccontents.members[5] = WANDDER_NOACTION;
     dec->cccontents.members[6] = WANDDER_NOACTION;
     dec->cccontents.members[7] = WANDDER_NOACTION;
@@ -1579,6 +2096,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
 
+
     dec->ipiriid.membercount = 3;
     ALLOC_MEMBERS(dec->ipiriid);
     dec->ipiriid.members[0] =
@@ -1600,6 +2118,333 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->ipiriid.sequence = WANDDER_NOACTION;
+
+    dec->gprsparams.membercount = 6;
+    ALLOC_MEMBERS(dec->gprsparams);
+    dec->gprsparams.sequence = WANDDER_NOACTION;
+
+    dec->gprsparams.members[0] = WANDDER_NOACTION;
+    dec->gprsparams.members[1] =
+        (struct wandder_dump_action) {
+                .name = "pDP-address-allocated-to-the-target",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->gprsparams.members[2] =
+        (struct wandder_dump_action) {
+                .name = "aPN",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_DOMAIN_NAME
+        };
+    dec->gprsparams.members[3] =
+        (struct wandder_dump_action) {
+                .name = "pDP-type",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+    dec->gprsparams.members[4] =
+        (struct wandder_dump_action) {
+                .name = "nSAPI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->gprsparams.members[5] =
+        (struct wandder_dump_action) {
+                .name = "additionalIPaddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->servicesdatainfo.membercount = 2;
+    ALLOC_MEMBERS(dec->servicesdatainfo)
+    dec->servicesdatainfo.sequence = WANDDER_NOACTION;
+
+    dec->servicesdatainfo.members[0] = WANDDER_NOACTION;
+    dec->servicesdatainfo.members[1] =
+        (struct wandder_dump_action) {
+                .name = "gPRS-parameters",
+                .descend = &dec->gprsparams,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
+    dec->partyidentity.membercount = 12;
+    ALLOC_MEMBERS(dec->partyidentity);
+    dec->partyidentity.sequence = WANDDER_NOACTION;
+
+    dec->partyidentity.members[0] = WANDDER_NOACTION;
+    dec->partyidentity.members[1] =
+        (struct wandder_dump_action) {
+                .name = "imei",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_3G_IMEI
+        };
+    dec->partyidentity.members[2] = WANDDER_NOACTION;
+    dec->partyidentity.members[3] =
+        (struct wandder_dump_action) {
+                .name = "imsi",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_3G_IMEI
+        };
+    dec->partyidentity.members[4] = WANDDER_NOACTION;
+    dec->partyidentity.members[5] = WANDDER_NOACTION;
+    dec->partyidentity.members[6] =
+        (struct wandder_dump_action) {
+                .name = "msISDN",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_3G_IMEI
+        };
+    dec->partyidentity.members[7] =
+        (struct wandder_dump_action) {
+                .name = "e164-Format",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->partyidentity.members[8] =
+        (struct wandder_dump_action) {
+                .name = "sip-uri",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->partyidentity.members[9] =
+        (struct wandder_dump_action) {
+                .name = "tel-uri",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->partyidentity.members[10] =
+        (struct wandder_dump_action) {
+                .name = "x-3GPP-Asserted-Identity",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->partyidentity.members[11] =
+        (struct wandder_dump_action) {
+                .name = "xUI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+
+    dec->partyinfo.membercount = 5;
+    ALLOC_MEMBERS(dec->partyinfo);
+    dec->partyinfo.sequence = WANDDER_NOACTION;
+
+    dec->partyinfo.members[0] =
+        (struct wandder_dump_action) {
+                .name = "party-Qualifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->partyinfo.members[1] =
+        (struct wandder_dump_action) {
+                .name = "partyIdentity",
+                .descend = &dec->partyidentity,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->partyinfo.members[2] = WANDDER_NOACTION;
+    dec->partyinfo.members[3] = WANDDER_NOACTION;
+    dec->partyinfo.members[4] =
+        (struct wandder_dump_action) {
+                .name = "services-Data-Information",
+                .descend = &dec->servicesdatainfo,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
+    dec->location.membercount = 14;
+    ALLOC_MEMBERS(dec->location);
+    dec->location.sequence = WANDDER_NOACTION;
+
+    dec->location.members[0] = WANDDER_NOACTION;
+    dec->location.members[1] =
+        (struct wandder_dump_action) {
+                .name = "e164-Number",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[2] =
+        (struct wandder_dump_action) {
+                .name = "globalCellID",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[3] = WANDDER_NOACTION;
+    dec->location.members[4] =
+        (struct wandder_dump_action) {
+                .name = "rAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[5] = WANDDER_NOACTION;
+    dec->location.members[6] = WANDDER_NOACTION;
+    dec->location.members[7] =
+        (struct wandder_dump_action) {
+                .name = "sAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[8] =
+        (struct wandder_dump_action) {
+                .name = "oldRAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[9] =
+        (struct wandder_dump_action) {
+                .name = "tAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_TAI
+        };
+    dec->location.members[10] =
+        (struct wandder_dump_action) {
+                .name = "eCGI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ECGI
+        };
+    dec->location.members[11] = WANDDER_NOACTION;
+    dec->location.members[12] =
+        (struct wandder_dump_action) {
+                .name = "operatorSpecificInfo",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->location.members[13] =
+        (struct wandder_dump_action) {
+                .name = "uELocationTimestamp",
+                .descend = &dec->timestamp,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->umtsiri_params.membercount = 60;
+    ALLOC_MEMBERS(dec->umtsiri_params);
+    dec->umtsiri_params.sequence = WANDDER_NOACTION;
+
+    dec->umtsiri_params.members[0] =
+        (struct wandder_dump_action) {
+                .name = "hi2DomainId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OID
+        };
+    dec->umtsiri_params.members[1] =
+        (struct wandder_dump_action) {
+                .name = "lawfulInterceptionIdentifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->umtsiri_params.members[2] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[3] =
+        (struct wandder_dump_action) {
+                .name = "timeStamp",
+                .descend = &dec->timestamp,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[4] =
+        (struct wandder_dump_action) {
+                .name = "initiator",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->umtsiri_params.members[5] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[6] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[7] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[8] =
+        (struct wandder_dump_action) {
+                .name = "locationOfTheTarget",
+                .descend = &dec->location,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[9] =
+        (struct wandder_dump_action) {
+                .name = "partyInformation",
+                .descend = &dec->partyinfo,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[10] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[11] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[12] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[13] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[14] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[15] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[16] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[17] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[18] =
+        (struct wandder_dump_action) {
+                .name = "gPRSCorrelationNumber",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->umtsiri_params.members[19] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[20] =
+        (struct wandder_dump_action) {
+                .name = "gPRSevent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->umtsiri_params.members[21] =
+        (struct wandder_dump_action) {
+                .name = "sgsnAddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[22] =
+        (struct wandder_dump_action) {
+                .name = "gPRSOperationErrorCode",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_3G_SM_CAUSE
+        };
+    dec->umtsiri_params.members[23] =
+        (struct wandder_dump_action) {
+                .name = "iRIversion",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->umtsiri_params.members[24] =
+        (struct wandder_dump_action) {
+                .name = "ggsnAddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[25] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[26] =
+        (struct wandder_dump_action) {
+                .name = "networkIdentifier",
+                .descend = &(dec->networkidentifier),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri_params.members[27] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[28] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[29] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[30] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[31] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[32] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[33] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[34] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[35] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[36] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[37] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[38] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[39] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[40] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[41] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[42] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[43] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[44] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[45] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[46] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[47] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[48] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[49] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[50] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[51] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[52] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[53] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[54] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[55] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[56] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[57] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[58] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[59] = WANDDER_NOACTION;
 
     dec->ipiricontents.membercount = 24;
     ALLOC_MEMBERS(dec->ipiricontents);
@@ -1755,6 +2600,20 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->ipiri.sequence = WANDDER_NOACTION;
 
+    dec->umtsiri.membercount = 4;
+    ALLOC_MEMBERS(dec->umtsiri);
+    dec->umtsiri.sequence =WANDDER_NOACTION;
+
+    dec->umtsiri.members[0] =
+        (struct wandder_dump_action) {
+                .name = "iRI-Parameters",
+                .descend = &(dec->umtsiri_params),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->umtsiri.members[1] = WANDDER_NOACTION;
+    dec->umtsiri.members[2] = WANDDER_NOACTION;
+    dec->umtsiri.members[3] = WANDDER_NOACTION;
+
     dec->iricontents.membercount = 16;
     ALLOC_MEMBERS(dec->iricontents);
     dec->iricontents.members[0] = WANDDER_NOACTION;
@@ -1771,7 +2630,12 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->iricontents.members[3] = WANDDER_NOACTION;
-    dec->iricontents.members[4] = WANDDER_NOACTION;
+    dec->iricontents.members[4] =
+            (struct wandder_dump_action) {
+                .name = "uMTSIRI",
+                .descend = &dec->umtsiri,
+                .interpretas = WANDDER_TAG_NULL
+            };
     dec->iricontents.members[5] = WANDDER_NOACTION;
     dec->iricontents.members[6] = WANDDER_NOACTION;
     dec->iricontents.members[7] = WANDDER_NOACTION;
@@ -1945,7 +2809,1228 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
 }
 
+void wandder_pshdr_update(int64_t cin,
+        int64_t seqno, struct timeval *tv, wandder_etsili_top_t * top) {
+
+    ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        1, 
+        &(cin), 
+        sizeof cin,
+        top->header.cin);
+
+    ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        4, 
+        &(seqno), 
+        sizeof seqno,
+        top->header.seqno);
+
+    ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        0, 
+        &(tv->tv_sec), 
+        sizeof tv->tv_sec,
+        top->header.sec);
+
+    ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        1, 
+        &(tv->tv_usec), 
+        sizeof tv->tv_usec,
+        top->header.usec);
+}
+
+//creates a new psheader and populates it with the preencoded values
+//the header leaves pointers to the spaces which will require updating
+//return value has been malloc'd
+static inline void init_pshdr_pc_ber(wandder_buf_t **precomputed, int64_t cin,
+        int64_t seqno, struct timeval *tv, wandder_etsili_top_t *top) {
+
+    /* hdrdata should be pretty static for each ETSI LI record, so
+     * you can populate it once and repeatedly use it.
+     * CIN, seqno and tv will change for each record, so I've made them
+     * into separate parameters.
+     */
+
+    uint32_t totallen = //this can probably just be generously be estimated, dont need the actual value
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_PSDOMAINID]->len+
+        precomputed[WANDDER_PREENCODE_LIID]->len+
+        precomputed[WANDDER_PREENCODE_AUTHCC]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_3]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
+        precomputed[WANDDER_PREENCODE_OPERATORID]->len+
+        precomputed[WANDDER_PREENCODE_NETWORKELEMID]->len+
+        2 + //endseq
+        //THIS CAN BE ANY INTEGER just need to obtain the size, which is the same for all integers
+        precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len+ //Integer
+        precomputed[WANDDER_PREENCODE_DELIVCC]->len+
+        2 + //endseq
+        precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len+ //Integer
+        (
+            (precomputed[WANDDER_PREENCODE_INTPOINTID]) ? 
+                (
+                    precomputed[WANDDER_PREENCODE_INTPOINTID]->len +
+                    precomputed[WANDDER_PREENCODE_CSEQUENCE_7]->len
+                ): 
+                (
+                    precomputed[WANDDER_PREENCODE_CSEQUENCE_7]->len
+                ) 
+        )+ 
+        precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len+ //Integer
+        precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len+ //Integer
+        2 + //endseq
+        precomputed[WANDDER_PREENCODE_TVCLASS]->len+
+        2; //endseq
+
+    
+    top->alloc_len = totallen;
+    top->buf = malloc(top->alloc_len);
+    uint8_t * ptr = top->buf;
+    
+
+    //////////////////////////////////////////////////////////////// block 0
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_PSDOMAINID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_LIID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_AUTHCC]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_3]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_OPERATORID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_NETWORKELEMID]);
+    ENDCONSTRUCTEDBLOCK(ptr,1) //endseq
+    //////////////////////////////////////////////////////////////// cin
+    top->header.cin = ptr;
+    ptr += ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        1, 
+        &(cin), 
+        sizeof cin,
+        ptr);
+    //////////////////////////////////////////////////////////////// block 1
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DELIVCC]);
+    ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
+    //////////////////////////////////////////////////////////////// seqno
+    top->header.seqno = ptr;
+    ptr+= ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        4, 
+        &(seqno), 
+        sizeof seqno,
+        ptr);
+    //////////////////////////////////////////////////////////////// block 2
+    if (precomputed[WANDDER_PREENCODE_INTPOINTID]){
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_INTPOINTID]);
+    }
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_7]);
+    //////////////////////////////////////////////////////////////// sec
+    top->header.sec = ptr;
+    ptr+= ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        0,
+        &(tv->tv_sec), 
+        sizeof tv->tv_sec,
+        ptr);
+    //////////////////////////////////////////////////////////////// usec
+    top->header.usec = ptr;
+    ptr+= ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        1, 
+        &(tv->tv_usec), 
+        sizeof tv->tv_usec,
+        ptr);
+    //////////////////////////////////////////////////////////////// block 3
+    ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_TVCLASS]);
+    ENDCONSTRUCTEDBLOCK(ptr,1);//endseq
+
+    top->len = ptr - top->buf;
+}
+
+static inline void wandder_ipcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
+        uint32_t iplen, uint8_t dir, wandder_etsili_top_t * top) {
+
+    //tab space
+
+    //calc length of iplen <-TODO
+    //id for ipcont is known, is ALWAYS 1 byte
+    //vallen is iplen 
+    //just need lenlen
+    size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
+    if (iplen > 127){  //if iplen > 127, long form must be used        
+        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
+            lenlen ++; 
+        }
+        lenlen++;
+    } 
+    size_t iptotalen = 1 + lenlen + iplen;
+    size_t totallen = (top->body.ipcc.ipcontent - top->buf) + iptotalen + (7 * 2);
+    //                  (size up to variable part) + (lenght of variable part) + (size of footer)
+
+    //if new length is larger
+    uint8_t * new;
+    if (totallen > top->len){ //if new content length is larger than old content length
+
+        top->len = totallen;
+
+        if (top->len > top->alloc_len){
+            top->alloc_len = top->len;
+            new = realloc(top->buf, top->alloc_len);
+            
+            if (new == NULL){
+                printf("unable to alloc mem\n");
+                assert(0);
+            }
+            
+            //update all refrences
+            if (new != top->buf){
+                ptrdiff_t offset = (new - top->buf);            //TODO is this *valid* C code? 
+                //need to readjust all the pointers in top to the realloc'd location
+                top->buf            += offset; //base pointer
+                top->header.cin     += offset; //cin pointer
+                top->header.seqno   += offset; //seqno pointer
+                top->header.sec     += offset; //sec pointer
+                top->header.usec    += offset; //usec pointer
+                top->header.end     += offset; //start pointer
+                top->body.ipcc.dir       += offset; //dir pointer
+                top->body.ipcc.ipcontent += offset; //ipcontent pointer
+            }
+        }
+    }
+
+    //can maybe reduce this down to a single ber_rebuild_integer() (dirfrom/to/unknowen are just differnt ints)
+    if (dir == 0) {
+        memcpy(top->body.ipcc.dir, precomputed[WANDDER_PREENCODE_DIRFROM]->buf, precomputed[WANDDER_PREENCODE_DIRFROM]->len);
+    } else if (dir == 1) {
+        memcpy(top->body.ipcc.dir, precomputed[WANDDER_PREENCODE_DIRTO]->buf, precomputed[WANDDER_PREENCODE_DIRTO]->len);
+    } else if (dir == 2) {
+        memcpy(top->body.ipcc.dir, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->buf, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len);
+    } else {
+        ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0, 
+            &(dir), 
+            sizeof dir,
+            top->body.ipcc.dir);
+    }
+    uint8_t * ptr = top->body.ipcc.ipcontent;
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_IPPACKET,
+            ipcontent, 
+            iplen,
+            top->body.ipcc.ipcontent,
+            top->alloc_len - (ptr - top->buf));
+
+    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
+
+    assert((ptr - top->buf) ==  totallen);
+
+    top->len = totallen;
+}
+
+static inline void init_ipcc_body(
+        wandder_buf_t **precomputed, void *ipcontent,
+        uint32_t iplen, uint8_t dir,
+        wandder_etsili_top_t * top) {
+
+    //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
+
+    size_t totallen = 
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_IPCCOID]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        32 + iplen + //id field and length of ipcontents //overcompensate length to avoid calculating
+        (2 * 7); //7 endseq items
+
+    top->header.end = top->buf + top->len;
+    
+
+    top->len += totallen;
+    uint8_t * new;
+    if (top->len > top->alloc_len){
+        top->alloc_len = top->len;
+        new = realloc(top->buf, top->alloc_len);
+
+        if (new == NULL){
+            printf("unable to alloc mem\n");
+            assert(0);
+        }
+        
+        //update all refrences
+        if (new != top->buf){
+            ptrdiff_t offset = new - top->buf;
+            //need to readjust all the pointers into top
+            top->buf            += offset; //base pointer
+            top->header.cin     += offset; //cin pointer
+            top->header.seqno   += offset; //seqno pointer
+            top->header.sec     += offset; //sec pointer
+            top->header.usec    += offset; //usec pointer
+            top->header.end    += offset; //current pointer 
+        }
+    }
+
+    uint8_t* ptr = top->header.end;
+
+    //////////////////////////////////////////////////////////////// block 0
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
+    //////////////////////////////////////////////////////////////// dir
+    top->body.ipcc.dir = ptr;
+    if (dir == 0) {
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRFROM]);
+    } else if (dir == 1) {
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRTO]);
+    } else if (dir == 2) {
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]);
+    } else {
+        ptr += ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0, 
+            &(dir), 
+            sizeof dir,
+            ptr);
+    }
+    //////////////////////////////////////////////////////////////// block 1
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPCCOID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    //////////////////////////////////////////////////////////////// ipcontents
+    top->body.ipcc.ipcontent = ptr;
+
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_IPPACKET,
+            ipcontent, 
+            iplen,
+            ptr,
+            top->alloc_len - (ptr - top->buf));
+
+    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
+    top->len= ptr - top->buf;
+
+}
+
+void wandder_encode_etsi_ipcc_ber(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
+        wandder_etsili_top_t *top) {
+
+    if (top->buf){
+        wandder_pshdr_update(cin, seqno, tv, top);
+        
+    } else {
+        init_pshdr_pc_ber(precomputed, cin, seqno, tv, top);
+    }
+
+    if (top->body_type != WANDDER_ETSILI_IPCC){
+        top->body_type = WANDDER_ETSILI_IPCC;
+        init_ipcc_body(precomputed, ipcontents, iplen, dir, top);
+    }
+    else {
+        wandder_ipcc_body_update(precomputed, ipcontents, iplen, dir, top);
+    }
+}
+
+void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandder_etsili_top_t *top){
+    struct timeval tv;
+    init_pshdr_pc_ber(precomputed, 0, 0, &tv, top);
+    top->body_type = WANDDER_ETSILI_EMPTY;
+}
+
+static inline void wandder_ipmmiri_body_update(wandder_buf_t **precomputed, void *ipcontent,
+        size_t iplen, wandder_etsili_iri_type_t iritype, wandder_etsili_top_t * top) {
+
+    //tab space
+
+    //calc length of iplen <-TODO
+    //id for ipcont is known, is ALWAYS 1 byte
+    //vallen is iplen 
+    //just need lenlen
+    size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
+    if (iplen > 127){  //if iplen > 127, long form must be used        
+        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
+            lenlen ++; 
+        }
+        lenlen++;
+    } 
+    size_t iptotalen = 1 + lenlen + iplen;
+
+    size_t totallen = (top->body.ipmmiri.ipcontent - top->buf) + iptotalen + (7 * 2);
+    //                  (size up to variable part) + (lenght of variable part) + (size of footer)
+
+    //if new length is larger
+    uint8_t * new;
+    if (totallen > top->len){ //if new content length is larger than old content length
+
+        top->len = totallen;
+
+        if (top->len > top->alloc_len){
+            top->alloc_len = top->len;
+            new = realloc(top->buf, top->alloc_len);
+            
+            if (new == NULL){
+                printf("unable to alloc mem\n");
+                assert(0);
+            }
+            
+            //update all refrences
+            if (new != top->buf){
+                ptrdiff_t offset = (new - top->buf);            //TODO is this *valid* C code? 
+                //need to readjust all the pointers in top to the realloc'd location
+                top->buf            += offset; //base pointer
+                top->header.cin     += offset; //cin pointer
+                top->header.seqno   += offset; //seqno pointer
+                top->header.sec     += offset; //sec pointer
+                top->header.usec    += offset; //usec pointer
+                top->header.end     += offset; //start pointer
+                top->body.ipmmiri.iritype   += offset; //dir pointer
+                top->body.ipmmiri.ipcontent += offset; //ipcontent pointer
+            }
+        }
+    }
+    ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        0, 
+        &(iritype), 
+        sizeof iritype,
+        top->body.ipmmiri.iritype);
+
+    uint8_t * ptr = top->body.ipmmiri.ipcontent;
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_IPPACKET,
+            ipcontent, 
+            iplen,
+            top->body.ipcc.ipcontent,
+            top->alloc_len - (ptr - top->buf));
+
+    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
+
+    assert((ptr - top->buf) ==  totallen);
+
+    top->len = totallen;
+}
+
+static inline size_t encode_ipaddress(uint8_t* ptr, ptrdiff_t rem, wandder_etsili_ipaddress_t *addr){
+    uint32_t addrlen = 4;
+    uint32_t iptype = addr->iptype;
+    uint32_t assign = addr->assignment;
+    uint32_t prefbits = addr->v6prefixlen;
+    size_t total = 0;
+
+    if (addr->iptype == WANDDER_IPADDRESS_VERSION_6) {
+        addrlen = 16;
+    }
+
+    // iP-Type
+    size_t ret = wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE,
+        1,
+        WANDDER_TAG_ENUM,
+        (uint8_t*)&(iptype),
+        sizeof(iptype),
+        ptr,
+        rem);
+    ptr += ret;
+    rem -= ret;
+    total += ret;
+
+    ret = wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_CONSTRUCT, 2, WANDDER_TAG_SEQUENCE, NULL, 0, ptr, rem);
+    ptr += ret;
+    rem -= ret;
+    total += ret;
+
+    if (addr->valtype == WANDDER_IPADDRESS_REP_BINARY) {
+        ret = wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE,
+            1,
+            WANDDER_TAG_OCTETSTRING,
+            addr->ipvalue,
+            addrlen,
+            ptr,
+            rem);
+        ptr += ret;
+        rem -= ret;
+        total += ret;
+        
+    } else {
+        ret = wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE,
+            2,
+            WANDDER_TAG_IA5,
+            addr->ipvalue,
+            strlen((char *)addr->ipvalue),
+            ptr,
+            rem);
+        ptr += ret;
+        rem -= ret;
+        total += ret;
+    }
+
+    ENDCONSTRUCTEDBLOCK(ptr, 1);
+
+    // iP-assignment
+    ret = wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE,
+            3,
+            WANDDER_TAG_ENUM,
+            (uint8_t*)&(assign),
+            sizeof assign,
+            ptr,
+            rem);
+    ptr += ret;
+    rem -= ret;
+    total += ret;
+
+    // iPv6PrefixLength
+    if (addr->v6prefixlen > 0) {
+        ret = wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE,
+                4,
+                WANDDER_TAG_INTEGER,
+                (uint8_t *)&(prefbits),
+                sizeof prefbits,
+                ptr,
+                rem);
+        ptr += ret;
+        rem -= ret;
+        total += ret;
+    }
+
+    // iPv4SubnetMask
+    if (addr->v4subnetmask > 0) {
+        ret = wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE,
+                5,
+                WANDDER_TAG_OCTETSTRING,
+                (uint8_t *)&(addr->v4subnetmask),
+                sizeof addr->v4subnetmask,
+                ptr,
+                rem);
+        ptr += ret;
+        rem -= ret;
+        total += ret;
+    }
+    return total;
+}
+
+static inline void init_ipmmiri_body(
+        wandder_buf_t **precomputed, void *ipcontent,
+        uint32_t iplen, wandder_etsili_iri_type_t iritype,
+        uint8_t *ipsrc, uint8_t *ipdest, int ipfamily,
+        wandder_etsili_top_t * top) {
+
+    //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
+
+    uint32_t totallen = 
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size (iritype)
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_11]->len+
+        precomputed[WANDDER_PREENCODE_IPMMIRIOID]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
+        20 + //ip address length, overcompensate length to avoid calculating
+        4 +
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        20 + //ip address length, overcompensate length to avoid calculating
+        4 +
+        32 + iplen + //id field and length of ipcontents //overcompensate length to avoid calculating
+        (2 * 8); //7 endseq items
 
 
+    top->header.end = top->buf + top->len;
+    
+
+    top->len += totallen;
+    uint8_t * new;
+    if (top->len > top->alloc_len){
+        top->alloc_len = top->len;
+        new = realloc(top->buf, top->alloc_len);
+
+        if (new == NULL){
+            printf("unable to alloc mem\n");
+            assert(0);
+        }
+        
+        //update all refrences
+        if (new != top->buf){
+            ptrdiff_t offset = new - top->buf;
+            //need to readjust all the pointers into top
+            top->buf            += offset; //base pointer
+            top->header.cin     += offset; //cin pointer
+            top->header.seqno   += offset; //seqno pointer
+            top->header.sec     += offset; //sec pointer
+            top->header.usec    += offset; //usec pointer
+            top->header.end    += offset; //current pointer 
+        }
+    }
+
+    uint8_t* ptr = top->header.end;
+
+    wandder_etsili_ipaddress_t encipsrc, encipdst;
+    if (ipfamily == AF_INET) {
+        encipsrc.iptype = WANDDER_IPADDRESS_VERSION_4;
+        encipsrc.assignment = WANDDER_IPADDRESS_ASSIGNED_UNKNOWN;
+        encipsrc.v6prefixlen = 0;
+        encipsrc.v4subnetmask = 0xffffffff;
+        encipsrc.valtype = WANDDER_IPADDRESS_REP_BINARY;
+        encipsrc.ipvalue = ipsrc;
+
+        encipdst = encipsrc;
+        encipdst.ipvalue = ipdest;
+    } else if (ipfamily == AF_INET6) {
+        encipsrc.iptype = WANDDER_IPADDRESS_VERSION_6;
+        encipsrc.assignment = WANDDER_IPADDRESS_ASSIGNED_UNKNOWN;
+        encipsrc.v6prefixlen = 0;
+        encipsrc.v4subnetmask = 0;
+        encipsrc.valtype = WANDDER_IPADDRESS_REP_BINARY;
+
+        encipsrc.ipvalue = ipsrc;
+
+        encipdst = encipsrc;
+        encipdst.ipvalue = ipdest;
+    } else {
+        ENDCONSTRUCTEDBLOCK(ptr, 1);  // ends outermost sequence
+        //TODO handle length changes
+        return;
+    }
+
+    //////////////////////////////////////////////////////////////// block 0
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
+    //////////////////////////////////////////////////////////////// dir
+    top->body.ipmmiri.iritype = ptr;
+    ptr += ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        0, 
+        &(iritype), 
+        sizeof iritype,
+        ptr);
+    //////////////////////////////////////////////////////////////// block 1
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_11]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMIRIOID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
+    ptr += encode_ipaddress(ptr, top->alloc_len - (top->buf - ptr), &encipsrc);
+    ENDCONSTRUCTEDBLOCK(ptr,2)
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    ptr += encode_ipaddress(ptr, top->alloc_len - (top->buf - ptr), &encipdst);
+    ENDCONSTRUCTEDBLOCK(ptr,2)
+    top->body.ipmmiri.ipcontent = ptr;
+    ptr += wandder_encode_inplace_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            2,
+            WANDDER_TAG_OCTETSTRING,
+            ipcontent, 
+            iplen,
+            ptr,
+            top->alloc_len - (top->buf - ptr));
+    ENDCONSTRUCTEDBLOCK(ptr,8) //endseq
+
+    top->len = ptr - top->buf;
+}
+
+void wandder_encode_etsi_ipmmiri_ber(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype,
+        uint8_t *ipsrc, uint8_t *ipdest, int ipfamily,
+        wandder_etsili_top_t *top) {
+
+    if (top->buf){
+        wandder_pshdr_update(cin, seqno, tv, top);
+        
+    } else {
+        init_pshdr_pc_ber(precomputed, cin, seqno, tv, top);
+    }
+
+    if (top->body_type != WANDDER_ETSILI_IPMMIRI){
+        top->body_type = WANDDER_ETSILI_IPMMIRI;
+        init_ipmmiri_body(precomputed, ipcontents, iplen, iritype, 
+        ipsrc, ipdest, ipfamily,
+        top);
+
+    }
+    else {
+        wandder_ipmmiri_body_update(precomputed, ipcontents, iplen, iritype, top);
+    }
+
+    
+}
+
+/////////////////////////
+static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *params,
+        wandder_etsili_iri_type_t iritype, wandder_etsili_top_t * top) {
+
+    //tab space
+
+   
+    size_t paramlen = 10;  //TODO work out length of params
+    size_t lenlen = WANDDER_LOG256_SIZE(paramlen); //if iplen > 127, long form must be used
+    if (paramlen > 127){  //if iplen > 127, long form must be used
+        lenlen++;
+    }
+    size_t iptotalen = 1 + lenlen + paramlen;
+    size_t totallen = (top->body.ipcc.ipcontent - top->buf) + iptotalen + (7 * 2);
+    //                  (size up to variable part) + (lenght of variable part) + (size of footer)
+
+    //if new length is larger
+    uint8_t * new;
+    if (totallen > top->len){ //if new content length is larger than old content length
+
+        top->len = totallen;
+
+        if (top->len > top->alloc_len){
+            top->alloc_len = top->len;
+            new = realloc(top->buf, top->alloc_len);
+            
+            if (new == NULL){
+                printf("unable to alloc mem\n");
+                assert(0);
+            }
+            
+            //update all refrences
+            if (new != top->buf){
+                ptrdiff_t offset = (new - top->buf);            //TODO is this *valid* C code? 
+                //need to readjust all the pointers in top to the realloc'd location
+                top->buf            += offset; //base pointer
+                top->header.cin     += offset; //cin pointer
+                top->header.seqno   += offset; //seqno pointer
+                top->header.sec     += offset; //sec pointer
+                top->header.usec    += offset; //usec pointer
+                top->header.end     += offset; //start pointer
+                top->body.ipiri.iritype   += offset; //dir pointer
+                top->body.ipiri.params    += offset; //ipcontent pointer
+            }
+        }
+    }
+    ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        0, 
+        &(iritype), 
+        sizeof iritype,
+        top->body.ipiri.iritype);
+
+    uint8_t * ptr = top->body.ipiri.params;
+    //TODO copy in all the params in sorted order here
+    // ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    //         0,
+    //         WANDDER_TAG_IPPACKET,
+    //         params, 
+    //         iplen,
+    //         top->body.ipcc.params,
+    //         top->alloc_len - (ptr - top->buf));
+
+    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
+
+    assert((ptr - top->buf) ==  totallen);
+
+    top->len = totallen;
+}
+
+static inline void init_ipiri_body(
+        wandder_buf_t **precomputed, void *params,
+        wandder_etsili_iri_type_t iritype,
+        wandder_etsili_top_t * top) {
+
+    //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
+
+    uint32_t totallen = 
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size (iritype)
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_IPIRIOID]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        // totalsize of params +
+        (2 * 7); //7 endseq items
+
+    top->header.end = top->buf + top->len;
+    
+
+    top->len += totallen;
+    uint8_t * new;
+    if (top->len > top->alloc_len){
+        top->alloc_len = top->len;
+        new = realloc(top->buf, top->alloc_len);
+
+        if (new == NULL){
+            printf("unable to alloc mem\n");
+            assert(0);
+        }
+        
+        //update all refrences
+        if (new != top->buf){
+            ptrdiff_t offset = new - top->buf;
+            //need to readjust all the pointers into top
+            top->buf            += offset; //base pointer
+            top->header.cin     += offset; //cin pointer
+            top->header.seqno   += offset; //seqno pointer
+            top->header.sec     += offset; //sec pointer
+            top->header.usec    += offset; //usec pointer
+            top->header.end    += offset; //current pointer 
+        }
+    }
+
+    uint8_t* ptr = top->header.end;
+
+    //////////////////////////////////////////////////////////////// block 0
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
+    //////////////////////////////////////////////////////////////// dir
+    top->body.ipiri.iritype = ptr;
+    ptr += ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        0, 
+        &(iritype), 
+        sizeof iritype,
+        ptr);
+    //////////////////////////////////////////////////////////////// block 1
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMIRIOID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    //////////////////////////////////////////////////////////////// ipcontents
+    top->body.ipiri.params = ptr;
+    //TODO copy in all params here in sorted order
+    // ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+    //         0,
+    //         WANDDER_TAG_IPPACKET,
+    //         params, 
+    //         params,
+    //         ptr,
+    //         top->alloc_len - (ptr - top->buf));
+    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
+    top->len = ptr - top->buf;
+}
+
+void wandder_encode_etsi_ipiri_ber(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void * params, wandder_etsili_iri_type_t iritype,
+        wandder_etsili_top_t *top) {
+
+    if (top->buf){
+        wandder_pshdr_update(cin, seqno, tv, top);
+        
+    } else {
+        init_pshdr_pc_ber(precomputed, cin, seqno, tv, top);
+    }
+
+    if (top->body_type != WANDDER_ETSILI_IPMMIRI){
+        top->body_type = WANDDER_ETSILI_IPMMIRI;
+        init_ipiri_body(precomputed, params, iritype, top);
+    }
+    else {
+        wandder_ipiri_body_update(precomputed, params, iritype, top);
+    }
+}
+/////////////////////////////////
+
+static inline void init_ipmmcc_body(
+        wandder_buf_t **precomputed, void *ipcontent,
+        uint32_t iplen, uint8_t dir,
+        wandder_etsili_top_t * top) {
+
+    uint32_t frametype = 0;
+    uint32_t mmccproto = 0;
+
+    uint32_t totallen = 
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_12]->len+
+        precomputed[WANDDER_PREENCODE_IPMMCCOID]->len+
+        32 + iplen + //id field and length of ipcontents //overcompensate length 
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+//just need an int length (frametype)
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+//just need an int length (mmccproto)
+        (2 * 6); //6 endseq items
+
+    top->header.end = top->buf + top->len;
+
+    top->len += totallen;
+    uint8_t * new;
+    if (top->len > top->alloc_len){
+        top->alloc_len = top->len;
+        new = realloc(top->buf, top->alloc_len);
+
+        if (new == NULL){
+                printf("unable to alloc mem\n");
+                assert(0);
+            }
+        
+        //update all refrences
+        if (new != top->buf){
+            ptrdiff_t offset = new - top->buf;
+            //need to readjust all the pointers into top
+            top->buf            += offset; //base pointer
+            top->header.cin     += offset; //cin pointer
+            top->header.seqno   += offset; //seqno pointer
+            top->header.sec     += offset; //sec pointer
+            top->header.usec    += offset; //usec pointer
+            top->header.end    += offset; //current pointer 
+        }
+    }
+    uint8_t *ptr = top->header.end;
+    
+
+    //////////////////////////////////////////////////////////////// block 0
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
+    //////////////////////////////////////////////////////////////// dir
+    top->body.ipmmcc.dir = ptr;
+    if (dir == 0) {
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRFROM]);
+    } else if (dir == 1) {
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRTO]);
+    } else if (dir == 2) {
+        MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]);
+    } else {
+        ptr += ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0, 
+            &(dir), 
+            sizeof dir,
+            ptr);
+    }
+    //////////////////////////////////////////////////////////////// block 1
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_12]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMCCOID]);
+    //////////////////////////////////////////////////////////////// ipcontents
+    top->body.ipmmcc.ipcontent = ptr;
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            1,
+            WANDDER_TAG_IPPACKET,
+            ipcontent, 
+            iplen,
+            ptr,
+            top->alloc_len - (ptr - top->buf));    
+    //////////////////////////////////////////////////////////////// block 2
+    ptr += ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            2, 
+            &(frametype), 
+            sizeof frametype,
+            ptr);
+    ptr += ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            2, 
+            &(mmccproto), 
+            sizeof mmccproto,
+            ptr);
+            
+    ENDCONSTRUCTEDBLOCK(ptr,6) //endseq
+    top->len= ptr - top->buf;
+}
+
+void wandder_ipmmcc_body_update(wandder_buf_t **precomputed, void *ipcontent,
+        uint32_t iplen, uint8_t dir, wandder_etsili_top_t * top) {
+
+    size_t lenlen = WANDDER_LOG256_SIZE(iplen); //if iplen > 127, long form must be used
+    if (iplen > 127){  //if iplen > 127, long form must be used        
+        if (iplen > WANDDER_EXTRA_OCTET_THRESH(lenlen)) { 
+            lenlen ++; 
+        }
+        lenlen++;
+    }
+    size_t iptotalen = 1 + lenlen + iplen;
+    size_t totallen = (top->body.ipmmcc.ipcontent - top->buf) + iptotalen + (7 * 2);
+    //                  (size up to variable part) + (lenght of variable part) + (size of footer)
+
+    //if new length is larger
+    uint8_t * new;
+    if (totallen > top->len){ //if new content length is larger than old content length
+
+        top->len = totallen;
+
+        if (top->len > top->alloc_len){
+            top->alloc_len = top->len;
+            new = realloc(top->buf, top->alloc_len);
+            
+            if (new == NULL){
+                printf("unable to alloc mem\n");
+                assert(0);
+            }
+            
+            //update all refrences
+            if (new != top->buf){
+                ptrdiff_t offset = (new - top->buf);            //TODO is this *valid* C code? 
+                //need to readjust all the pointers in top to the realloc'd location
+                top->buf            += offset; //base pointer
+                top->header.cin     += offset; //cin pointer
+                top->header.seqno   += offset; //seqno pointer
+                top->header.sec     += offset; //sec pointer
+                top->header.usec    += offset; //usec pointer
+                top->header.end     += offset; //start pointer
+                top->body.ipmmcc.dir       += offset; //dir pointer
+                top->body.ipmmcc.ipcontent += offset; //ipcontent pointer
+            }
+        }
+    }
+
+    //can maybe reduce this down to a single ber_rebuild_integer() (dirfrom/to/unknowen are just differnt ints)
+    if (dir == 0) {
+        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRFROM]->buf, precomputed[WANDDER_PREENCODE_DIRFROM]->len);
+    } else if (dir == 1) {
+        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRTO]->buf, precomputed[WANDDER_PREENCODE_DIRTO]->len);
+    } else if (dir == 2) {
+        memcpy(top->body.ipmmcc.dir, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->buf, precomputed[WANDDER_PREENCODE_DIRUNKNOWN]->len);
+    } else {
+        ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0, 
+            &(dir), 
+            sizeof dir,
+            top->body.ipmmcc.dir);
+    }
+    uint8_t * ptr = top->body.ipmmcc.ipcontent;
+    ptr += wandder_encode_inplace_ber(WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_IPPACKET,
+            ipcontent, 
+            iplen,
+            top->body.ipmmcc.ipcontent,
+            top->alloc_len - (ptr - top->buf));
+
+    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
+
+    assert((ptr - top->buf) ==  totallen);
+
+    top->len = totallen;
+}
+
+void wandder_encode_etsi_ipmmcc_ber(
+        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
+        wandder_etsili_top_t *top) {
+
+    if (top->buf){
+        wandder_pshdr_update(cin, seqno, tv, top);
+        
+    } else {
+        init_pshdr_pc_ber(precomputed, cin, seqno, tv, top);
+    }
+
+    if (top->body_type != WANDDER_ETSILI_IPMMCC){
+        top->body_type = WANDDER_ETSILI_IPMMCC;
+        init_ipmmcc_body(precomputed, ipcontents, iplen, dir, top);
+    }
+    else {
+        wandder_ipmmcc_body_update(precomputed, ipcontents, iplen, dir, top);
+    }
+}
+
+void wandder_etsili_clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
+
+    wandder_preencode_index_t i;
+
+    for (i = 0; i < WANDDER_PREENCODE_LAST -1; i++) {
+        if (pendarray[i]) {
+            free(pendarray[i]->buf);
+            free(pendarray[i]);
+        }
+    }
+}
+
+void wandder_free_top(wandder_etsili_top_t *top){
+    if(top){
+        if (top->buf){
+            free(top->buf);
+        }
+        free(top);
+    }
+}
+
+void wandder_etsili_preencode_static_fields_ber(
+        wandder_buf_t **pendarray, wandder_etsili_intercept_details_t *details) {
+
+    wandder_buf_t *p;
+    int tvclass = 1;
+    uint32_t dirin = 0, dirout = 1, dirunk = 2;
+
+    memset(pendarray, 0, sizeof(p) * WANDDER_PREENCODE_LAST);
+
+    pendarray[WANDDER_PREENCODE_USEQUENCE] = wandder_encode_new_ber(
+            WANDDER_CLASS_UNIVERSAL_CONSTRUCT, 
+            WANDDER_TAG_SEQUENCE,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_0] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            0,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_1] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            1,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_2] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            2,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_3] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            3,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_7] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            7,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_11] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            11,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_12] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            12,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    //TODO i dont think this is 100% correct but i cant see anything wrong
+    pendarray[WANDDER_PREENCODE_PSDOMAINID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_OID,
+            (uint8_t *)WANDDER_ETSILI_PSDOMAINID, 
+            sizeof WANDDER_ETSILI_PSDOMAINID);
+
+    pendarray[WANDDER_PREENCODE_LIID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            1,
+            WANDDER_TAG_OCTETSTRING,
+            (uint8_t *)details->liid, 
+            strlen(details->liid));
+
+    pendarray[WANDDER_PREENCODE_AUTHCC] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            2,
+            WANDDER_TAG_OCTETSTRING,
+            (uint8_t *)details->authcc, 
+            strlen(details->authcc));
+
+    pendarray[WANDDER_PREENCODE_OPERATORID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_OCTETSTRING,
+            (uint8_t *)details->operatorid, 
+            strlen(details->operatorid));
+
+    pendarray[WANDDER_PREENCODE_NETWORKELEMID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            1,
+            WANDDER_TAG_OCTETSTRING,
+            (uint8_t *)details->networkelemid, 
+            strlen(details->networkelemid));
+
+    pendarray[WANDDER_PREENCODE_DELIVCC] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            2,
+            WANDDER_TAG_OCTETSTRING,
+            (uint8_t *)details->delivcc, 
+            strlen(details->delivcc));
+
+    //either build the field or set it NULL
+    pendarray[WANDDER_PREENCODE_INTPOINTID] =  (details->intpointid) ? wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            6,
+            WANDDER_TAG_OCTETSTRING,
+            (uint8_t *)details->intpointid, 
+            strlen(details->intpointid)) : NULL;
+
+    pendarray[WANDDER_PREENCODE_TVCLASS] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            8,
+            WANDDER_TAG_ENUM,
+            (uint8_t *)(&tvclass), 
+            sizeof tvclass);
+
+    pendarray[WANDDER_PREENCODE_IPMMIRIOID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_RELATIVEOID,
+            etsi_ipmmirioid, 
+            sizeof etsi_ipmmirioid);
+
+    pendarray[WANDDER_PREENCODE_IPCCOID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_RELATIVEOID,
+            etsi_ipccoid, 
+            sizeof etsi_ipccoid);
+
+    pendarray[WANDDER_PREENCODE_IPIRIOID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_RELATIVEOID,
+            etsi_ipirioid, 
+            sizeof etsi_ipirioid);
+
+    pendarray[WANDDER_PREENCODE_IPMMCCOID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_RELATIVEOID,
+            etsi_ipmmccoid, 
+            sizeof etsi_ipmmccoid);
+
+    pendarray[WANDDER_PREENCODE_DIRFROM] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_ENUM,
+            (uint8_t *)(&dirin), 
+            sizeof dirin);
+
+    pendarray[WANDDER_PREENCODE_DIRTO] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_ENUM,
+            (uint8_t *)(&dirout), 
+            sizeof dirout);
+
+    pendarray[WANDDER_PREENCODE_DIRUNKNOWN] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_ENUM,
+            (uint8_t *)(&dirunk), 
+            sizeof dirunk);
+    pendarray[WANDDER_PREENCODE_LIID_LEN] = (void *)((size_t)strlen(details->liid));
+
+}
 
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :
