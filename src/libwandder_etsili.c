@@ -735,7 +735,6 @@ static inline int stringify_lai(uint8_t *todecode, int decodelen,
         char *valstr, int len) {
 
     char *nextwrite = valstr;
-    int i;
     uint8_t byteval;
 
     if (decodelen < 3) {
