@@ -2162,162 +2162,6 @@ static inline void encode_ipaddress(wandder_encoder_ber_t* enc_ber,
     }
 }
 
-/////////////////////////
-static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *params,
-        wandder_etsili_iri_type_t iritype, wandder_etsili_top_t * top) {
-
-    //tab space
-
-   
-    size_t paramlen = 10;  //TODO work out length of params
-    size_t lenlen = WANDDER_LOG256_SIZE(paramlen); //if iplen > 127, long form must be used
-    if (paramlen > 127){  //if iplen > 127, long form must be used
-        lenlen++;
-    }
-    size_t iptotalen = 1 + lenlen + paramlen;
-    size_t totallen = (top->body.ipcc.ipcontent - top->buf) + iptotalen + (7 * 2);
-    //                  (size up to variable part) + (lenght of variable part) + (size of footer)
-
-    //if new length is larger
-    uint8_t * new;
-    if (totallen > top->len){ //if new content length is larger than old content length
-
-        top->len = totallen;
-
-        if (top->len > top->alloc_len){
-            top->alloc_len = top->len;
-            new = realloc(top->buf, top->alloc_len);
-            
-            if (new == NULL){
-                printf("unable to alloc mem\n");
-                assert(0);
-            }
-            
-            //update all refrences
-            if (new != top->buf){
-                ptrdiff_t offset = (new - top->buf);            //TODO is this *valid* C code? 
-                //need to readjust all the pointers in top to the realloc'd location
-                top->buf            += offset; //base pointer
-                top->header.cin     += offset; //cin pointer
-                top->header.seqno   += offset; //seqno pointer
-                top->header.sec     += offset; //sec pointer
-                top->header.usec    += offset; //usec pointer
-                top->header.end     += offset; //start pointer
-                top->body.ipiri.iritype   += offset; //dir pointer
-                top->body.ipiri.params    += offset; //ipcontent pointer
-            }
-        }
-    }
-    ber_rebuild_integer(
-        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-        0, 
-        &(iritype), 
-        sizeof iritype,
-        top->body.ipiri.iritype);
-
-    uint8_t * ptr = top->body.ipiri.params;
-    //TODO copy in all the params in sorted order here
-
-    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
-
-    assert((ptr - top->buf) ==  totallen);
-
-    top->len = totallen;
-}
-
-static inline void init_ipiri_body(
-        wandder_buf_t **precomputed, void *params,
-        wandder_etsili_iri_type_t iritype,
-        wandder_etsili_top_t * top) {
-
-    //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
-
-    uint32_t totallen = 
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
-        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
-        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size (iritype)
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
-        precomputed[WANDDER_PREENCODE_IPIRIOID]->len+
-        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
-        // totalsize of params +
-        (2 * 7); //7 endseq items
-
-    top->header.end = top->buf + top->len;
-    
-
-    top->len += totallen;
-    uint8_t * new;
-    if (top->len > top->alloc_len){
-        top->alloc_len = top->len;
-        new = realloc(top->buf, top->alloc_len);
-
-        if (new == NULL){
-            printf("unable to alloc mem\n");
-            assert(0);
-        }
-        
-        //update all refrences
-        if (new != top->buf){
-            ptrdiff_t offset = new - top->buf;
-            //need to readjust all the pointers into top
-            top->buf            += offset; //base pointer
-            top->header.cin     += offset; //cin pointer
-            top->header.seqno   += offset; //seqno pointer
-            top->header.sec     += offset; //sec pointer
-            top->header.usec    += offset; //usec pointer
-            top->header.end    += offset; //current pointer 
-        }
-    }
-
-    uint8_t* ptr = top->header.end;
-
-    //////////////////////////////////////////////////////////////// block 0
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
-    //////////////////////////////////////////////////////////////// dir
-    top->body.ipiri.iritype = ptr;
-    ptr += ber_rebuild_integer(
-        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-        0, 
-        &(iritype), 
-        sizeof iritype,
-        ptr);
-    //////////////////////////////////////////////////////////////// block 1
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMIRIOID]);
-    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
-    //////////////////////////////////////////////////////////////// ipcontents
-    top->body.ipiri.params = ptr;
-    //TODO copy in all params here in sorted order
-
-    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
-    top->len = ptr - top->buf;
-}
-
-void wandder_encode_etsi_ipiri_ber(
-        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
-        struct timeval *tv, void * params, wandder_etsili_iri_type_t iritype,
-        wandder_etsili_top_t *top) {
-
-    if (top->buf){
-        wandder_pshdr_update(cin, seqno, tv, top);
-        
-    } else {
-        init_pshdr_pc_ber(precomputed, cin, seqno, tv, top);
-    }
-
-    if (top->body_type != WANDDER_ETSILI_IPIRI){
-        top->body_type = WANDDER_ETSILI_IPIRI;
-        init_ipiri_body(precomputed, params, iritype, top);
-    }
-    else {
-        wandder_ipiri_body_update(precomputed, params, iritype, top);
-    }
-}
 
 /////////////////////////////////
 
@@ -3304,6 +3148,79 @@ static inline void init_etsili_ipiri(
     top->alloc_len              = res_ber->len;
 
     free(res_ber);
+}
+
+static inline void init_ipiri_body(
+        wandder_buf_t **precomputed, void *params,
+        wandder_etsili_iri_type_t iritype,
+        wandder_etsili_top_t * top) {
+
+    //wandder_ipcc_body_t *body = malloc(sizeof(wandder_ipcc_body_t));
+
+    uint32_t totallen = 
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_0]->len+
+        precomputed[WANDDER_PREENCODE_USEQUENCE]->len+
+        precomputed[WANDDER_PREENCODE_DIRFROM]->len+ //just need any Integer size (iritype)
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_2]->len+
+        precomputed[WANDDER_PREENCODE_IPIRIOID]->len+
+        precomputed[WANDDER_PREENCODE_CSEQUENCE_1]->len+
+        // totalsize of params +
+        (2 * 7); //7 endseq items
+
+    top->header.end = top->buf + top->len;
+    
+
+    top->len += totallen;
+    uint8_t * new;
+    if (top->len > top->alloc_len){
+        top->alloc_len = top->len;
+        new = realloc(top->buf, top->alloc_len);
+
+        if (new == NULL){
+            printf("unable to alloc mem\n");
+            assert(0);
+        }
+        
+        //update all refrences
+        if (new != top->buf){
+            ptrdiff_t offset = new - top->buf;
+            //need to readjust all the pointers into top
+            top->buf            += offset; //base pointer
+            top->header.cin     += offset; //cin pointer
+            top->header.seqno   += offset; //seqno pointer
+            top->header.sec     += offset; //sec pointer
+            top->header.usec    += offset; //usec pointer
+            top->header.end    += offset; //current pointer 
+        }
+    }
+
+    uint8_t* ptr = top->header.end;
+
+    //////////////////////////////////////////////////////////////// block 0
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_0]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_USEQUENCE]);
+    //////////////////////////////////////////////////////////////// dir
+    top->body.ipiri.iritype = ptr;
+    ptr += ber_rebuild_integer(
+        WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+        0, 
+        &(iritype), 
+        sizeof iritype,
+        ptr);
+    //////////////////////////////////////////////////////////////// block 1
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_2]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_IPMMIRIOID]);
+    MEMCPYPREENCODE(ptr, precomputed[WANDDER_PREENCODE_CSEQUENCE_1]);
+    //////////////////////////////////////////////////////////////// ipcontents
+    top->body.ipiri.params = ptr;
+    //TODO copy in all params here in sorted order
+
+    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
+    top->len = ptr - top->buf;
 }
 
 void wandder_encode_etsi_ipiri_ber (
