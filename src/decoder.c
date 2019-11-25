@@ -843,8 +843,9 @@ uint32_t stringify_roid(uint8_t *start, uint32_t length, char *space,
     return oid_to_string(start, length, space, spacerem, 0);
 }
 
-struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
-        char *gts, int len) {
+static inline struct timeval asn1ts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len, const char *fmt, int fmtlen) {
+
     struct timeval tv;
     struct tm tm, localres;
     char *nxt = NULL;
@@ -856,12 +857,12 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
     tv.tv_sec = 0;
     tv.tv_usec = 0;
 
-    if (len < 14) {
-        fprintf(stderr, "Generalized time string %s is too short!\n", gts);
+    if (len < fmtlen) {
+        fprintf(stderr, "ASN.1 time string %s is too short!\n", gts);
         return tv;
     }
 
-    nxt = gts + 14;     /* YYYYmmddHHMMSS */
+    nxt = gts + fmtlen;     /* YYYYmmddHHMMSS for generalized time */
 
     if (*nxt == '.') {
         skipto = nxt + 1;
@@ -872,7 +873,7 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
             }
 
             if (*skipto < '0' || *skipto > '9') {
-                fprintf(stderr, "Unexpected character in generalized time string %s (%c)\n", gts, *skipto);
+                fprintf(stderr, "Unexpected character in time string %s (%c)\n", gts, *skipto);
                 return tv;
             }
             ms = ms * 10 + ((*skipto) - '0');
@@ -880,14 +881,14 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
         }
     }
 
-    if (memcmp(gts, dec->prevgts, 14) == 0) {
+    if (memcmp(gts, dec->prevgts, fmtlen) == 0) {
         tv.tv_sec = dec->cachedts;
         tv.tv_usec = ms * 1000;
         return tv;
     }
 
-    if (strptime(gts, "%Y%m%d%H%M%S", &tm) == NULL) {
-        fprintf(stderr, "strptime failed to parse generalized time: %s\n", gts);
+    if (strptime(gts, fmt, &tm) == NULL) {
+        fprintf(stderr, "strptime failed to parse time: %s\n", gts);
         return tv;
     }
     /* The time is going to be interpreted as UTC, so we'll need to
@@ -919,12 +920,32 @@ struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
     tv.tv_usec = ms * 1000;
 
     dec->cachedts = tv.tv_sec;
-    memcpy(dec->prevgts, gts, 14);
-    dec->prevgts[14] = '\0';
+    memcpy(dec->prevgts, gts, fmtlen);
+    dec->prevgts[fmtlen] = '\0';
     return tv;
 }
 
+struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len) {
+
+    return asn1ts_to_timeval(dec, gts, len, "%Y%m%d%H%M%S", 14);
+}
+
+struct timeval wandder_utcts_to_timeval(wandder_decoder_t *dec,
+        char *gts, int len) {
+
+    return asn1ts_to_timeval(dec, gts, len, "%y%m%d%H%M%S", 12);
+}
+
+
 uint32_t stringify_gentime(uint8_t *start, uint32_t length, char *space,
+        uint16_t spacerem) {
+
+    /* TODO maybe parse this and print it a bit nicer? */
+    return stringify_octet_string(start, length, space, spacerem);
+}
+
+uint32_t stringify_utctime(uint8_t *start, uint32_t length, char *space,
         uint16_t spacerem) {
 
     /* TODO maybe parse this and print it a bit nicer? */
@@ -1001,12 +1022,17 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
             }
             break;
 
+        case WANDDER_TAG_UTCTIME:
+            if (stringify_utctime(c->valptr, c->length, space, len) == 0) {
+                return NULL;
+            }
+            break;
+
         case WANDDER_TAG_BOOLEAN:
         case WANDDER_TAG_BITSTRING:
         case WANDDER_TAG_OBJDESC:
         case WANDDER_TAG_REAL:
         case WANDDER_TAG_NUMERIC:
-        case WANDDER_TAG_UTCTIME:
         default:
             fprintf(stderr, "No stringify support for type %u just yet...\n",
                     datatype);

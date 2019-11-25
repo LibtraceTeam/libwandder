@@ -76,6 +76,13 @@ enum {
     /* Custom tag types, use only for "interpret as" values. */
     WANDDER_TAG_IPPACKET = 0x30,
     WANDDER_TAG_BINARY_IP = 0x31,
+    WANDDER_TAG_3G_IMEI = 0x32,     /* also used for imsi and msisdn */
+    WANDDER_TAG_DOMAIN_NAME=0x33,   /* domain names encoded as per RFC 1035 */
+    WANDDER_TAG_TAI = 0x34,
+    WANDDER_TAG_ECGI = 0x35,
+    WANDDER_TAG_HEX_BYTES=0x36,
+    WANDDER_TAG_3G_SM_CAUSE=0x37,
+    WANDDER_TAG_CUSTOM_END,
 };
 
 /* Dumpers are used to describe hierarchy and data types for a particular
@@ -381,6 +388,8 @@ const char *wandder_get_tag_string(wandder_decoder_t *dec);
 
 struct timeval wandder_generalizedts_to_timeval(wandder_decoder_t *dec,
         char *gts, int len);
+struct timeval wandder_utcts_to_timeval(wandder_decoder_t *dec, char *gts,
+        int len);
 int64_t wandder_get_integer_value(wandder_item_t *c, uint32_t *intlen);
 int wandder_timeval_to_generalizedts(struct timeval tv, char *gts, int space);
 int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,

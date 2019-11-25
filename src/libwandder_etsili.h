@@ -49,6 +49,9 @@ typedef struct wandder_etsistack {
 
 typedef struct wandder_etsispec {
     wandder_dumper_t ipaddress;
+    wandder_dumper_t datanodeaddress;
+    wandder_dumper_t timestamp;
+    wandder_dumper_t localtimestamp;
     wandder_dumper_t ipvalue;
     wandder_dumper_t nationalipmmiri;
     wandder_dumper_t h323content;
@@ -59,11 +62,19 @@ typedef struct wandder_etsispec {
     wandder_dumper_t ipiriid;
     wandder_dumper_t ipiricontents;
     wandder_dumper_t ipiri;
+    wandder_dumper_t umtsiri;
+    wandder_dumper_t umtsiri_params;
     wandder_dumper_t iricontents;
     wandder_dumper_t iripayload;
     wandder_dumper_t netelid;
     wandder_dumper_t root;
-    wandder_dumper_t netid;
+    wandder_dumper_t linetid;
+    wandder_dumper_t networkidentifier;
+    wandder_dumper_t location;
+    wandder_dumper_t partyinfo;
+    wandder_dumper_t partyidentity;
+    wandder_dumper_t servicesdatainfo;
+    wandder_dumper_t gprsparams;
     wandder_dumper_t cid;
     wandder_dumper_t msts;
     wandder_dumper_t cccontents;

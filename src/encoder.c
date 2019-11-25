@@ -1095,7 +1095,7 @@ size_t wandder_encode_inplace_ber(
     ret = encode_here_ber(idnum, class, encodeas, valptr, vallen, ptr, rem);
 
     if(ret != totallen){
-        printf("calc length:%4ld, real length:%4ld\n", totallen, ret);
+        printf("calc length:%4lu, real length:%4lu\n", totallen, ret);
         assert(0);
     }
 
@@ -1125,7 +1125,7 @@ wandder_buf_t * wandder_encode_new_ber(
     itembuf->len = ret;
 
     if(ret != totallen){
-        printf("calc length:%4ld, real length:%4ld\n", totallen, ret);
+        printf("calc length:%4lu, real length:%4lu\n", totallen, ret);
         assert(0);
     }
 
@@ -1144,6 +1144,8 @@ size_t ber_rebuild_integer(
     size_t lenocts = 0;
     int64_t val = 0;
     uint8_t *ptr = buf;
+    ptrdiff_t i;
+
     if (vallen == 8) {
         val = *((int64_t *)valptr);
     } else if (vallen == 4) {
@@ -1188,13 +1190,13 @@ size_t ber_rebuild_integer(
     *ptr = 0x80;
     *ptr |= lenlen;
 
-    for (ptrdiff_t i = 0 ; i < lenlen; i++){
+    for (i = 0 ; i < lenlen; i++){
         ptr++;
         *ptr = 0;
     }
     *ptr = lenocts;
 
-    for (ptrdiff_t i = lenocts - 1; i >= 0; i--) {
+    for (i = lenocts - 1; i >= 0; i--) {
         ptr[i+1] = (val & 0xff);
         val = val >> 8;
     }
@@ -1242,13 +1244,16 @@ void wandder_encode_next_ber(wandder_encoder_ber_t *enc_ber, uint8_t encodeas,
         uint8_t itemclass, uint32_t idnum, void *valptr, uint32_t vallen){
 
     size_t totallen = calculate_length(idnum, itemclass, encodeas, vallen);
+    size_t ret;
+    ptrdiff_t rem;
 
-    ptrdiff_t rem = rem_grow_check(enc_ber, totallen);
+    rem = rem_grow_check(enc_ber, totallen);
+    if (rem > 0) {
+        ret = encode_here_ber(idnum, itemclass, encodeas, valptr, vallen, enc_ber->ptr, rem);
 
-    size_t ret = encode_here_ber(idnum, itemclass, encodeas, valptr, vallen, enc_ber->ptr, rem);
-
-    enc_ber->ptr += ret;
-    enc_ber->len += ret;
+        enc_ber->ptr += ret;
+        enc_ber->len += ret;
+    }
 }
 
 wandder_encoded_result_ber_t* wandder_encode_finish_ber(wandder_encoder_ber_t *enc_ber){
@@ -1268,11 +1273,12 @@ void wandder_encode_endseq_ber(wandder_encoder_ber_t *enc_ber, uint32_t depth){
 
     ptrdiff_t rem = rem_grow_check(enc_ber, depth);
 
-    memset(enc_ber->ptr, 0, depth);
-    
-    enc_ber->ptr +=depth;
-    enc_ber->len +=depth;
-    
+    if (rem > 0) {
+        memset(enc_ber->ptr, 0, depth);
+
+        enc_ber->ptr +=depth;
+        enc_ber->len +=depth;
+    }
 }
 
 void wandder_reset_encoder_ber(wandder_encoder_ber_t* enc_ber){
@@ -1308,9 +1314,11 @@ void wandder_append_preencoded_ber(wandder_encoder_ber_t* enc_ber, wandder_buf_t
 
     ptrdiff_t rem = rem_grow_check(enc_ber, item_buf->len);
 
-    memcpy(enc_ber->ptr, item_buf->buf, item_buf->len);
-    enc_ber->ptr += item_buf->len;
-    enc_ber->len += item_buf->len;
+    if (rem > 0) {
+        memcpy(enc_ber->ptr, item_buf->buf, item_buf->len);
+        enc_ber->ptr += item_buf->len;
+        enc_ber->len += item_buf->len;
+    }
 
 }
 
