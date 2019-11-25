@@ -613,7 +613,7 @@ static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         family = AF_INET6;
         addr = &in6;
     } else {
-        fprintf(stderr, "Unexpected IP address length: %u\n", item->length);
+        fprintf(stderr, "Unexpected IP address length: %lu\n", item->length);
         return NULL;
     }
 
@@ -2569,6 +2569,7 @@ static void init_etsili_ipcc(wandder_buf_t** preencoded_ber,
     top->header.seqno           = res_ber->buf + pshdr_diff->seqno_diff;
     top->header.sec             = res_ber->buf + pshdr_diff->sec_diff;
     top->header.usec            = res_ber->buf + pshdr_diff->usec_diff;
+    top->header.end             = res_ber->buf + pshdr_diff->end_diff;
     top->body.ipcc.dir          = res_ber->buf + dir_diff;
     top->body.ipcc.ipcontent    = res_ber->buf + ipcontent_diff;
     top->len                    = res_ber->len;
@@ -2711,6 +2712,7 @@ static void init_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
     top->header.seqno           = res_ber->buf + pshdr_diff->seqno_diff;
     top->header.sec             = res_ber->buf + pshdr_diff->sec_diff;
     top->header.usec            = res_ber->buf + pshdr_diff->usec_diff;
+    top->header.end             = res_ber->buf + pshdr_diff->end_diff;
     top->body.ipcc.dir          = res_ber->buf + dir_diff;
     top->body.ipcc.ipcontent    = res_ber->buf + ipcontent_diff;
     top->len                    = res_ber->len;
@@ -2842,6 +2844,7 @@ static void init_etsili_ipmmiri(wandder_buf_t** preencoded_ber,
     top->header.seqno           = res_ber->buf + pshdr_diff->seqno_diff;
     top->header.sec             = res_ber->buf + pshdr_diff->sec_diff;
     top->header.usec            = res_ber->buf + pshdr_diff->usec_diff;
+    top->header.end             = res_ber->buf + pshdr_diff->end_diff;
     top->body.ipmmiri.iritype   = res_ber->buf + iri_diff;
     top->body.ipmmiri.ipcontent = res_ber->buf + ipcontent_diff;
     top->len                    = res_ber->len;
@@ -2875,6 +2878,17 @@ void wandder_encode_etsi_ipmmiri_ber (
 }
 
 /////////////////////////
+
+static int sort_etsili_generic(wandder_etsili_generic_t *a, wandder_etsili_generic_t *b) {
+
+    if (a->itemnum < b->itemnum) {
+        return -1;
+    }
+    if (a->itemnum > b->itemnum) {
+        return 1;
+    }
+    return 0;
+}
 
 static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *params,
         wandder_etsili_iri_type_t iritype, wandder_etsili_top_t * top) {
@@ -2948,11 +2962,13 @@ static inline void wandder_ipiri_body_update(wandder_buf_t **precomputed, void *
 static inline void init_etsili_ipiri(
         wandder_buf_t** preencoded_ber, 
         wandder_encoder_ber_t* enc_ber,
-        void* params, 
+        wandder_etsili_generic_t* params, 
         wandder_etsili_iri_type_t iritype,
         wandder_etsili_top_t* top, etsili_pshdr_diff_t* pshdr_diff) {
 
     wandder_encoded_result_ber_t* res_ber;
+    wandder_etsili_generic_t *p, *tmp;
+    wandder_ipiri_id_t* iriid;
 
     //////////////////////////////////////////////////////////////// block 0
     wandder_append_preencoded_ber(enc_ber, preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
@@ -2975,6 +2991,137 @@ static inline void init_etsili_ipiri(
     //TODO copy in all params here in sorted order
 
 
+    HASH_SRT(hh, params, sort_etsili_generic);
+
+
+    HASH_ITER(hh, params, p, tmp) {
+        switch(p->itemnum) {
+            case WANDDER_IPIRI_CONTENTS_ACCESS_EVENT_TYPE:
+            case WANDDER_IPIRI_CONTENTS_INTERNET_ACCESS_TYPE:
+            case WANDDER_IPIRI_CONTENTS_IPVERSION:
+            case WANDDER_IPIRI_CONTENTS_ENDREASON:
+            case WANDDER_IPIRI_CONTENTS_AUTHENTICATION_TYPE:
+                // wandder_encode_next(encoder, WANDDER_TAG_ENUM,
+                //         WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                //         p->itemptr, p->itemlen);
+                wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
+                        WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum, 
+                        p->itemptr, p->itemlen);
+                break;
+
+            case WANDDER_IPIRI_CONTENTS_TARGET_USERNAME:
+            case WANDDER_IPIRI_CONTENTS_RAW_AAA_DATA:
+                // wandder_encode_next(encoder, WANDDER_TAG_OCTETSTRING,
+                //         WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                //         p->itemptr, p->itemlen);
+                wandder_encode_next_ber(enc_ber, WANDDER_TAG_OCTETSTRING,
+                        WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                        p->itemptr, p->itemlen);
+                break;
+
+            case WANDDER_IPIRI_CONTENTS_TARGET_IPADDRESS:
+            case WANDDER_IPIRI_CONTENTS_POP_IPADDRESS:
+            case WANDDER_IPIRI_CONTENTS_ADDITIONAL_IPADDRESS:
+                // ENC_CSEQUENCE(encoder, p->itemnum);
+                wandder_encode_next_ber(enc_ber, WANDDER_TAG_SEQUENCE,
+                        WANDDER_CLASS_CONTEXT_CONSTRUCT, p->itemnum,
+                        NULL, 0);
+
+                // encode_ipaddress(encoder, (etsili_ipaddress_t *)(p->itemptr));
+                encode_ipaddress(enc_ber,
+                        (wandder_etsili_ipaddress_t *)(p->itemptr));
+
+                wandder_encode_endseq_ber(enc_ber, 1);
+                break;
+            case WANDDER_IPIRI_CONTENTS_POP_IDENTIFIER:
+
+                iriid = (wandder_ipiri_id_t *)p->itemptr;
+                // ENC_CSEQUENCE(encoder, p->itemnum);
+                wandder_encode_next_ber(enc_ber, WANDDER_TAG_SEQUENCE,
+                        WANDDER_CLASS_CONTEXT_CONSTRUCT, p->itemnum,
+                        NULL, 0);
+
+
+                // encode_ipiri_id(encoder, (wandder_ipiri_id_t *)(p->itemptr));
+                
+                if (iriid->type == WANDDER_IPIRI_ID_PRINTABLE) {
+                    // wandder_encode_next(encoder, WANDDER_TAG_UTF8STR,
+                    //         WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, iriid->content.printable,
+                    //         strlen(iriid->content.printable));
+                    wandder_encode_next_ber(enc_ber, WANDDER_TAG_UTF8STR,
+                        WANDDER_CLASS_CONTEXT_PRIMITIVE, 0,
+                        iriid->content.printable,
+                        strlen(iriid->content.printable));
+                } else if (iriid->type == WANDDER_IPIRI_ID_MAC) {
+                    // wandder_encode_next(encoder, WANDDER_TAG_OCTETSTRING,
+                    //         WANDDER_CLASS_CONTEXT_PRIMITIVE, 1, iriid->content.mac, 6);
+                    wandder_encode_next_ber(enc_ber, WANDDER_TAG_OCTETSTRING,
+                        WANDDER_CLASS_CONTEXT_PRIMITIVE, 1,
+                        iriid->content.mac, 6);
+                } else if (iriid->type == WANDDER_IPIRI_ID_IPADDR) {
+                    // ENC_CSEQUENCE(encoder, 2);
+                    wandder_encode_next_ber(enc_ber, WANDDER_TAG_SEQUENCE,
+                        WANDDER_CLASS_CONTEXT_CONSTRUCT, 2,
+                        NULL, 0);
+                    // encode_ipaddress(encoder, iriid->content.ip);
+                    encode_ipaddress(enc_ber, iriid->content.ip);
+                    // END_ENCODED_SEQUENCE(encoder, 1);
+                    wandder_encode_endseq_ber(enc_ber, 1);
+                }
+
+                wandder_encode_endseq_ber(enc_ber, 1);
+                break;
+
+            case WANDDER_IPIRI_CONTENTS_NATIONAL_IPIRI_PARAMETERS:
+                /* TODO NationalIPIRIParameters */
+                break;
+
+            case WANDDER_IPIRI_CONTENTS_OTHER_TARGET_IDENTIFIERS:
+                /* TODO */
+                break;
+
+            case WANDDER_IPIRI_CONTENTS_POP_PORTNUMBER:
+            case WANDDER_IPIRI_CONTENTS_OCTETS_RECEIVED:
+            case WANDDER_IPIRI_CONTENTS_OCTETS_TRANSMITTED:
+                // wandder_encode_next(encoder, WANDDER_TAG_INTEGER,
+                //         WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                //         p->itemptr, p->itemlen);
+                wandder_encode_next_ber(enc_ber, WANDDER_TAG_INTEGER,
+                        WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                        p->itemptr, p->itemlen);
+                break;
+
+            case WANDDER_IPIRI_CONTENTS_STARTTIME:
+            case WANDDER_IPIRI_CONTENTS_ENDTIME:
+            case WANDDER_IPIRI_CONTENTS_EXPECTED_ENDTIME:
+                if (p->itemlen != sizeof(struct timeval)) {
+                    return;
+                }
+                // wandder_encode_next(encoder, WANDDER_TAG_GENERALTIME,
+                //         WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                //         p->itemptr, p->itemlen);
+                wandder_encode_next_ber(enc_ber, WANDDER_TAG_GENERALTIME,
+                        WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                        p->itemptr, p->itemlen);
+                break;
+
+            case WANDDER_IPIRI_CONTENTS_TARGET_NETWORKID:
+            case WANDDER_IPIRI_CONTENTS_TARGET_CPEID:
+            case WANDDER_IPIRI_CONTENTS_TARGET_LOCATION:
+            case WANDDER_IPIRI_CONTENTS_CALLBACK_NUMBER:
+            case WANDDER_IPIRI_CONTENTS_POP_PHONENUMBER:
+                /* TODO enforce max string lens */
+                // wandder_encode_next(encoder, WANDDER_TAG_UTF8STR,
+                //         WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                //         p->itemptr, p->itemlen);
+                wandder_encode_next_ber(enc_ber, WANDDER_TAG_UTF8STR,
+                        WANDDER_CLASS_CONTEXT_PRIMITIVE, p->itemnum,
+                        p->itemptr, p->itemlen);
+                break;
+
+        }
+    }
+
     wandder_encode_endseq_ber(enc_ber, 7); //endseq
 
     res_ber = wandder_encode_finish_ber(enc_ber);
@@ -2984,7 +3131,8 @@ static inline void init_etsili_ipiri(
     top->header.seqno           = res_ber->buf + pshdr_diff->seqno_diff;
     top->header.sec             = res_ber->buf + pshdr_diff->sec_diff;
     top->header.usec            = res_ber->buf + pshdr_diff->usec_diff;
-    top->body.ipiri.iritype   = res_ber->buf + iri_diff;
+    top->header.end             = res_ber->buf + pshdr_diff->end_diff;
+    top->body.ipiri.iritype     = res_ber->buf + iri_diff;
     top->len                    = res_ber->len;
     top->alloc_len              = res_ber->len;
 
