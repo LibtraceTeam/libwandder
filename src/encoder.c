@@ -454,6 +454,48 @@ static uint32_t encode_gtime(wandder_encode_job_t *p, void *valptr,
     return (uint32_t)towrite;
 }
 
+static uint32_t encode_gtime_ber(void *valptr,
+        uint32_t len, uint8_t *buf, uint32_t rem) {
+
+    struct timeval *tv = (struct timeval *)valptr;
+    struct tm tm;
+    time_t tstamp;
+    size_t ret;
+    char gtimebuf[1024];
+    char timebuf[768];
+    int towrite = 0;
+
+    if (len != sizeof(struct timeval)) {
+        fprintf(stderr, "Encode error: unexpected length for timeval: %u\n",
+                len);
+        return 0;
+    }
+
+    tstamp = tv->tv_sec;
+    if (gmtime_r(&tstamp, &tm) == NULL) {
+        fprintf(stderr, "Encode error: failed to convert timeval to tm\n");
+        return 0;
+    }
+
+    strftime(timebuf, 768, "%Y%m%d%H%M%S", &tm);
+    snprintf(gtimebuf, 1024, "%s.%03ldZ", timebuf,
+            (int64_t)(tv->tv_usec / 1000));
+    towrite = strlen(gtimebuf);
+
+    ret = encode_length(towrite, buf, rem);
+    buf += ret;
+    rem -= ret;
+
+    //if (rem > towrite){
+    memcpy(buf, gtimebuf, towrite);
+    buf += towrite;
+    rem -= towrite;
+
+    return towrite + ret;
+    //}
+    //return 0;
+}
+
 static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
         uint32_t vallen) {
 
@@ -1060,6 +1102,20 @@ inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas,
                 memcpy(ptr, valptr, vallen);
                 ptr+=vallen;
                 rem-=vallen;
+
+            break;
+        case WANDDER_TAG_GENERALTIME:
+            ret = encode_identifier(class, idnum, ptr, rem);
+            ptr += ret;
+            rem -= ret;
+
+             /* Timeval to general TS */
+            ret = encode_gtime_ber(valptr, vallen, ptr, rem);
+            ptr += ret;
+            rem -= ret;
+            if (ret == 0) {
+                //TODO error or something?
+            }
 
             break;
 
