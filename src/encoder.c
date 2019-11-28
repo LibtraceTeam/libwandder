@@ -35,7 +35,7 @@
 #include "wandder_internal.h"
 #include "src/libwandder.h"
 
-#define MAXLENGTHOCTS 9
+#define MAXLENGTHOCTS 8
 
 #define VALALLOC(x, p) \
     if (x > p->valalloced) { \
@@ -486,7 +486,6 @@ static uint32_t encode_gtime_ber(void *valptr,
     buf += ret;
     rem -= ret;
 
-    //if (rem > towrite){
     memcpy(buf, gtimebuf, towrite);
     buf += towrite;
     rem -= towrite;
@@ -931,7 +930,8 @@ static inline size_t encode_length_indefinite(uint8_t *buf, ptrdiff_t rem) {
     return 1;
 }
 
-inline size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t encodeas, size_t vallen){
+inline size_t calculate_length(uint8_t idnum, uint8_t class, 
+        uint8_t encodeas, size_t vallen) {
     size_t idlen = 0;
     size_t lenlen = 0;
     size_t loglen = 0;

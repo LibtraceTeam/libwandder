@@ -40,7 +40,7 @@ size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t encodeas,
 size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas, 
         uint8_t* valptr, size_t vallen, uint8_t* ptr, ptrdiff_t rem);
 
-typedef struct etsili_pshdr_diff {    
+typedef struct etsili_pshdr_diff {
     ptrdiff_t cin_diff;
     ptrdiff_t seqno_diff;
     ptrdiff_t sec_diff;

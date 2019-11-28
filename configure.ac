@@ -7,7 +7,6 @@ AC_CONFIG_SRCDIR(src/decoder.c)
 AM_CONFIG_HEADER(config.h)
 AC_CONFIG_MACRO_DIR([m4])
 
-
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
 AC_PREFIX_DEFAULT(/usr/local)

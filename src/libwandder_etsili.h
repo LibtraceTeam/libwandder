@@ -102,14 +102,6 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
 } wandder_etsispec_t;
 
-typedef enum wandder_body_type {
-    WANDDER_ETSILI_EMPTY,
-    WANDDER_ETSILI_IPCC,
-    WANDDER_ETSILI_IPMMCC,
-    WANDDER_ETSILI_IPIRI,
-    WANDDER_ETSILI_IPMMIRI,
-} wandder_body_type_t;
-
 typedef enum {
     WANDDER_ETSILI_IRI_BEGIN = 1,
     WANDDER_ETSILI_IRI_END = 2,
@@ -161,7 +153,6 @@ typedef struct wandder_etsili_top {
     size_t len;
     size_t alloc_len;
     wandder_pshdr_t header;
-    wandder_body_type_t body_type;
     union {
         wandder_ipcc_body_t ipcc;
         wandder_ipmmcc_body_t ipmmcc;
@@ -322,7 +313,6 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 
 
-void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandder_etsili_top_t *top);
 void wandder_free_top(wandder_etsili_top_t *top);
 void wandder_encode_etsi_ipcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
