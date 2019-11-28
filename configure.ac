@@ -7,6 +7,7 @@ AC_CONFIG_SRCDIR(src/decoder.c)
 AM_CONFIG_HEADER(config.h)
 AC_CONFIG_MACRO_DIR([m4])
 
+
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
 AC_PREFIX_DEFAULT(/usr/local)
@@ -22,6 +23,10 @@ EXTRA_LIBS=""
 
 AC_CHECK_LIB([m], [ceil],,math_found = 0)
 AC_CHECK_LIB([pthread], [pthread_mutex_trylock],,pthread_found=0)
+
+AC_CHECK_HEADERS([uthash.h], [uthash_avail=yes; break;])
+AS_IF([test "x$uthash_avail" != "xyes"],
+        [AC_MSG_ERROR([Required header uthash.h not found; install uthash and try again])])
 
 AC_CONFIG_FILES([Makefile src/Makefile])
 

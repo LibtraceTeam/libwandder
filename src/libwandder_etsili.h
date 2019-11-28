@@ -123,7 +123,6 @@ enum {
     WANDDER_IPIRI_ID_IPADDR = 2,
 };
 
-
 typedef struct wandder_pshdr {
     uint8_t* cin;
     uint8_t* seqno;
