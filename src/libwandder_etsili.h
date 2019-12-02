@@ -29,6 +29,7 @@
 
 #include <libwandder.h>
 #include <stdint.h>
+#include <uthash.h>
 
 #define WANDDER_ETSILI_PSDOMAINID (etsi_lipsdomainid)
 
@@ -101,20 +102,18 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
 } wandder_etsispec_t;
 
-typedef enum wandder_body_type {
-    WANDDER_ETSILI_EMPTY,
-    WANDDER_ETSILI_IPCC,
-    WANDDER_ETSILI_IPMMCC,
-    WANDDER_ETSILI_IPIRI,
-    WANDDER_ETSILI_IPMMIRI,
-} wandder_body_type_t;
-
 typedef enum {
     WANDDER_ETSILI_IRI_BEGIN = 1,
     WANDDER_ETSILI_IRI_END = 2,
     WANDDER_ETSILI_IRI_CONTINUE = 3,
     WANDDER_ETSILI_IRI_REPORT = 4
 } wandder_etsili_iri_type_t;
+
+enum {
+    WANDDER_IPIRI_ID_PRINTABLE = 0,
+    WANDDER_IPIRI_ID_MAC = 1,
+    WANDDER_IPIRI_ID_IPADDR = 2,
+};
 
 typedef struct wandder_pshdr {
     uint8_t* cin;
@@ -144,18 +143,24 @@ typedef struct wandder_ipmmiri_body {
     uint8_t* ipcontent;
 } wandder_ipmmiri_body_t;
 
+typedef struct wandder_generic_body {
+    uint8_t* meta;
+    uint8_t* data;
+} wandder_generic_body_t;
+
 typedef struct wandder_etsili_top {
     uint8_t* buf;
     size_t len;
     size_t alloc_len;
     wandder_pshdr_t header;
-    wandder_body_type_t body_type;
     union {
         wandder_ipcc_body_t ipcc;
         wandder_ipmmcc_body_t ipmmcc;
         wandder_ipmmiri_body_t ipmmiri;
         wandder_ipiri_body_t ipiri;
+        wandder_generic_body_t generic;
     } body;
+    size_t increment_len;
 } wandder_etsili_top_t;
 
 
@@ -188,6 +193,53 @@ typedef enum {
 
 } wandder_preencode_index_t;
 
+enum {
+    WANDDER_IPIRI_CONTENTS_ACCESS_EVENT_TYPE = 0,
+    WANDDER_IPIRI_CONTENTS_TARGET_USERNAME = 1,
+    WANDDER_IPIRI_CONTENTS_INTERNET_ACCESS_TYPE = 2,
+    WANDDER_IPIRI_CONTENTS_IPVERSION = 3,
+    WANDDER_IPIRI_CONTENTS_TARGET_IPADDRESS = 4,
+    WANDDER_IPIRI_CONTENTS_TARGET_NETWORKID = 5,
+    WANDDER_IPIRI_CONTENTS_TARGET_CPEID = 6,
+    WANDDER_IPIRI_CONTENTS_TARGET_LOCATION = 7,
+    WANDDER_IPIRI_CONTENTS_POP_PORTNUMBER = 8,
+    WANDDER_IPIRI_CONTENTS_CALLBACK_NUMBER = 9,
+    WANDDER_IPIRI_CONTENTS_STARTTIME = 10,
+    WANDDER_IPIRI_CONTENTS_ENDTIME = 11,
+    WANDDER_IPIRI_CONTENTS_ENDREASON = 12,
+    WANDDER_IPIRI_CONTENTS_OCTETS_RECEIVED = 13,
+    WANDDER_IPIRI_CONTENTS_OCTETS_TRANSMITTED = 14,
+    WANDDER_IPIRI_CONTENTS_RAW_AAA_DATA = 15,
+    WANDDER_IPIRI_CONTENTS_EXPECTED_ENDTIME = 16,
+    WANDDER_IPIRI_CONTENTS_POP_PHONENUMBER = 17,
+    WANDDER_IPIRI_CONTENTS_POP_IDENTIFIER = 18,
+    WANDDER_IPIRI_CONTENTS_POP_IPADDRESS = 19,
+    WANDDER_IPIRI_CONTENTS_NATIONAL_IPIRI_PARAMETERS = 20,
+    WANDDER_IPIRI_CONTENTS_ADDITIONAL_IPADDRESS = 21,
+    WANDDER_IPIRI_CONTENTS_AUTHENTICATION_TYPE = 22,
+    WANDDER_IPIRI_CONTENTS_OTHER_TARGET_IDENTIFIERS = 23,
+};
+
+typedef struct wandder_etsili_generic wandder_etsili_generic_t;
+typedef struct wandder_etsili_generic_freelist wandder_etsili_generic_freelist_t;
+
+struct wandder_etsili_generic {
+    uint8_t itemnum;
+    uint16_t itemlen;
+    uint8_t *itemptr;
+    uint16_t alloced;
+
+    UT_hash_handle hh;
+    wandder_etsili_generic_t *nextfree;
+    wandder_etsili_generic_freelist_t *owner;
+};
+
+struct wandder_etsili_generic_freelist {
+    wandder_etsili_generic_t *first;
+    pthread_mutex_t mutex;
+    uint8_t needmutex;
+};
+
 typedef struct wandder_etsili_intercept_details {
     char *liid;
     char *authcc;
@@ -211,6 +263,15 @@ typedef struct wandder_etsili_ipaddress {
     uint8_t valtype;
     uint8_t *ipvalue;
 } wandder_etsili_ipaddress_t;
+
+typedef struct wandder_ipiri_id {
+    uint8_t type;
+    union {
+        char *printable;
+        uint8_t mac[6];
+        wandder_etsili_ipaddress_t *ip;
+    } content;
+} wandder_ipiri_id_t;
 
 enum {
     WANDDER_IPADDRESS_REP_BINARY = 1,
@@ -252,7 +313,6 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 
 
-void wandder_init_pshdr_ber(wandder_buf_t **precomputed, wandder_etsili_top_t *top);
 void wandder_free_top(wandder_etsili_top_t *top);
 void wandder_encode_etsi_ipcc_ber(
         wandder_buf_t **precomputed, int64_t cin, int64_t seqno,

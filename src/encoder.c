@@ -35,7 +35,7 @@
 #include "wandder_internal.h"
 #include "src/libwandder.h"
 
-#define MAXLENGTHOCTS 9
+#define MAXLENGTHOCTS 8
 
 #define VALALLOC(x, p) \
     if (x > p->valalloced) { \
@@ -452,6 +452,45 @@ static uint32_t encode_gtime(wandder_encode_job_t *p, void *valptr,
 
     memcpy(p->valspace, gtimebuf, towrite);
     return (uint32_t)towrite;
+}
+
+static uint32_t encode_gtime_ber(void *valptr,
+        uint32_t len, uint8_t *buf, uint32_t rem) {
+
+    struct timeval *tv = (struct timeval *)valptr;
+    struct tm tm;
+    time_t tstamp;
+    size_t ret;
+    char gtimebuf[1024];
+    char timebuf[768];
+    int towrite = 0;
+
+    if (len != sizeof(struct timeval)) {
+        fprintf(stderr, "Encode error: unexpected length for timeval: %u\n",
+                len);
+        return 0;
+    }
+
+    tstamp = tv->tv_sec;
+    if (gmtime_r(&tstamp, &tm) == NULL) {
+        fprintf(stderr, "Encode error: failed to convert timeval to tm\n");
+        return 0;
+    }
+
+    strftime(timebuf, 768, "%Y%m%d%H%M%S", &tm);
+    snprintf(gtimebuf, 1024, "%s.%03ldZ", timebuf,
+            (int64_t)(tv->tv_usec / 1000));
+    towrite = strlen(gtimebuf);
+
+    ret = encode_length(towrite, buf, rem);
+    buf += ret;
+    rem -= ret;
+
+    memcpy(buf, gtimebuf, towrite);
+    buf += towrite;
+    rem -= towrite;
+
+    return towrite + ret;
 }
 
 static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
@@ -891,7 +930,8 @@ static inline size_t encode_length_indefinite(uint8_t *buf, ptrdiff_t rem) {
     return 1;
 }
 
-static inline size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t encodeas, size_t vallen){
+inline size_t calculate_length(uint8_t idnum, uint8_t class, 
+        uint8_t encodeas, size_t vallen) {
     size_t idlen = 0;
     size_t lenlen = 0;
     size_t loglen = 0;
@@ -939,7 +979,8 @@ static inline size_t calculate_length(uint8_t idnum, uint8_t class, uint8_t enco
     return totallen;
 }
 
-static inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas, uint8_t* valptr, size_t vallen, uint8_t* ptr, ptrdiff_t rem){
+inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas, 
+        uint8_t* valptr, size_t vallen, uint8_t* ptr, ptrdiff_t rem){
     
     size_t ret = 0;
     uint8_t* init_ptr = ptr;
@@ -1061,6 +1102,20 @@ static inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encod
                 rem-=vallen;
 
             break;
+        case WANDDER_TAG_GENERALTIME:
+            ret = encode_identifier(class, idnum, ptr, rem);
+            ptr += ret;
+            rem -= ret;
+
+             /* Timeval to general TS */
+            ret = encode_gtime_ber(valptr, vallen, ptr, rem);
+            ptr += ret;
+            rem -= ret;
+            if (ret == 0) {
+                //TODO error or something?
+            }
+
+            break;
 
         default:
             fprintf(stderr, "Encode error: unable to encode tag type %d\n",
@@ -1080,7 +1135,7 @@ size_t wandder_encode_inplace_ber(
         void* buf, 
         ptrdiff_t rem){
 
-    size_t totallen = calculate_length(idnum, class, encodeas, vallen);
+    ptrdiff_t totallen = calculate_length(idnum, class, encodeas, vallen);
 
     if (totallen > rem){
         fprintf(stderr, "Encode error: not enough room\n");
@@ -1258,9 +1313,9 @@ void wandder_encode_next_ber(wandder_encoder_ber_t *enc_ber, uint8_t encodeas,
 wandder_encoded_result_ber_t* wandder_encode_finish_ber(wandder_encoder_ber_t *enc_ber){
 
     wandder_encoded_result_ber_t* res = malloc(sizeof *res);
-    res->buf = malloc(enc_ber->len);
+    res->buf = enc_ber->buf;
     res->len = enc_ber->len;
-    memcpy(res->buf, enc_ber->buf, enc_ber->len);
+    enc_ber->buf = NULL;
     return res;
 
 }
