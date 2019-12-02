@@ -3582,12 +3582,12 @@ static void init_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
     wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 1, ipcontents, iplen);
 
-    ptrdiff_t frametype_diff = enc_ber->ptr - enc_ber->buf;
+    //ptrdiff_t frametype_diff = enc_ber->ptr - enc_ber->buf;
     wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
                 WANDDER_CLASS_CONTEXT_PRIMITIVE, 2, &frametype,
                 sizeof frametype);
 
-    ptrdiff_t mmccproto_diff = enc_ber->ptr - enc_ber->buf;
+    //ptrdiff_t mmccproto_diff = enc_ber->ptr - enc_ber->buf;
     wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
                 WANDDER_CLASS_CONTEXT_PRIMITIVE, 4, &mmccproto,
                 sizeof mmccproto);
@@ -3873,7 +3873,7 @@ static void update_etsili_ipiri(wandder_buf_t** preencoded_ber,
                             0,
                             WANDDER_CLASS_CONTEXT_PRIMITIVE,
                             WANDDER_TAG_UTF8STR,
-                            iriid->content.printable,
+                            (uint8_t *)iriid->content.printable,
                             strlen(iriid->content.printable),
                             ptr, rem);
                     ptr += ret;
