@@ -3295,28 +3295,28 @@ static void update_etsili_pshdr_pc(wandder_etsili_top_t* top, int64_t cin,
 }
 
 static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber, 
-        wandder_buf_t** preencoded_ber, int64_t cin, int64_t seqno,
+        wandder_etsili_top_t* top, int64_t cin, int64_t seqno,
         struct timeval* tv, 
         etsili_pshdr_diff_t* pshdr_diff) {
 
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_USEQUENCE]);
+                top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+                top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_PSDOMAINID]);
+                top->preencoded[WANDDER_PREENCODE_PSDOMAINID]);
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_LIID]);
+                top->preencoded[WANDDER_PREENCODE_LIID]);
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_AUTHCC]);
+                top->preencoded[WANDDER_PREENCODE_AUTHCC]);
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_3]);
+                top->preencoded[WANDDER_PREENCODE_CSEQUENCE_3]);
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_0]);
+                top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_OPERATORID]);
+                top->preencoded[WANDDER_PREENCODE_OPERATORID]);
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_NETWORKELEMID]);
+                top->preencoded[WANDDER_PREENCODE_NETWORKELEMID]);
         wandder_encode_endseq_ber(enc_ber, 1);
 
         pshdr_diff->cin_diff = enc_ber->ptr - enc_ber->buf;
@@ -3325,7 +3325,7 @@ static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber,
                 sizeof cin);
 
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_DELIVCC]);
+                top->preencoded[WANDDER_PREENCODE_DELIVCC]);
         wandder_encode_endseq_ber(enc_ber, 1);
 
         pshdr_diff->seqno_diff = enc_ber->ptr - enc_ber->buf;
@@ -3333,12 +3333,12 @@ static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber,
                 WANDDER_CLASS_CONTEXT_PRIMITIVE, 4, &(seqno),
                 sizeof seqno);
 
-        if (preencoded_ber[WANDDER_PREENCODE_INTPOINTID]) {
+        if (top->preencoded[WANDDER_PREENCODE_INTPOINTID]) {
             wandder_append_preencoded_ber(enc_ber, 
-                    preencoded_ber[WANDDER_PREENCODE_INTPOINTID]);
+                    top->preencoded[WANDDER_PREENCODE_INTPOINTID]);
         }
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_7]);
+                top->preencoded[WANDDER_PREENCODE_CSEQUENCE_7]);
 
         pshdr_diff->sec_diff = enc_ber->ptr - enc_ber->buf;
         wandder_encode_next_ber(enc_ber, WANDDER_TAG_INTEGER,
@@ -3353,26 +3353,26 @@ static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber,
         wandder_encode_endseq_ber(enc_ber, 1);
 
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_TVCLASS]);
+                top->preencoded[WANDDER_PREENCODE_TVCLASS]);
         wandder_encode_endseq_ber(enc_ber, 1);
         pshdr_diff->end_diff = enc_ber->ptr - enc_ber->buf;
 }
 
-static void update_etsili_ipcc(wandder_buf_t** preencoded_ber,
+static void update_etsili_ipcc(
         void* ipcontents, size_t iplen, uint8_t dir, 
         wandder_etsili_top_t* top) {
     if (dir == 0) {
         memcpy(top->body.ipcc.dir, 
-                preencoded_ber[WANDDER_PREENCODE_DIRFROM]->buf, 
-                preencoded_ber[WANDDER_PREENCODE_DIRFROM]->len);
+                top->preencoded[WANDDER_PREENCODE_DIRFROM]->buf, 
+                top->preencoded[WANDDER_PREENCODE_DIRFROM]->len);
     } else if (dir == 1) {
         memcpy(top->body.ipcc.dir, 
-                preencoded_ber[WANDDER_PREENCODE_DIRTO]->buf, 
-                preencoded_ber[WANDDER_PREENCODE_DIRTO]->len);
+                top->preencoded[WANDDER_PREENCODE_DIRTO]->buf, 
+                top->preencoded[WANDDER_PREENCODE_DIRTO]->len);
     } else if (dir == 2) {
         memcpy(top->body.ipcc.dir, 
-                preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
-                preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->len);
+                top->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
+                top->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len);
     } else {
         ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -3394,8 +3394,7 @@ static void update_etsili_ipcc(wandder_buf_t** preencoded_ber,
     ENDCONSTRUCTEDBLOCK(ptr,7)
 }
 
-static void init_etsili_ipcc(wandder_buf_t** preencoded_ber,
-        wandder_encoder_ber_t* enc_ber,
+static void init_etsili_ipcc(wandder_encoder_ber_t* enc_ber,
         void* ipcontents, size_t iplen, uint8_t dir,
         wandder_etsili_top_t* top,
         etsili_pshdr_diff_t* pshdr_diff) {
@@ -3403,22 +3402,22 @@ static void init_etsili_ipcc(wandder_buf_t** preencoded_ber,
     wandder_encoded_result_ber_t* res_ber;
     
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_USEQUENCE]);
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
 
     ptrdiff_t dir_diff = enc_ber->ptr - enc_ber->buf;
     if (dir == 0) {
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_DIRFROM]);
+                top->preencoded[WANDDER_PREENCODE_DIRFROM]);
     } else if (dir == 1) {
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_DIRTO]);
+                top->preencoded[WANDDER_PREENCODE_DIRTO]);
     } else if (dir == 2) {
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]);
+                top->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]);
     } else {
         wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
                 WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, &dir,
@@ -3426,13 +3425,13 @@ static void init_etsili_ipcc(wandder_buf_t** preencoded_ber,
     }
 
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_IPCCOID]);
+            top->preencoded[WANDDER_PREENCODE_IPCCOID]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
 
     ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
     wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
@@ -3457,7 +3456,7 @@ static void init_etsili_ipcc(wandder_buf_t** preencoded_ber,
 }
 
 void wandder_encode_etsi_ipcc_ber (
-        wandder_buf_t** preencoded_ber, int64_t cin, int64_t seqno,
+        int64_t cin, int64_t seqno,
         struct timeval* tv, void* ipcontents, size_t iplen, uint8_t dir,
         wandder_etsili_top_t* top) {
     
@@ -3465,22 +3464,43 @@ void wandder_encode_etsi_ipcc_ber (
 
     if (top->buf){
         update_etsili_pshdr_pc(top, cin, seqno, tv);
-        update_etsili_ipcc(preencoded_ber, ipcontents, iplen, dir, top);
+        update_etsili_ipcc(ipcontents, iplen, dir, top);
     } else {
         wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
                 INITIAL_ENCODER_SIZE, 
                 INCREMENT_ENCODER_SIZE);
 
-        init_etsili_pshdr_pc(enc_ber, preencoded_ber, cin, seqno,
+        init_etsili_pshdr_pc(enc_ber, top, cin, seqno,
                 tv, &pshdr_diff);
-        init_etsili_ipcc(preencoded_ber, enc_ber, ipcontents,
+        init_etsili_ipcc(enc_ber, ipcontents,
                 iplen, dir, top, &pshdr_diff);
         top->increment_len = INCREMENT_ENCODER_SIZE;
         wandder_free_encoder_ber(enc_ber);
     }
+    // if (!top->buf){
+    //     printf("libwandder error: run top init before encoding\n");
+    //     return;
+    // }
+
+    // update_etsili_pshdr_pc(top, cin, seqno, tv);
+    
+    // if (top->bodytype == WANDDER_ESTILI_IPCC){
+    //     update_etsili_ipcc(ipcontents, iplen, dir, top);
+    // } else {
+    //     wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
+    //             INITIAL_ENCODER_SIZE, 
+    //             INCREMENT_ENCODER_SIZE);
+
+    //     init_etsili_ipcc(enc_ber, ipcontents,
+    //             iplen, dir, top, &pshdr_diff);
+    //     top->increment_len = INCREMENT_ENCODER_SIZE;
+    //     top->bodytype = WANDDER_ESTILI_IPCC;
+    //     wandder_free_encoder_ber(enc_ber);
+    // }
+
 }
 
-static void update_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
+static void update_etsili_ipmmcc(
         void* ipcontents, size_t iplen, uint8_t dir, 
         wandder_etsili_top_t* top) {
 
@@ -3489,16 +3509,16 @@ static void update_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
 
     if (dir == 0) {
         memcpy(top->body.ipcc.dir, 
-                preencoded_ber[WANDDER_PREENCODE_DIRFROM]->buf, 
-                preencoded_ber[WANDDER_PREENCODE_DIRFROM]->len);
+                top->preencoded[WANDDER_PREENCODE_DIRFROM]->buf, 
+                top->preencoded[WANDDER_PREENCODE_DIRFROM]->len);
     } else if (dir == 1) {
         memcpy(top->body.ipcc.dir, 
-                preencoded_ber[WANDDER_PREENCODE_DIRTO]->buf, 
-                preencoded_ber[WANDDER_PREENCODE_DIRTO]->len);
+                top->preencoded[WANDDER_PREENCODE_DIRTO]->buf, 
+                top->preencoded[WANDDER_PREENCODE_DIRTO]->len);
     } else if (dir == 2) {
         memcpy(top->body.ipcc.dir, 
-                preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
-                preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->len);
+                top->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
+                top->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len);
     } else {
         ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -3518,7 +3538,7 @@ static void update_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
 
     //ensure there is enough space for the last section
     ptr += check_top_size(top, (ptr - top->buf) + 
-            (6*2) + (preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]->len *2));
+            (6*2) + (top->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len *2));
 
     ptr += ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -3537,7 +3557,7 @@ static void update_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
     ENDCONSTRUCTEDBLOCK(ptr,6) //endseq
 }
 
-static void init_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
+static void init_etsili_ipmmcc(
         wandder_encoder_ber_t* enc_ber,
         void* ipcontents, size_t iplen, uint8_t dir,
         wandder_etsili_top_t* top,
@@ -3549,22 +3569,22 @@ static void init_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
     wandder_encoded_result_ber_t* res_ber;
     
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_USEQUENCE]);
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
 
     ptrdiff_t dir_diff = enc_ber->ptr - enc_ber->buf;
     if (dir == 0) {
         wandder_append_preencoded_ber(enc_ber, 
-                preencoded_ber[WANDDER_PREENCODE_DIRFROM]);
+                top->preencoded[WANDDER_PREENCODE_DIRFROM]);
     } else if (dir == 1) {
         wandder_append_preencoded_ber(enc_ber,
-                preencoded_ber[WANDDER_PREENCODE_DIRTO]);
+                top->preencoded[WANDDER_PREENCODE_DIRTO]);
     } else if (dir == 2) {
         wandder_append_preencoded_ber(enc_ber,
-                preencoded_ber[WANDDER_PREENCODE_DIRUNKNOWN]);
+                top->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]);
     } else {
         wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
                 WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, &dir,
@@ -3572,11 +3592,11 @@ static void init_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
     }
 
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_12]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_12]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_IPMMCCOID]);
+            top->preencoded[WANDDER_PREENCODE_IPMMCCOID]);
 
     ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
     wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
@@ -3611,7 +3631,7 @@ static void init_etsili_ipmmcc(wandder_buf_t** preencoded_ber,
 }
 
 void wandder_encode_etsi_ipmmcc_ber (
-        wandder_buf_t** preencoded_ber, int64_t cin, int64_t seqno,
+        int64_t cin, int64_t seqno,
         struct timeval* tv, void* ipcontents, size_t iplen, uint8_t dir,
         wandder_etsili_top_t* top) {
     
@@ -3619,22 +3639,42 @@ void wandder_encode_etsi_ipmmcc_ber (
 
     if (top->buf){
         update_etsili_pshdr_pc(top, cin, seqno, tv);
-        update_etsili_ipmmcc(preencoded_ber, ipcontents, iplen, dir, top);
+        update_etsili_ipmmcc(ipcontents, iplen, dir, top);
     } else {
         wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
                 INITIAL_ENCODER_SIZE,
                 INCREMENT_ENCODER_SIZE);
 
-        init_etsili_pshdr_pc(enc_ber, preencoded_ber, cin, seqno,
+        init_etsili_pshdr_pc(enc_ber, top, cin, seqno,
                 tv, &pshdr_diff);
-        init_etsili_ipmmcc(preencoded_ber, enc_ber, ipcontents,
+        init_etsili_ipmmcc(enc_ber, ipcontents,
                 iplen, dir, top, &pshdr_diff);
         top->increment_len = INCREMENT_ENCODER_SIZE;
         wandder_free_encoder_ber(enc_ber);
     }
+    // if (!top->buf){
+    //     printf("libwandder error: run top init before encoding\n");
+    //     return;
+    // }
+
+    // update_etsili_pshdr_pc(top, cin, seqno, tv);
+
+    // if (top->bodytype == WANDDER_ESTILI_IPMMCC){
+    //     update_etsili_ipmmcc(ipcontents, iplen, dir, top);
+    // } else {
+    //     wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
+    //             INITIAL_ENCODER_SIZE,
+    //             INCREMENT_ENCODER_SIZE);
+
+    //     init_etsili_ipmmcc(enc_ber, ipcontents,
+    //             iplen, dir, top, &pshdr_diff);
+    //     top->increment_len = INCREMENT_ENCODER_SIZE;
+    //     top->bodytype = WANDDER_ESTILI_IPMMCC;
+    //     wandder_free_encoder_ber(enc_ber);
+    // }
 }
 
-static void update_etsili_ipmmiri(wandder_buf_t** preencoded_ber,
+static void update_etsili_ipmmiri(
         void* ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype, 
         wandder_etsili_top_t* top) {
 
@@ -3658,7 +3698,7 @@ static void update_etsili_ipmmiri(wandder_buf_t** preencoded_ber,
     ENDCONSTRUCTEDBLOCK(ptr,8) //endseq
 }
 
-static void init_etsili_ipmmiri(wandder_buf_t** preencoded_ber,
+static void init_etsili_ipmmiri(
         wandder_encoder_ber_t* enc_ber,
         void* ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype,
         uint8_t *ipsrc, uint8_t *ipdest, int ipfamily,
@@ -3695,11 +3735,11 @@ static void init_etsili_ipmmiri(wandder_buf_t** preencoded_ber,
 
     
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_0]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_USEQUENCE]);
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
 
     ptrdiff_t iri_diff = enc_ber->ptr - enc_ber->buf;
     wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
@@ -3707,24 +3747,24 @@ static void init_etsili_ipmmiri(wandder_buf_t** preencoded_ber,
             sizeof iritype);
 
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_11]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_11]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_IPMMIRIOID]);
+            top->preencoded[WANDDER_PREENCODE_IPMMIRIOID]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_0]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
     
     //encode ip address encipsrc
     encode_ipaddress(enc_ber, &encipsrc);
     wandder_encode_endseq_ber(enc_ber, 1);
 
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
 
     //encode ip address encipdst
     encode_ipaddress(enc_ber, &encipdst);
@@ -3754,29 +3794,51 @@ static void init_etsili_ipmmiri(wandder_buf_t** preencoded_ber,
 }
 
 void wandder_encode_etsi_ipmmiri_ber (
-        wandder_buf_t** preencoded_ber, int64_t cin, int64_t seqno,
+        int64_t cin, int64_t seqno,
         struct timeval* tv, void* ipcontents, size_t iplen, 
         wandder_etsili_iri_type_t iritype,
         uint8_t *ipsrc, uint8_t *ipdest, int ipfamily,
         wandder_etsili_top_t* top) {
-    
+
+
     etsili_pshdr_diff_t pshdr_diff;
 
     if (top->buf){
         update_etsili_pshdr_pc(top, cin, seqno, tv);
-        update_etsili_ipmmiri(preencoded_ber, ipcontents, iplen, iritype, top);
+        update_etsili_ipmmiri(ipcontents, iplen, iritype, top);
     } else {
         wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
                 INITIAL_ENCODER_SIZE,
                 INCREMENT_ENCODER_SIZE);
 
-        init_etsili_pshdr_pc(enc_ber, preencoded_ber, cin, seqno,
+        init_etsili_pshdr_pc(enc_ber, top, cin, seqno,
                 tv, &pshdr_diff);
-        init_etsili_ipmmiri(preencoded_ber, enc_ber, ipcontents,
+        init_etsili_ipmmiri(enc_ber, ipcontents,
                 iplen, iritype, ipsrc, ipdest, ipfamily, top, &pshdr_diff);
         top->increment_len = INCREMENT_ENCODER_SIZE;
         wandder_free_encoder_ber(enc_ber);
     }
+    // if (!top->buf){
+    //     printf("libwandder error: run top init before encoding\n");
+    //     return;
+    // }
+
+    // update_etsili_pshdr_pc(top, cin, seqno, tv);
+
+    // if (top->bodytype == WANDDER_ESTILI_IPMMIRI){
+    //     update_etsili_ipmmiri(ipcontents, iplen, iritype, top);
+    // } else {
+    //     wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
+    //             INITIAL_ENCODER_SIZE,
+    //             INCREMENT_ENCODER_SIZE);
+
+    //     init_etsili_ipmmiri(enc_ber, ipcontents,
+    //             iplen, iritype, ipsrc, ipdest, ipfamily, top, &pshdr_diff);
+
+    //     top->increment_len = INCREMENT_ENCODER_SIZE;
+    //     top->bodytype = WANDDER_ESTILI_IPMMIRI;
+    //     wandder_free_encoder_ber(enc_ber);
+    // }
 }
 
 static int sort_etsili_generic(wandder_etsili_generic_t *a, 
@@ -3791,7 +3853,7 @@ static int sort_etsili_generic(wandder_etsili_generic_t *a,
     return 0;
 }
 
-static void update_etsili_ipiri(wandder_buf_t** preencoded_ber,
+static void update_etsili_ipiri(
         wandder_etsili_generic_t *params, wandder_etsili_iri_type_t iritype, 
         wandder_etsili_top_t* top) {
 
@@ -3968,7 +4030,6 @@ static void update_etsili_ipiri(wandder_buf_t** preencoded_ber,
 }
 
 static inline void init_etsili_ipiri(
-        wandder_buf_t** preencoded_ber, 
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_generic_t* params, 
         wandder_etsili_iri_type_t iritype,
@@ -3980,11 +4041,11 @@ static inline void init_etsili_ipiri(
 
     //////////////////////////////////////////////////////////////// block 0
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_0]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_USEQUENCE]);
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
     //////////////////////////////////////////////////////////////// dir
 
     ptrdiff_t iri_diff = enc_ber->ptr - enc_ber->buf;
@@ -3994,13 +4055,13 @@ static inline void init_etsili_ipiri(
 
     //////////////////////////////////////////////////////////////// block 1
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_2]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_IPIRIOID]);
+            top->preencoded[WANDDER_PREENCODE_IPIRIOID]);
     wandder_append_preencoded_ber(enc_ber, 
-            preencoded_ber[WANDDER_PREENCODE_CSEQUENCE_1]);
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
     //////////////////////////////////////////////////////////////// ipcontents
 
     HASH_SRT(hh, params, sort_etsili_generic);
@@ -4118,7 +4179,7 @@ static inline void init_etsili_ipiri(
 }
 
 void wandder_encode_etsi_ipiri_ber (
-        wandder_buf_t** preencoded_ber, int64_t cin, int64_t seqno,
+        int64_t cin, int64_t seqno,
         struct timeval* tv, void* params, wandder_etsili_iri_type_t iritype,
         wandder_etsili_top_t* top) {
     
@@ -4126,19 +4187,52 @@ void wandder_encode_etsi_ipiri_ber (
 
     if (top->buf){
         update_etsili_pshdr_pc(top, cin, seqno, tv);
-        update_etsili_ipiri(preencoded_ber, params, iritype, top);
+        update_etsili_ipiri(params, iritype, top);
     } else {
         wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
                 INITIAL_ENCODER_SIZE,
                 INCREMENT_ENCODER_SIZE);
 
-        init_etsili_pshdr_pc(enc_ber, preencoded_ber, cin, seqno,
+        init_etsili_pshdr_pc(enc_ber, top, cin, seqno,
                 tv, &pshdr_diff);
-        init_etsili_ipiri(preencoded_ber, enc_ber, params,
+
+        init_etsili_ipiri(enc_ber, params,
                 iritype, top, &pshdr_diff);
 
         wandder_free_encoder_ber(enc_ber);
     }
+}
+
+void wandder_encode_init_top_ber (wandder_etsili_top_t* top ,
+        wandder_etsili_intercept_details_t* intdetails) {
+    
+    etsili_pshdr_diff_t pshdr_diff;
+
+    struct timeval tv = {0,0};
+
+    top->preencoded = calloc(WANDDER_PREENCODE_LAST, 
+                sizeof (wandder_buf_t));
+    wandder_etsili_preencode_static_fields_ber(top->preencoded, 
+                intdetails);
+
+    // if (top->buf){
+    //     //buffer should be empty here
+    //     assert(!"buffer should always be empty here\n");
+    // } else {
+    //     wandder_encoder_ber_t* enc_ber = wandder_init_encoder_ber(
+    //             INITIAL_ENCODER_SIZE,
+    //             INCREMENT_ENCODER_SIZE);
+
+    //     init_etsili_pshdr_pc(enc_ber, top, 0, 0,
+    //             &tv, &pshdr_diff);
+
+    //     init_etsili_ipmmiri(enc_ber, NULL,
+    //             0, 0, top, &pshdr_diff);
+    //     top->bodytype = WANDDER_ESTILI_NONE;
+    //     top->increment_len = INCREMENT_ENCODER_SIZE;
+
+    //     wandder_free_encoder_ber(enc_ber);
+    // }
 }
 
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

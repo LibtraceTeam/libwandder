@@ -115,6 +115,14 @@ enum {
     WANDDER_IPIRI_ID_IPADDR = 2,
 };
 
+typedef enum {
+    WANDDER_ESTILI_IPCC,
+    WANDDER_ESTILI_IPMMCC,
+    WANDDER_ESTILI_IPMMIRI,
+    WANDDER_ESTILI_IPIRI,
+    WANDDER_ESTILI_NONE
+} wandder_bodytype_t;
+
 typedef struct wandder_pshdr {
     uint8_t* cin;
     uint8_t* seqno;
@@ -153,6 +161,7 @@ typedef struct wandder_etsili_top {
     size_t len;
     size_t alloc_len;
     wandder_pshdr_t header;
+    wandder_bodytype_t bodytype;
     union {
         wandder_ipcc_body_t ipcc;
         wandder_ipmmcc_body_t ipmmcc;
@@ -161,6 +170,7 @@ typedef struct wandder_etsili_top {
         wandder_generic_body_t generic;
     } body;
     size_t increment_len;
+    wandder_buf_t **preencoded;
 } wandder_etsili_top_t;
 
 
@@ -315,24 +325,27 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 void wandder_free_top(wandder_etsili_top_t *top);
 void wandder_encode_etsi_ipcc_ber(
-        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandder_etsili_top_t *top);
 void wandder_encode_etsi_ipmmcc_ber(
-        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandder_etsili_top_t *top);
 
 void wandder_encode_etsi_ipmmiri_ber(
-        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype,
         uint8_t *ipsrc, uint8_t *ipdest, int ipfamily,
         wandder_etsili_top_t *top);
 
 void wandder_encode_etsi_ipiri_ber(
-        wandder_buf_t **precomputed, int64_t cin, int64_t seqno,
+        int64_t cin, int64_t seqno,
         struct timeval *tv, void* params, wandder_etsili_iri_type_t iritype,
         wandder_etsili_top_t *top);
+
+void wandder_encode_init_top_ber (wandder_etsili_top_t* top,
+        wandder_etsili_intercept_details_t* intdetails);
 
 void wandder_etsili_preencode_static_fields_ber(
         wandder_buf_t **pendarray, wandder_etsili_intercept_details_t *details);
