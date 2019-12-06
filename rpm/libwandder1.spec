@@ -10,6 +10,7 @@ Source0:        https://github.com/wanduow/libwandder/archive/%{version}.tar.gz
 BuildRequires: gcc
 BuildRequires: gcc-c++
 BuildRequires: make
+BuildRequires: uthash-devel
 
 %description
 Libwandder is a helper library that can be used to perform some typical
