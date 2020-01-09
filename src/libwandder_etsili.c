@@ -1895,7 +1895,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->cid.members[1] =
         (struct wandder_dump_action) {
-                .name = "communicationIdentifier",
+                .name = "communicationIdentityNumber",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
