@@ -65,7 +65,11 @@ static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_tai(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_cgi(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_ecgi(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_sai(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 
 #define QUICK_DECODE(fail) \
@@ -345,6 +349,24 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret ECGI field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_CGI) {
+                if (stringify_cgi(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret CGI field %d:%d\n",
+                            etsidec->stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_SAI) {
+                if (stringify_sai(etsidec, etsidec->dec->current, curr,
+                            valstr, 2048) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret SAI field %d:%d\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -845,6 +867,75 @@ static char *stringify_ecgi(wandder_etsispec_t *etsidec,
     }
 
     memcpy(nextwrite, eci, strlen(eci));
+    return valstr;
+}
+
+static char *stringify_sai(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    char *nextwrite;
+    int used = 0;
+    char lac[24];
+    char sac[24];
+
+    memset(valstr, 0, len);
+
+    used = stringify_lai(item->valptr, item->length, valstr, len);
+
+    if (used == 0 || used >= len) {
+        return NULL;
+    }
+
+    nextwrite = valstr + used;
+    snprintf(lac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 3))));
+    snprintf(sac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 5))));
+
+    if (strlen(lac) + strlen(sac) + 1 > len - used) {
+        return NULL;
+    }
+
+    memcpy(nextwrite, lac, strlen(lac));
+    nextwrite += strlen(lac);
+
+    *nextwrite = '-';
+    nextwrite ++;
+
+    memcpy(nextwrite, sac, strlen(sac));
+    return valstr;
+}
+
+
+static char *stringify_cgi(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    char *nextwrite;
+    int used = 0;
+    char lac[24];
+    char cellid[24];
+
+    memset(valstr, 0, len);
+
+    used = stringify_lai(item->valptr, item->length, valstr, len);
+
+    if (used == 0 || used >= len) {
+        return NULL;
+    }
+
+    nextwrite = valstr + used;
+    snprintf(lac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 3))));
+    snprintf(cellid, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 5))));
+
+    if (strlen(lac) + strlen(cellid) + 1 > len - used) {
+        return NULL;
+    }
+
+    memcpy(nextwrite, lac, strlen(lac));
+    nextwrite += strlen(lac);
+
+    *nextwrite = '-';
+    nextwrite ++;
+
+    memcpy(nextwrite, cellid, strlen(cellid));
     return valstr;
 }
 
@@ -1804,7 +1895,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->cid.members[1] =
         (struct wandder_dump_action) {
-                .name = "communicationIdentifier",
+                .name = "communicationIdentityNumber",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
@@ -2270,7 +2361,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "globalCellID",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_OCTETSTRING
+                .interpretas = WANDDER_TAG_CGI
         };
     dec->location.members[3] = WANDDER_NOACTION;
     dec->location.members[4] =
@@ -2285,7 +2376,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "sAI",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_OCTETSTRING
+                .interpretas = WANDDER_TAG_SAI
         };
     dec->location.members[8] =
         (struct wandder_dump_action) {
