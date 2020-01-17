@@ -115,15 +115,9 @@ enum {
     WANDDER_IPIRI_ID_IPADDR = 2,
 };
 
-typedef enum {
-    WANDDER_ESTILI_IPCC,
-    WANDDER_ESTILI_IPMMCC,
-    WANDDER_ESTILI_IPMMIRI,
-    WANDDER_ESTILI_IPIRI,
-    WANDDER_ESTILI_NONE
-} wandder_bodytype_t;
-
 typedef struct wandder_pshdr {
+    uint8_t* buf;
+    size_t len;
     uint8_t* cin;
     uint8_t* seqno;
     uint8_t* sec;
@@ -131,44 +125,20 @@ typedef struct wandder_pshdr {
     uint8_t* end;
 } wandder_pshdr_t;
 
-typedef struct wandder_ipcc_body {
-    uint8_t* dir;
-    uint8_t* ipcontent;
-} wandder_ipcc_body_t;
-
-typedef struct wandder_ipmmcc_body {
-    uint8_t* dir;
-    uint8_t* ipcontent;
-} wandder_ipmmcc_body_t;
-
-typedef struct wandder_ipiri_body {
-    uint8_t* iritype;
-    uint8_t* params;
-} wandder_ipiri_body_t;
-
-typedef struct wandder_ipmmiri_body {
-    uint8_t* iritype;
-    uint8_t* ipcontent;
-} wandder_ipmmiri_body_t;
-
 typedef struct wandder_generic_body {
+    uint8_t* buf;
+    size_t len;
+    size_t alloc_len;
     uint8_t* meta;
     uint8_t* data;
 } wandder_generic_body_t;
 
 typedef struct wandder_etsili_top {
-    uint8_t* buf;
-    size_t len;
-    size_t alloc_len;
     wandder_pshdr_t header;
-    wandder_bodytype_t bodytype;
-    union {
-        wandder_ipcc_body_t ipcc;
-        wandder_ipmmcc_body_t ipmmcc;
-        wandder_ipmmiri_body_t ipmmiri;
-        wandder_ipiri_body_t ipiri;
-        wandder_generic_body_t generic;
-    } body;
+    wandder_generic_body_t ipcc;
+    wandder_generic_body_t ipmmcc;
+    wandder_generic_body_t ipmmiri;
+    wandder_generic_body_t ipiri;
     size_t increment_len;
     wandder_buf_t **preencoded;
 } wandder_etsili_top_t;
@@ -323,6 +293,9 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
 
 
 
+wandder_etsili_top_t* wandder_encode_init_top_ber (
+            wandder_encoder_ber_t* enc_ber, 
+            wandder_etsili_intercept_details_t* intdetails);
 void wandder_free_top(wandder_etsili_top_t *top);
 void wandder_encode_etsi_ipcc_ber(
         int64_t cin, int64_t seqno,
@@ -332,26 +305,16 @@ void wandder_encode_etsi_ipmmcc_ber(
         int64_t cin, int64_t seqno,
         struct timeval *tv, void *ipcontents, size_t iplen, uint8_t dir,
         wandder_etsili_top_t *top);
-
 void wandder_encode_etsi_ipmmiri_ber(
         int64_t cin, int64_t seqno,
-        struct timeval *tv, void *ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype,
-        uint8_t *ipsrc, uint8_t *ipdest, int ipfamily,
+        struct timeval *tv, void *ipcontents, size_t iplen, 
+        wandder_etsili_iri_type_t iritype, uint8_t *ipsrc, uint8_t *ipdest,
+        int ipfamily,
         wandder_etsili_top_t *top);
-
 void wandder_encode_etsi_ipiri_ber(
         int64_t cin, int64_t seqno,
         struct timeval *tv, void* params, wandder_etsili_iri_type_t iritype,
         wandder_etsili_top_t *top);
-
-void wandder_encode_init_top_ber (wandder_etsili_top_t* top,
-        wandder_etsili_intercept_details_t* intdetails);
-
-void wandder_etsili_preencode_static_fields_ber(
-        wandder_buf_t **pendarray, wandder_etsili_intercept_details_t *details);
-void wandder_etsili_clear_preencoded_fields_ber(wandder_buf_t **pendarray);
-
-
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

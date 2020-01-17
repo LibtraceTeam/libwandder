@@ -1316,6 +1316,7 @@ wandder_encoded_result_ber_t* wandder_encode_finish_ber(wandder_encoder_ber_t *e
     res->buf = enc_ber->buf;
     res->len = enc_ber->len;
     enc_ber->buf = NULL;
+    wandder_reset_encoder_ber(enc_ber);
     return res;
 
 }
@@ -1336,6 +1337,9 @@ void wandder_encode_endseq_ber(wandder_encoder_ber_t *enc_ber, uint32_t depth){
 
 void wandder_reset_encoder_ber(wandder_encoder_ber_t* enc_ber){
 
+    if (!enc_ber->buf) {
+        enc_ber->buf = malloc(enc_ber->alloc_len);
+    }
     enc_ber->ptr = enc_ber->buf;
     enc_ber->len = 0;
 
