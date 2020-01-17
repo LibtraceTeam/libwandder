@@ -316,5 +316,18 @@ void wandder_encode_etsi_ipiri_ber(
         struct timeval *tv, void* params, wandder_etsili_iri_type_t iritype,
         wandder_etsili_top_t *top);
 
+void wandder_init_etsili_ipcc(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top);
+void wandder_init_etsili_ipmmcc(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top);
+void wandder_init_etsili_ipiri(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top);
+void wandder_init_etsili_ipmmiri(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top);
+
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

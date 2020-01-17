@@ -3370,49 +3370,6 @@ static void update_etsili_ipcc(
 
 }
 
-static void init_etsili_ipcc(wandder_encoder_ber_t* enc_ber,
-        wandder_etsili_top_t* top) {
-
-    wandder_encoded_result_ber_t* res_ber;
-    
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
-
-    ptrdiff_t dir_diff = enc_ber->ptr - enc_ber->buf;
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_DIRFROM]);
-
-
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_IPCCOID]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
-
-    ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
-    wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, NULL, 0);
-
-    wandder_encode_endseq_ber(enc_ber, 7);
-
-    res_ber = wandder_encode_finish_ber(enc_ber);
-
-    top->ipcc.buf               = res_ber->buf;
-    top->ipcc.len               = res_ber->len;
-    top->ipcc.alloc_len         = res_ber->len;
-    top->ipcc.meta               = res_ber->buf + dir_diff;
-    top->ipcc.data         = res_ber->buf + ipcontent_diff;
-
-    free(res_ber);
-}
-
 static void update_etsili_ipmmcc(
         void* ipcontents, size_t iplen, uint8_t dir, 
         wandder_etsili_top_t* top) {
@@ -3471,60 +3428,6 @@ static void update_etsili_ipmmcc(
     top->ipmmcc.len = ptr - top->ipmmcc.buf;
 }
 
-static void init_etsili_ipmmcc(
-        wandder_encoder_ber_t* enc_ber,
-        wandder_etsili_top_t* top) {
-
-    uint32_t frametype = 0;
-    uint32_t mmccproto = 0;
-
-    wandder_encoded_result_ber_t* res_ber;
-    
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
-
-    ptrdiff_t dir_diff = enc_ber->ptr - enc_ber->buf;
-
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_DIRFROM]);
-
-
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_12]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_IPMMCCOID]);
-
-    ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
-    wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 1, NULL, 0);
-
-    wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
-                WANDDER_CLASS_CONTEXT_PRIMITIVE, 2, &frametype,
-                sizeof frametype);
-
-    wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
-                WANDDER_CLASS_CONTEXT_PRIMITIVE, 4, &mmccproto,
-                sizeof mmccproto);
-
-    wandder_encode_endseq_ber(enc_ber, 6);
-
-    res_ber = wandder_encode_finish_ber(enc_ber);
-
-    top->ipmmcc.buf                 = res_ber->buf;
-    top->ipmmcc.len                 = res_ber->len;
-    top->ipmmcc.alloc_len           = res_ber->len;
-    top->ipmmcc.meta                = res_ber->buf + dir_diff;
-    top->ipmmcc.data                = res_ber->buf + ipcontent_diff;
-
-    free(res_ber);
-}
-
 static void update_etsili_ipmmiri(
         void* ipcontents, size_t iplen, wandder_etsili_iri_type_t iritype, 
         wandder_etsili_top_t* top) {
@@ -3550,84 +3453,8 @@ static void update_etsili_ipmmiri(
     top->ipmmiri.len = ptr - top->ipmmiri.buf;
 }
 
-static void init_etsili_ipmmiri(
-        wandder_encoder_ber_t* enc_ber,
-        wandder_etsili_top_t* top) {
-
-    wandder_encoded_result_ber_t* res_ber;
-    uint32_t source_ip = 0;
-    uint32_t dest_ip = 0;
-    uint8_t *ipsrc = (uint8_t*)&source_ip;
-    uint8_t *ipdest = (uint8_t*)&dest_ip;
-    wandder_etsili_iri_type_t iritype = 0;
-
-    wandder_etsili_ipaddress_t encipsrc, encipdst;
-   
-    encipsrc.iptype = WANDDER_IPADDRESS_VERSION_4;
-    encipsrc.assignment = WANDDER_IPADDRESS_ASSIGNED_UNKNOWN;
-    encipsrc.v6prefixlen = 0;
-    encipsrc.v4subnetmask = 0xffffffff;
-    encipsrc.valtype = WANDDER_IPADDRESS_REP_BINARY;
-    encipsrc.ipvalue = ipsrc;
-
-    encipdst = encipsrc;
-    encipdst.ipvalue = ipdest;
-
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
-
-    ptrdiff_t iri_diff = enc_ber->ptr - enc_ber->buf;
-    wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, &iritype,
-            sizeof iritype);
-
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_11]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_IPMMIRIOID]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
-    
-    //encode ip address encipsrc
-    encode_ipaddress(enc_ber, &encipsrc);
-    wandder_encode_endseq_ber(enc_ber, 1);
-
-    wandder_append_preencoded_ber(enc_ber, 
-            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
-
-    //encode ip address encipdst
-    encode_ipaddress(enc_ber, &encipdst);
-    wandder_encode_endseq_ber(enc_ber, 1);
-
-    ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
-    wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 2, NULL, 0);
-
-
-    wandder_encode_endseq_ber(enc_ber, 8);
-
-    res_ber = wandder_encode_finish_ber(enc_ber);
-
-    top->ipmmiri.buf               = res_ber->buf;
-    top->ipmmiri.len               = res_ber->len;
-    top->ipmmiri.alloc_len         = res_ber->len;
-    top->ipmmiri.meta              = res_ber->buf + iri_diff;
-    top->ipmmiri.data              = res_ber->buf + ipcontent_diff;
-
-    free(res_ber);
-}
-
-static int sort_etsili_generic(wandder_etsili_generic_t *a, 
+static int sort_etsili_generic(
+        wandder_etsili_generic_t *a, 
         wandder_etsili_generic_t *b) {
 
     if (a->itemnum < b->itemnum) {
@@ -3818,7 +3645,182 @@ static void update_etsili_ipiri(
 
 }
 
-static inline void init_etsili_ipiri(
+void wandder_init_etsili_ipmmcc(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top) {
+
+    uint32_t frametype = 0;
+    uint32_t mmccproto = 0;
+
+    wandder_encoded_result_ber_t* res_ber;
+    
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
+
+    ptrdiff_t dir_diff = enc_ber->ptr - enc_ber->buf;
+
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_DIRFROM]);
+
+
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_12]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_IPMMCCOID]);
+
+    ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 1, NULL, 0);
+
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
+                WANDDER_CLASS_CONTEXT_PRIMITIVE, 2, &frametype,
+                sizeof frametype);
+
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
+                WANDDER_CLASS_CONTEXT_PRIMITIVE, 4, &mmccproto,
+                sizeof mmccproto);
+
+    wandder_encode_endseq_ber(enc_ber, 6);
+
+    res_ber = wandder_encode_finish_ber(enc_ber);
+
+    top->ipmmcc.buf                 = res_ber->buf;
+    top->ipmmcc.len                 = res_ber->len;
+    top->ipmmcc.alloc_len           = res_ber->len;
+    top->ipmmcc.meta                = res_ber->buf + dir_diff;
+    top->ipmmcc.data                = res_ber->buf + ipcontent_diff;
+
+    free(res_ber);
+}
+
+void wandder_init_etsili_ipmmiri(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top) {
+
+    wandder_encoded_result_ber_t* res_ber;
+    uint32_t source_ip = 0;
+    uint32_t dest_ip = 0;
+    uint8_t *ipsrc = (uint8_t*)&source_ip;
+    uint8_t *ipdest = (uint8_t*)&dest_ip;
+    wandder_etsili_iri_type_t iritype = 0;
+
+    wandder_etsili_ipaddress_t encipsrc, encipdst;
+   
+    encipsrc.iptype = WANDDER_IPADDRESS_VERSION_4;
+    encipsrc.assignment = WANDDER_IPADDRESS_ASSIGNED_UNKNOWN;
+    encipsrc.v6prefixlen = 0;
+    encipsrc.v4subnetmask = 0xffffffff;
+    encipsrc.valtype = WANDDER_IPADDRESS_REP_BINARY;
+    encipsrc.ipvalue = ipsrc;
+
+    encipdst = encipsrc;
+    encipdst.ipvalue = ipdest;
+
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
+
+    ptrdiff_t iri_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_ENUM,
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, &iritype,
+            sizeof iritype);
+
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_11]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_IPMMIRIOID]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
+    
+    //encode ip address encipsrc
+    encode_ipaddress(enc_ber, &encipsrc);
+    wandder_encode_endseq_ber(enc_ber, 1);
+
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
+
+    //encode ip address encipdst
+    encode_ipaddress(enc_ber, &encipdst);
+    wandder_encode_endseq_ber(enc_ber, 1);
+
+    ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 2, NULL, 0);
+
+
+    wandder_encode_endseq_ber(enc_ber, 8);
+
+    res_ber = wandder_encode_finish_ber(enc_ber);
+
+    top->ipmmiri.buf               = res_ber->buf;
+    top->ipmmiri.len               = res_ber->len;
+    top->ipmmiri.alloc_len         = res_ber->len;
+    top->ipmmiri.meta              = res_ber->buf + iri_diff;
+    top->ipmmiri.data              = res_ber->buf + ipcontent_diff;
+
+    free(res_ber);
+}
+
+void wandder_init_etsili_ipcc(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top) {
+
+    wandder_encoded_result_ber_t* res_ber;
+    
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
+
+    ptrdiff_t dir_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_DIRFROM]);
+
+
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_IPCCOID]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
+
+    ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 0, NULL, 0);
+
+    wandder_encode_endseq_ber(enc_ber, 7);
+
+    res_ber = wandder_encode_finish_ber(enc_ber);
+
+    top->ipcc.buf               = res_ber->buf;
+    top->ipcc.len               = res_ber->len;
+    top->ipcc.alloc_len         = res_ber->len;
+    top->ipcc.meta               = res_ber->buf + dir_diff;
+    top->ipcc.data         = res_ber->buf + ipcontent_diff;
+
+    free(res_ber);
+}
+
+void wandder_init_etsili_ipiri(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top) {
 
@@ -3964,12 +3966,6 @@ wandder_etsili_top_t* wandder_encode_init_top_ber (wandder_encoder_ber_t* enc_be
     top->preencoded =  wandder_etsili_preencode_static_fields_ber(intdetails);
 
     init_etsili_pshdr_pc(enc_ber, top);
-
-    //seperate these?
-    init_etsili_ipcc(enc_ber, top);
-    init_etsili_ipiri(enc_ber, top);
-    init_etsili_ipmmcc(enc_ber, top);
-    init_etsili_ipmmiri(enc_ber, top);
 
     top->increment_len = enc_ber->increment;
 
