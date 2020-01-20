@@ -3652,7 +3652,7 @@ static void update_etsili_ipiri(
 
 }
 
-static wandder_etsili_child_t *create_child(wandder_etsili_top_t* top, 
+wandder_etsili_child_t *wandder_etsili_create_child(wandder_etsili_top_t* top, 
         wandder_generic_body_t * body) {
 
     ptrdiff_t diff;
@@ -3765,7 +3765,7 @@ wandder_etsili_child_t * wandder_init_etsili_ipmmcc(
 
     free(res_ber);
 
-    return create_child(top ,&top->ipmmcc);
+    return wandder_etsili_create_child(top ,&top->ipmmcc);
 }
 
 wandder_etsili_child_t * wandder_init_etsili_ipmmiri(
@@ -3844,7 +3844,7 @@ wandder_etsili_child_t * wandder_init_etsili_ipmmiri(
 
     free(res_ber);
 
-    return create_child(top ,&top->ipmmiri);
+    return wandder_etsili_create_child(top ,&top->ipmmiri);
 }
 
 wandder_etsili_child_t * wandder_init_etsili_ipcc(
@@ -3895,7 +3895,7 @@ wandder_etsili_child_t * wandder_init_etsili_ipcc(
 
     free(res_ber);
 
-    return create_child(top ,&top->ipcc);
+    return wandder_etsili_create_child(top ,&top->ipcc);
 }
 
 wandder_etsili_child_t * wandder_init_etsili_ipiri(
@@ -3945,7 +3945,7 @@ wandder_etsili_child_t * wandder_init_etsili_ipiri(
 
     free(res_ber);
 
-    return create_child(top ,&top->ipiri);
+    return wandder_etsili_create_child(top ,&top->ipiri);
 }
 
 void wandder_encode_etsi_ipmmcc_ber (

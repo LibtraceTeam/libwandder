@@ -306,7 +306,8 @@ wandder_etsili_top_t* wandder_encode_init_top_ber (
             wandder_encoder_ber_t* enc_ber, 
             wandder_etsili_intercept_details_t* intdetails);
 void wandder_free_top(wandder_etsili_top_t *top);
-wandder_etsili_child_t *wandder_create_ipcc_child(wandder_etsili_top_t* top);
+wandder_etsili_child_t *wandder_etsili_create_child(wandder_etsili_top_t* top, 
+        wandder_generic_body_t * body);
 void wandder_free_child(wandder_etsili_child_t * child);
 
 void wandder_encode_etsi_ipcc_ber(
