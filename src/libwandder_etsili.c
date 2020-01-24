@@ -2993,7 +2993,7 @@ void wandder_free_top(wandder_etsili_top_t *top){
     }
 }
 
-wandder_buf_t ** wandder_etsili_preencode_static_fields_ber(
+static wandder_buf_t ** wandder_etsili_preencode_static_fields_ber(
         wandder_etsili_intercept_details_t *details) {
 
     int tvclass = 1;
@@ -3172,6 +3172,9 @@ wandder_buf_t ** wandder_etsili_preencode_static_fields_ber(
 
 }
 
+//ensures that the buffer exceeds child->body.buf + currlen in allocated memeroy
+//adjusts all internal pointers accordingly if realloc
+//returns the difference between new, and old buffers
 static ptrdiff_t check_body_size(wandder_etsili_child_t * child, size_t currlen){
     
     uint8_t* new;
@@ -3179,6 +3182,7 @@ static ptrdiff_t check_body_size(wandder_etsili_child_t * child, size_t currlen)
 
     if (currlen + (child->body.data - child->buf) > child->alloc_len){
         child->alloc_len = child->len + currlen + child->increment_len;
+        child->body.alloc_len = child->alloc_len - child->header.len;
         new = realloc(child->buf, child->alloc_len);
         if (new == NULL){
             //TODO handle realloc fail
@@ -3190,6 +3194,7 @@ static ptrdiff_t check_body_size(wandder_etsili_child_t * child, size_t currlen)
         if (new != child->body.buf){ //only need to update if alloc moved
             ptrdiff_t offset = (new - child->buf);
             child->buf          += offset;
+            child->header.buf   += offset;
             child->header.cin   += offset;
             child->header.seqno += offset;
             child->header.sec   += offset;
@@ -3387,6 +3392,7 @@ static void update_etsili_ipcc(
     ptr += check_body_size(child, (ptr - child->body.buf) + (7*2));
     ENDCONSTRUCTEDBLOCK(ptr,7)
     child->body.len = ptr - child->body.buf;
+    child->len = ptr - child->buf;
 
 }
 
@@ -3446,6 +3452,7 @@ static void update_etsili_ipmmcc(
     
     ENDCONSTRUCTEDBLOCK(ptr,6) //endseq
     child->body.len = ptr - child->body.buf;
+    child->len = ptr - child->buf;
 }
 
 static void update_etsili_ipmmiri(
@@ -3471,18 +3478,19 @@ static void update_etsili_ipmmiri(
     ptr += check_body_size(child, (ptr - child->body.buf) + (8*2));
     ENDCONSTRUCTEDBLOCK(ptr,8)
     child->body.len = ptr - child->body.buf;
+    child->len = ptr - child->buf;
 }
 
 static void update_etsili_ipiri(
         wandder_etsili_generic_t *params, wandder_etsili_iri_type_t iritype, 
-        wandder_etsili_child_t * child) { //TODO remove top, replace child
+        wandder_etsili_child_t * child) {
 
     wandder_etsili_generic_t *p, *tmp;
     wandder_ipiri_id_t* iriid;
     size_t ret;
     uint8_t * ptr = child->body.data;
-    ptrdiff_t data_ptr_diff = ptr - child->body.buf;
-    ptrdiff_t rem = (ptr - child->body.buf) - child->body.alloc_len;
+    ptrdiff_t data_ptr_diff = ptr - child->buf;
+    ptrdiff_t rem = child->alloc_len - (ptr - child->buf);
     
     ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -3494,6 +3502,9 @@ static void update_etsili_ipiri(
     //do params here from
     HASH_SRT(hh, params, sort_etsili_generic);
     HASH_ITER(hh, params, p, tmp) {
+        ptr += check_body_size(child, (ptr - child->body.buf) + 512);
+        rem = child->alloc_len - (ptr - child->buf);
+        //need a better way then just making it bigger before hand (maybe?)
         switch(p->itemnum) {
             case WANDDER_IPIRI_CONTENTS_ACCESS_EVENT_TYPE:
             case WANDDER_IPIRI_CONTENTS_INTERNET_ACCESS_TYPE:
@@ -3645,10 +3656,11 @@ static void update_etsili_ipiri(
     }
 
     //ensure there is enough space for the last section
-    child->body.data = data_ptr_diff + child->body.buf;
+    child->body.data = data_ptr_diff + child->buf;
     ptr += check_body_size(child, (ptr - child->body.buf) + (8*2));
-    ENDCONSTRUCTEDBLOCK(ptr,8) //endseq
+    ENDCONSTRUCTEDBLOCK(ptr,7) //endseq
     child->body.len = ptr - child->body.buf;
+    child->len = ptr - child->buf;
 
 }
 
