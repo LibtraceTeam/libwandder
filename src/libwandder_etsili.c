@@ -3208,7 +3208,7 @@ static ptrdiff_t check_body_size(wandder_etsili_child_t * child, size_t currlen)
         new = realloc(child->buf, child->alloc_len);
         if (new == NULL){
             //TODO handle realloc fail
-            printf("unable to alloc mem\n");
+            fprintf(stderr, "unable to alloc mem\n");
             assert(0);
         }
         
@@ -3694,7 +3694,9 @@ wandder_etsili_child_t *wandder_etsili_create_child(wandder_etsili_top_t* top,
 
     //ensure top and body exist
     if ( !(top) || !(top->header.buf) || (!body->buf) ){
-        printf("make sure top and body has been initlizied first\n");
+        fprintf(stderr,
+            "Make sure wandder_encode_init_top_ber and wandder_init_etsili_??? \
+            have been called first\n");
         return NULL;
     }
     
@@ -3786,7 +3788,7 @@ void wandder_init_etsili_ipmmcc(
     wandder_encoded_result_ber_t* res_ber;
 
     if (!top || !top->preencoded || !enc_ber){
-        printf ("ensure top is initlized first\n");
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
         return;
     }
     
@@ -3849,7 +3851,7 @@ void wandder_init_etsili_ipmmiri(
     wandder_etsili_iri_type_t iritype = 0;
 
     if (!top || !top->preencoded || !enc_ber){
-        printf ("ensure top is initlized first\n");
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
         return;
     }
 
@@ -3926,7 +3928,7 @@ void wandder_init_etsili_ipcc(
         wandder_etsili_top_t* top) {
 
     if (!top || !top->preencoded || !enc_ber){
-        printf ("ensure top is initlized first\n");
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
         return;
     }
 
@@ -3982,7 +3984,7 @@ void wandder_init_etsili_ipiri(
     wandder_etsili_iri_type_t iritype = 0;
 
     if (!top || !top->preencoded || !enc_ber){
-        printf ("ensure top is initlized first\n");
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
         return;
     }
 
@@ -4033,12 +4035,12 @@ void wandder_encode_etsi_ipmmcc_ber (
     
     if (!child || !child->header.buf) {
         //error out for not initlizing top first
-        printf("Call init top first.\n");
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
         return;
     }
     if (!child->body.buf) {
         //error out for not initlizing ipmmcc
-        printf("Call init ipmmcc first.\n");
+        fprintf(stderr,"Call init ipmmcc first.\n");
         return;
     }
 
@@ -4057,12 +4059,12 @@ void wandder_encode_etsi_ipmmiri_ber (
 
     if (!child || !child->header.buf) {
         //error out for not initlizing top first
-        printf("Call init top first.\n");
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
         return;
     }
     if (!child->body.buf) {
         //error out for not initlizing ipmmiri
-        printf("Call init ipmmiri first.\n");
+        fprintf(stderr,"Call init ipmmiri first.\n");
         return;
     }
 
@@ -4078,12 +4080,12 @@ void wandder_encode_etsi_ipcc_ber (
 
     if (!child || !child->header.buf) {
         //error out for not initlizing top first
-        printf("Call init top first.\n");
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
         return;
     }
     if (!child->body.buf) {
         //error out for not initlizing ipcc
-        printf("Call init ipcc first.\n");
+        fprintf(stderr,"Call init ipcc first.\n");
         return;
     }
     
@@ -4099,12 +4101,12 @@ void wandder_encode_etsi_ipiri_ber (
     
     if (!child || !child->header.buf) {
         //error out for not initlizing top first
-        printf("Call init top first.\n");
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
         return;
     }
     if (!child->body.buf) {
         //error out for not initlizing ipiri
-        printf("Call init ipiri first.\n");
+        fprintf(stderr,"Call init ipiri first.\n");
         return;
     }
 
