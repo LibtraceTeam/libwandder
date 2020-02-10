@@ -125,12 +125,22 @@ typedef struct wandder_pshdr {
     uint8_t* end;
 } wandder_pshdr_t;
 
+typedef struct wandder_etsili_child wandder_etsili_child_t;
+
+typedef struct wandder_etsili_child_freelist {
+    pthread_mutex_t mutex;
+    wandder_etsili_child_t * first;
+    int counter;
+    int marked_for_delete;
+} wandder_etsili_child_freelist_t;
+
 typedef struct wandder_generic_body {
     uint8_t* buf;
     size_t len;
     size_t alloc_len;
     uint8_t* meta;
     uint8_t* data;
+    wandder_etsili_child_freelist_t * flist;
 } wandder_generic_body_t;
 
 typedef struct wandder_etsili_top {
@@ -143,15 +153,17 @@ typedef struct wandder_etsili_top {
     wandder_buf_t **preencoded;
 } wandder_etsili_top_t;
 
-typedef struct wandder_etsili_child {
+struct wandder_etsili_child {
     uint8_t* buf;
     size_t len;
     size_t alloc_len;
     wandder_pshdr_t header;
     wandder_generic_body_t body;
-    size_t increment_len;
-    wandder_buf_t **preencoded;
-} wandder_etsili_child_t;
+    wandder_etsili_top_t * owner;
+
+    wandder_etsili_child_freelist_t * flist;
+    wandder_etsili_child_t * nextfree;
+};
 
 typedef enum {
     WANDDER_PREENCODE_USEQUENCE,
@@ -329,18 +341,22 @@ void wandder_encode_etsi_ipiri_ber(
         struct timeval *tv, void* params, wandder_etsili_iri_type_t iritype,
         wandder_etsili_child_t * child);
 
-wandder_etsili_child_t * wandder_init_etsili_ipcc(
+void wandder_init_etsili_ipcc(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top);
-wandder_etsili_child_t * wandder_init_etsili_ipmmcc(
+void wandder_init_etsili_ipmmcc(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top);
-wandder_etsili_child_t * wandder_init_etsili_ipiri(
+void wandder_init_etsili_ipiri(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top);
-wandder_etsili_child_t * wandder_init_etsili_ipmmiri(
+void wandder_init_etsili_ipmmiri(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top);
+
+wandder_etsili_child_freelist_t *wandder_create_etsili_child_freelist();
+wandder_etsili_child_t *wandder_create_etsili_child(wandder_etsili_top_t* top, 
+        wandder_generic_body_t * body);
 
 #endif
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :

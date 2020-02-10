@@ -2959,7 +2959,31 @@ static inline void encode_ipaddress(wandder_encoder_ber_t* enc_ber,
 
 
 /////////////////////////////////start of BER code
+static void free_generic_body(wandder_generic_body_t * body) {
 
+    wandder_etsili_child_t * head = NULL;
+    wandder_etsili_child_t * next = NULL;
+
+    if (body->buf){
+        free(body->buf);
+    }
+
+    if (body->flist) {
+        //obtain lock and remove list from flist to prevent lock contention
+        // (could make the mutex recursive instead?)
+        if (pthread_mutex_lock(&(body->flist->mutex)) == 0){
+            head = body->flist->first;
+            body->flist->first = NULL;
+            body->flist->marked_for_delete = 1;
+            pthread_mutex_unlock(&(body->flist->mutex));
+        }
+        while (head){
+            next = head->nextfree;
+            wandder_free_child(head);
+            head = next;
+        }
+    }
+} 
 static void clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
 
     wandder_preencode_index_t i;
@@ -2981,14 +3005,12 @@ void wandder_free_top(wandder_etsili_top_t *top){
         }
         if (top->header.buf)
             free(top->header.buf);
-        if (top->ipcc.buf)
-            free(top->ipcc.buf);
-        if (top->ipmmcc.buf)
-            free(top->ipmmcc.buf);
-        if (top->ipiri.buf)
-            free(top->ipiri.buf);
-        if (top->ipmmiri.buf)
-            free(top->ipmmiri.buf);
+
+        free_generic_body(&top->ipcc);
+        free_generic_body(&top->ipmmcc);
+        free_generic_body(&top->ipiri);
+        free_generic_body(&top->ipmmiri);
+
         free(top);
     }
 }
@@ -3181,7 +3203,7 @@ static ptrdiff_t check_body_size(wandder_etsili_child_t * child, size_t currlen)
     ptrdiff_t offset = 0;
 
     if (currlen + (child->body.data - child->buf) > child->alloc_len){
-        child->alloc_len = child->len + currlen + child->increment_len;
+        child->alloc_len = child->len + currlen + child->owner->increment_len;
         child->body.alloc_len = child->alloc_len - child->header.len;
         new = realloc(child->buf, child->alloc_len);
         if (new == NULL){
@@ -3362,16 +3384,16 @@ static void update_etsili_ipcc(
         wandder_etsili_child_t * child) {
     if (dir == 0) {
         memcpy(child->body.meta, 
-                child->preencoded[WANDDER_PREENCODE_DIRFROM]->buf, 
-                child->preencoded[WANDDER_PREENCODE_DIRFROM]->len);
+                child->owner->preencoded[WANDDER_PREENCODE_DIRFROM]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRFROM]->len);
     } else if (dir == 1) {
         memcpy(child->body.meta, 
-                child->preencoded[WANDDER_PREENCODE_DIRTO]->buf, 
-                child->preencoded[WANDDER_PREENCODE_DIRTO]->len);
+                child->owner->preencoded[WANDDER_PREENCODE_DIRTO]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRTO]->len);
     } else if (dir == 2) {
         memcpy(child->body.meta, 
-                child->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
-                child->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len);
+                child->owner->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len);
     } else {
         ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -3405,16 +3427,16 @@ static void update_etsili_ipmmcc(
 
     if (dir == 0) {
         memcpy(child->body.meta, 
-                child->preencoded[WANDDER_PREENCODE_DIRFROM]->buf, 
-                child->preencoded[WANDDER_PREENCODE_DIRFROM]->len);
+                child->owner->preencoded[WANDDER_PREENCODE_DIRFROM]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRFROM]->len);
     } else if (dir == 1) {
         memcpy(child->body.meta, 
-                child->preencoded[WANDDER_PREENCODE_DIRTO]->buf, 
-                child->preencoded[WANDDER_PREENCODE_DIRTO]->len);
+                child->owner->preencoded[WANDDER_PREENCODE_DIRTO]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRTO]->len);
     } else if (dir == 2) {
         memcpy(child->body.meta, 
-                child->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
-                child->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len);
+                child->owner->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len);
     } else {
         ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -3434,7 +3456,7 @@ static void update_etsili_ipmmcc(
 
     //ensure there is enough space for the last section
     ptr += check_body_size(child, (ptr - child->body.buf) +
-            (6*2) + (child->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len *2));
+            (6*2) + (child->owner->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len *2));
 
     ptr += ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
@@ -3677,13 +3699,19 @@ wandder_etsili_child_t *wandder_etsili_create_child(wandder_etsili_top_t* top,
     }
     
     child = malloc(sizeof(wandder_etsili_child_t));
-    child->increment_len = top->increment_len;
-    child->preencoded = top->preencoded;
-
     child->len = top->header.len + body->len;
     child->buf = malloc(child->len);
     child->alloc_len = child->len;
-    
+
+    child->owner = top;
+    child->flist = body->flist;
+    if (child->flist) {
+        if (pthread_mutex_lock(&(child->flist->mutex)) == 0) {
+            child->flist->counter++;
+        pthread_mutex_unlock(&(child->flist->mutex));
+        }
+    }
+
     child->header.buf = child->buf;
     child->header.len = top->header.len;
 
@@ -3718,13 +3746,37 @@ wandder_etsili_child_t *wandder_etsili_create_child(wandder_etsili_top_t* top,
 void wandder_free_child(wandder_etsili_child_t * child){
 
     if (child) {
+        if (child->flist){
+            if (pthread_mutex_lock(&(child->flist->mutex)) == 0) {
+                if (child->flist->marked_for_delete == 0){
+                    //release and return
+                    child->nextfree = child->flist->first;
+                    child->flist->first = child;
+
+                    pthread_mutex_unlock(&(child->flist->mutex));
+                    return;
+                }
+
+                child->flist->counter--;
+                
+                if (child->flist->counter == 0){
+                    //we are the sole owner so we can free it
+                    pthread_mutex_destroy(&(child->flist->mutex));
+                    free(child->flist);
+                } else {
+                    pthread_mutex_unlock(&(child->flist->mutex));
+                }
+            }
+        }
+
         if (child->buf)
             free(child->buf);
+        
         free(child);
     }
 }
 
-wandder_etsili_child_t * wandder_init_etsili_ipmmcc(
+void wandder_init_etsili_ipmmcc(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top) {
 
@@ -3732,6 +3784,11 @@ wandder_etsili_child_t * wandder_init_etsili_ipmmcc(
     uint32_t mmccproto = 0;
 
     wandder_encoded_result_ber_t* res_ber;
+
+    if (!top || !top->preencoded || !enc_ber){
+        printf ("ensure top is initlized first\n");
+        return;
+    }
     
     wandder_append_preencoded_ber(enc_ber, 
             top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
@@ -3777,10 +3834,10 @@ wandder_etsili_child_t * wandder_init_etsili_ipmmcc(
 
     free(res_ber);
 
-    return wandder_etsili_create_child(top ,&top->ipmmcc);
+    return;
 }
 
-wandder_etsili_child_t * wandder_init_etsili_ipmmiri(
+void wandder_init_etsili_ipmmiri(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top) {
 
@@ -3790,6 +3847,11 @@ wandder_etsili_child_t * wandder_init_etsili_ipmmiri(
     uint8_t *ipsrc = (uint8_t*)&source_ip;
     uint8_t *ipdest = (uint8_t*)&dest_ip;
     wandder_etsili_iri_type_t iritype = 0;
+
+    if (!top || !top->preencoded || !enc_ber){
+        printf ("ensure top is initlized first\n");
+        return;
+    }
 
     wandder_etsili_ipaddress_t encipsrc, encipdst;
    
@@ -3856,16 +3918,16 @@ wandder_etsili_child_t * wandder_init_etsili_ipmmiri(
 
     free(res_ber);
 
-    return wandder_etsili_create_child(top ,&top->ipmmiri);
+    return;
 }
 
-wandder_etsili_child_t * wandder_init_etsili_ipcc(
+void wandder_init_etsili_ipcc(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top) {
 
     if (!top || !top->preencoded || !enc_ber){
         printf ("ensure top is initlized first\n");
-        return NULL;
+        return;
     }
 
     wandder_encoded_result_ber_t* res_ber;
@@ -3907,10 +3969,10 @@ wandder_etsili_child_t * wandder_init_etsili_ipcc(
 
     free(res_ber);
 
-    return wandder_etsili_create_child(top ,&top->ipcc);
+    return;
 }
 
-wandder_etsili_child_t * wandder_init_etsili_ipiri(
+void wandder_init_etsili_ipiri(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top) {
 
@@ -3919,7 +3981,11 @@ wandder_etsili_child_t * wandder_init_etsili_ipiri(
     wandder_ipiri_id_t* iriid;
     wandder_etsili_iri_type_t iritype = 0;
 
-    
+    if (!top || !top->preencoded || !enc_ber){
+        printf ("ensure top is initlized first\n");
+        return;
+    }
+
     //////////////////////////////////////////////////////////////// block 0
     wandder_append_preencoded_ber(enc_ber, 
             top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
@@ -3957,7 +4023,7 @@ wandder_etsili_child_t * wandder_init_etsili_ipiri(
 
     free(res_ber);
 
-    return wandder_etsili_create_child(top ,&top->ipiri);
+    return;
 }
 
 void wandder_encode_etsi_ipmmcc_ber (
@@ -4064,5 +4130,44 @@ wandder_etsili_top_t* wandder_encode_init_top_ber (wandder_encoder_ber_t* enc_be
     return top;
 }
 
+wandder_etsili_child_freelist_t *wandder_create_etsili_child_freelist() {
+    wandder_etsili_child_freelist_t *flist;
+
+    pthread_mutexattr_t attr;
+
+    flist = (wandder_etsili_child_freelist_t *)calloc(1,
+            sizeof(wandder_etsili_child_freelist_t));
+
+    //setting recursive as lock operations happen across a linked list
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&(flist->mutex), &attr);
+    flist->first = NULL;
+    return flist;
+}
+
+wandder_etsili_child_t *wandder_create_etsili_child(
+        wandder_etsili_top_t* top, 
+        wandder_generic_body_t * body) {
+
+    wandder_etsili_child_t *child = NULL;
+
+    //only need to actually create child if none exist here
+
+    if (pthread_mutex_trylock(&(body->flist->mutex)) == 0) {
+        //if you cant obtain mutex just make a new child, no need to wait
+        if (body->flist->first) {
+            child = body->flist->first;
+            body->flist->first = child->nextfree;
+        }
+
+        pthread_mutex_unlock(&(body->flist->mutex));
+    }
+
+    if (child == NULL) {
+        child = wandder_etsili_create_child(top, body);
+    }
+
+    return child;
+}
 
 // vim: set sw=4 tabstop=4 softtabstop=4 expandtab :
