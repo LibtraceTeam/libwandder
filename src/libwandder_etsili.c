@@ -48,6 +48,7 @@ uint8_t etsi_ipccoid[4] = {0x05, 0x03, 0x0a, 0x02};
 uint8_t etsi_ipirioid[4] = {0x05, 0x03, 0x0a, 0x01};
 uint8_t etsi_ipmmccoid[4] = {0x05, 0x05, 0x06, 0x02};
 uint8_t etsi_ipmmirioid[4] = {0x05, 0x05, 0x06, 0x01};
+uint8_t etsi_umtsirioid[9] = {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x01, 0x0f, 0x05};
 
 static void init_dumpers(wandder_etsispec_t *dec);
 static void free_dumpers(wandder_etsispec_t *dec);
@@ -2903,6 +2904,8 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
 }
 
+/////////////////////////////////start of BER code
+
 static inline void encode_ipaddress(wandder_encoder_ber_t* enc_ber, 
         wandder_etsili_ipaddress_t *addr){
 
@@ -2957,8 +2960,136 @@ static inline void encode_ipaddress(wandder_encoder_ber_t* enc_ber,
     }
 }
 
+//ensures that the buffer exceeds child->body.buf + currlen in allocated memeroy
+//adjusts all internal pointers accordingly if realloc
+//returns the difference between new, and old buffers
+static ptrdiff_t check_body_size(wandder_etsili_child_t * child, size_t currlen){
+    
+    uint8_t* new;
+    ptrdiff_t offset = 0;
 
-/////////////////////////////////start of BER code
+    if (currlen + (child->body.data - child->buf) > child->alloc_len){
+        child->alloc_len = child->len + currlen + child->owner->increment_len;
+        child->body.alloc_len = child->alloc_len - child->header.len;
+        new = realloc(child->buf, child->alloc_len);
+        if (new == NULL){
+            //TODO handle realloc fail
+            fprintf(stderr, "unable to alloc mem\n");
+            assert(0);
+        }
+        
+        //update all refrences
+        if (new != child->body.buf){ //only need to update if alloc moved
+            ptrdiff_t offset = (new - child->buf);
+            child->buf          += offset;
+            child->header.buf   += offset;
+            child->header.cin   += offset;
+            child->header.seqno += offset;
+            child->header.sec   += offset;
+            child->header.usec  += offset;
+            child->header.end   += offset;
+
+            child->body.buf     += offset;
+            child->body.meta    += offset; 
+            child->body.data    += offset;
+            return offset;
+        }
+    }
+    return offset;
+}
+
+inline static void preencoded_here(uint8_t** ptr, ptrdiff_t * rem, int index, 
+        wandder_etsili_child_t * child) {
+
+    size_t ret = child->owner->preencoded[index]->len;
+    *ptr += check_body_size(child, (*ptr - child->body.buf) + ret);
+    memcpy(*ptr, 
+            child->owner->preencoded[index]->buf, ret);
+    *ptr += ret;
+    *rem = child->alloc_len - (*ptr - child->buf);
+}
+
+inline static size_t encode_here_ber_update(
+        uint8_t idnum, uint8_t class, uint8_t encodeas, 
+        void * valptr, size_t vallen, 
+        uint8_t** ptr, ptrdiff_t* rem,
+        wandder_etsili_child_t * child){
+
+    *ptr += check_body_size(child, (*ptr - child->body.buf) + 512);
+    size_t ret = encode_here_ber(
+                idnum,
+                class,
+                encodeas,
+                valptr, 
+                vallen,
+                *ptr,
+                *rem);
+    *ptr += ret;
+    *rem = child->alloc_len - (*ptr - child->buf);
+}
+
+static inline void encode_ipaddress_inplace(
+        uint8_t** ptr, ptrdiff_t* rem, wandder_etsili_child_t * child,
+        wandder_etsili_ipaddress_t *addr) {
+
+    uint32_t addrlen = 4;
+    uint32_t iptype = addr->iptype;
+    uint32_t assign = addr->assignment;
+    uint32_t prefbits = addr->v6prefixlen;
+
+    if (addr->iptype == WANDDER_IPADDRESS_VERSION_6) {
+        addrlen = 16;
+    }
+
+    // iP-Type
+    encode_here_ber_update(
+            1, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+            (uint8_t*)&(iptype), sizeof(iptype),
+            ptr, rem, child);
+
+    encode_here_ber_update(
+            2, WANDDER_CLASS_CONTEXT_CONSTRUCT, WANDDER_TAG_SEQUENCE,
+            NULL, 0,
+            ptr, rem, child);
+
+    if (addr->valtype == WANDDER_IPADDRESS_REP_BINARY) {
+        encode_here_ber_update(
+                1, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                addr->ipvalue, addrlen,
+                ptr, rem, child);
+    } else {
+        encode_here_ber_update(
+                2, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_IA5,
+                addr->ipvalue, strlen((char *)addr->ipvalue),
+                ptr, rem, child);
+    }
+
+    ENDCONSTRUCTEDBLOCK(*ptr, 1)
+    *rem -= 2;
+
+    // iP-assignment
+    encode_here_ber_update(
+            3, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+            (uint8_t*)&(assign), sizeof(assign),
+            ptr, rem, child);
+
+    // iPv6PrefixLength
+    if (addr->v6prefixlen > 0) {
+        encode_here_ber_update(
+                4, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_INTEGER,
+                (uint8_t*)&(prefbits), sizeof(prefbits),
+                ptr, rem, child);
+    }
+
+    // iPv4SubnetMask
+    if (addr->v4subnetmask > 0) {
+        encode_here_ber_update(
+                5, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                (uint8_t*)&(addr->v4subnetmask), sizeof(addr->v4subnetmask),
+                ptr, rem, child);
+    }
+}
+
 static void free_generic_body(wandder_generic_body_t * body) {
 
     wandder_etsili_child_t * head = NULL;
@@ -3059,9 +3190,37 @@ static wandder_buf_t ** wandder_etsili_preencode_static_fields_ber(
             NULL, 
             0);
 
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_4] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            4,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_5] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            5,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
     pendarray[WANDDER_PREENCODE_CSEQUENCE_7] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             7,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_8] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            8,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_9] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            9,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
@@ -3076,6 +3235,20 @@ static wandder_buf_t ** wandder_etsili_preencode_static_fields_ber(
     pendarray[WANDDER_PREENCODE_CSEQUENCE_12] =  wandder_encode_new_ber(
             WANDDER_CLASS_CONTEXT_CONSTRUCT, 
             12,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_13] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            13,
+            WANDDER_TAG_SEQUENCE,
+            NULL, 
+            0);
+
+    pendarray[WANDDER_PREENCODE_CSEQUENCE_26] =  wandder_encode_new_ber(
+            WANDDER_CLASS_CONTEXT_CONSTRUCT, 
+            26,
             WANDDER_TAG_SEQUENCE,
             NULL, 
             0);
@@ -3161,6 +3334,13 @@ static wandder_buf_t ** wandder_etsili_preencode_static_fields_ber(
             etsi_ipirioid, 
             sizeof etsi_ipirioid);
 
+    pendarray[WANDDER_PREENCODE_UMTSIRIOID] =  wandder_encode_new_ber( 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0,
+            WANDDER_TAG_OID,
+            etsi_umtsirioid, 
+            sizeof etsi_umtsirioid);
+
     pendarray[WANDDER_PREENCODE_IPMMCCOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
@@ -3192,44 +3372,6 @@ static wandder_buf_t ** wandder_etsili_preencode_static_fields_ber(
 
     return pendarray;
 
-}
-
-//ensures that the buffer exceeds child->body.buf + currlen in allocated memeroy
-//adjusts all internal pointers accordingly if realloc
-//returns the difference between new, and old buffers
-static ptrdiff_t check_body_size(wandder_etsili_child_t * child, size_t currlen){
-    
-    uint8_t* new;
-    ptrdiff_t offset = 0;
-
-    if (currlen + (child->body.data - child->buf) > child->alloc_len){
-        child->alloc_len = child->len + currlen + child->owner->increment_len;
-        child->body.alloc_len = child->alloc_len - child->header.len;
-        new = realloc(child->buf, child->alloc_len);
-        if (new == NULL){
-            //TODO handle realloc fail
-            fprintf(stderr, "unable to alloc mem\n");
-            assert(0);
-        }
-        
-        //update all refrences
-        if (new != child->body.buf){ //only need to update if alloc moved
-            ptrdiff_t offset = (new - child->buf);
-            child->buf          += offset;
-            child->header.buf   += offset;
-            child->header.cin   += offset;
-            child->header.seqno += offset;
-            child->header.sec   += offset;
-            child->header.usec  += offset;
-            child->header.end   += offset;
-
-            child->body.buf     += offset;
-            child->body.meta    += offset; 
-            child->body.data    += offset;
-            return offset;
-        }
-    }
-    return offset;
 }
 
 static int sort_etsili_generic(
@@ -3686,6 +3828,383 @@ static void update_etsili_ipiri(
 
 }
 
+static void update_etsili_umtscc(
+        void* ipcontents, size_t iplen, uint8_t dir, 
+        wandder_etsili_child_t * child) {
+    if (dir == 0) {
+        memcpy(child->body.meta, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRFROM]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRFROM]->len);
+    } else if (dir == 1) {
+        memcpy(child->body.meta, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRTO]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRTO]->len);
+    } else if (dir == 2) {
+        memcpy(child->body.meta, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->buf, 
+                child->owner->preencoded[WANDDER_PREENCODE_DIRUNKNOWN]->len);
+    } else {
+        ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0, 
+            &(dir), 
+            sizeof dir,
+            child->body.meta);
+    }
+
+    uint8_t* ptr = wandder_encode_body_data_ber(
+            child,
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            4,
+            WANDDER_TAG_IPPACKET,
+            ipcontents, 
+            iplen);
+
+    ptr += check_body_size(child, (ptr - child->body.buf) + (5*2));
+    ENDCONSTRUCTEDBLOCK(ptr,5)
+    child->body.len = ptr - child->body.buf;
+    child->len = ptr - child->buf;
+
+}
+
+static void update_etsili_umtsiri(
+        wandder_etsili_generic_t *params, wandder_etsili_iri_type_t iritype, 
+        wandder_etsili_child_t * child) {
+
+    wandder_etsili_generic_t *p, *tmp, *savedtime;
+    wandder_ipiri_id_t* iriid;
+    size_t ret;
+    uint8_t lookup;
+    uint32_t iriversion = 8;
+    uint32_t gprstarget = 3;
+    uint8_t * ptr = child->body.meta; //start from meta,
+    ptrdiff_t data_ptr_diff = ptr - child->buf;
+    ptrdiff_t rem;
+    
+    ret = ber_rebuild_integer(
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
+            0, 
+            &(iritype), 
+            sizeof iritype,
+            child->body.meta);
+    ptr += ret;
+    ptr += check_body_size(child, (ptr - child->body.buf) + 512);
+    rem = child->alloc_len - (ptr - child->buf);
+    
+/* timeStamp -- as generalized time */
+    lookup = WANDDER_UMTSIRI_CONTENTS_EVENT_TIME;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                1, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_GENERALTIME,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+        savedtime = p;
+    } else {
+        savedtime = NULL;
+        fprintf(stderr,
+                "wandder: warning, no timestamp available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    }
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_2, child);
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_4, child);
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_0, child);
+
+    /* IRI-Parameters start here */
+
+    /* Object identifier (0) */
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_UMTSIRIOID, child);
+
+    /* LIID (1) -- fortunately the identifier matches the one
+     * used in the PSHeader, so we can use our preencoded
+     * version */
+
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_LIID, child);    
+
+    /* timeStamp again (3) -- different format, use UTCTime */
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_3, child);
+
+    if (savedtime) {
+        encode_here_ber_update(
+                1, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_UTCTIME,
+                savedtime->itemptr, savedtime->itemlen,
+                &ptr, &rem, child);
+    }
+    ENDCONSTRUCTEDBLOCK(ptr, 1) //TODO double check this
+
+    /* initiator (4) */
+    lookup = WANDDER_UMTSIRI_CONTENTS_INITIATOR;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (!p) {
+        fprintf(stderr, "wandder: warning, no initiator available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    } else {
+        encode_here_ber_update(
+                4, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+    /* location, if available (8) -- nested */
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_8, child);
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_CGI;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update( //TODO forgot number
+                0, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_SAI;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                7, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_TAI;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                9, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_ECGI;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        rem -= ret;
+        encode_here_ber_update(
+                10, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_13, child);
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_0, child);
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_LOCATION_TIME;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                0, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_UTCTIME,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+    ENDCONSTRUCTEDBLOCK(ptr,3)
+
+    /* party information (9) -- nested */
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_9, child);
+
+    encode_here_ber_update(
+                7, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+                &gprstarget, sizeof(gprstarget),
+                &ptr, &rem, child);
+
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_1, child);
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_IMEI;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                1, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    } else {
+        fprintf(stderr, "wandder: warning, no IMEI available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    }
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_IMSI;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                3, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    } else {
+        fprintf(stderr, "wandder: warning, no IMSI available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    }
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_MSISDN;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                6, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    } else {
+        fprintf(stderr, "wandder: warning, no MSISDN available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    }
+
+    ENDCONSTRUCTEDBLOCK(ptr,1)
+
+    /* servicesDataInformation (pdpAddress, APN etc) */
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_4, child);       // services-data-information
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_1, child);       // gprs-parameters
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_PDP_ADDRESS;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_1, child);       // pdp-address
+        preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_1, child);       // datanodeaddress
+        encode_ipaddress_inplace(&ptr, &rem, child, (wandder_etsili_ipaddress_t *)(p->itemptr));
+        ENDCONSTRUCTEDBLOCK(ptr,2)
+    } else {
+        fprintf(stderr, "wandder: warning, no PDP Address available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    }
+
+    /* TODO figure out if we need to include the "length" field in our
+     * encoding.
+     */
+    lookup = WANDDER_UMTSIRI_CONTENTS_APNAME;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                2, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_PDPTYPE;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                3, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+    ENDCONSTRUCTEDBLOCK(ptr,3)
+
+    /* gprs correlation number (18) */
+    lookup = WANDDER_UMTSIRI_CONTENTS_GPRS_CORRELATION;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (!p) {
+        fprintf(stderr, "wandder: warning, no GPRS correlation number available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    } else {
+        char space[24];
+        snprintf(space, 24, "%lu", *((uint64_t *)(p->itemptr)));
+
+        encode_here_ber_update(
+                18, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                space, strlen(space),
+                &ptr, &rem, child);
+    }
+
+    /* gprs event (20) */
+    lookup = WANDDER_UMTSIRI_CONTENTS_EVENT_TYPE;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (!p) {
+        fprintf(stderr, "wandder: warning, no GPRS event type available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    } else {
+        encode_here_ber_update(
+                3, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+
+    /* gprs operation error code (22)  -- optional */
+    lookup = WANDDER_UMTSIRI_CONTENTS_GPRS_ERROR_CODE;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                22, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    }
+
+    /* IRI version (23) */
+    encode_here_ber_update(
+                23, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+                &iriversion, sizeof(iriversion),
+                &ptr, &rem, child);
+
+    /* networkIdentifier (26) -- nested */
+    preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_26, child);
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_OPERATOR_IDENTIFIER;
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        encode_here_ber_update(
+                0, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+                p->itemptr, p->itemlen,
+                &ptr, &rem, child);
+    } else {
+        fprintf(stderr, "wandder: warning, no operator identifier available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    }
+
+    lookup = WANDDER_UMTSIRI_CONTENTS_GGSN_IPADDRESS;
+
+    HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
+    if (p) {
+        preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_1, child);
+        preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_5, child);
+        encode_ipaddress_inplace(&ptr, &rem, child, (wandder_etsili_ipaddress_t *)(p->itemptr));
+        ENDCONSTRUCTEDBLOCK(ptr,2)
+    } else {
+        fprintf(stderr, "wandder: warning, no network element identifier available for constructing UMTS IRI\n");
+        fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
+    }
+
+    //ensure there is enough space for the last section
+    child->body.data = data_ptr_diff + child->buf;
+    ptr += check_body_size(child, (ptr - child->body.buf) + (8*2));
+    ENDCONSTRUCTEDBLOCK(ptr,8) //endseq
+    child->body.len = ptr - child->body.buf;
+    child->len = ptr - child->buf;
+
+}
+
+void wandder_init_etsili_umtsiri(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top) {
+
+    wandder_encoded_result_ber_t* res_ber;
+    wandder_etsili_iri_type_t iritype = 0;
+
+    if (!top || !top->preencoded || !enc_ber){
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
+        return;
+    }
+    
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
+
+    ptrdiff_t iri_diff = enc_ber->ptr - enc_ber->buf;
+
+    // most of UMTSIRI is regenerated, so no point continuing to
+    // populate areas that might be over written
+    ptrdiff_t params_diff = enc_ber->ptr - enc_ber->buf;
+
+    res_ber = wandder_encode_finish_ber(enc_ber);
+
+    top->umtsiri.buf              = res_ber->buf;
+    top->umtsiri.len              = res_ber->len;
+    top->umtsiri.alloc_len        = res_ber->len;
+    top->umtsiri.meta             = res_ber->buf + iri_diff;
+    top->umtsiri.data             = res_ber->buf + params_diff;
+
+    free(res_ber);
+
+}
+
 wandder_etsili_child_t *wandder_etsili_create_child(wandder_etsili_top_t* top, 
         wandder_generic_body_t * body) {
 
@@ -3693,10 +4212,14 @@ wandder_etsili_child_t *wandder_etsili_create_child(wandder_etsili_top_t* top,
     wandder_etsili_child_t * child;
 
     //ensure top and body exist
-    if ( !(top) || !(top->header.buf) || (!body->buf) ){
+    if ( !(top) || !(top->header.buf) ) {
         fprintf(stderr,
-            "Make sure wandder_encode_init_top_ber and wandder_init_etsili_??? \
-            have been called first\n");
+            "Make sure wandder_encode_init_top_ber have been called first\n");
+        return NULL;
+    }
+    if (!body->buf) {
+        fprintf(stderr,
+            "Make sure wandder_init_etsili_??? have been called first\n");
         return NULL;
     }
     
@@ -4028,6 +4551,51 @@ void wandder_init_etsili_ipiri(
     return;
 }
 
+void wandder_init_etsili_umtscc(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top) {
+
+    if (!top || !top->preencoded || !enc_ber){
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
+        return;
+    }
+
+    wandder_encoded_result_ber_t* res_ber;
+    
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
+
+    ptrdiff_t dir_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_DIRFROM]);
+
+
+    wandder_append_preencoded_ber(enc_ber, 
+            top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    
+    ptrdiff_t ipcontent_diff = enc_ber->ptr - enc_ber->buf;
+    wandder_encode_next_ber(enc_ber, WANDDER_TAG_IPPACKET,
+            WANDDER_CLASS_CONTEXT_PRIMITIVE, 4, NULL, 0);
+
+    wandder_encode_endseq_ber(enc_ber, 5);
+
+    res_ber = wandder_encode_finish_ber(enc_ber);
+
+    top->umtscc.buf               = res_ber->buf;
+    top->umtscc.len               = res_ber->len;
+    top->umtscc.alloc_len         = res_ber->len;
+    top->umtscc.meta              = res_ber->buf + dir_diff;
+    top->umtscc.data              = res_ber->buf + ipcontent_diff;
+
+    free(res_ber);
+
+    return;
+}
+
 void wandder_encode_etsi_ipmmcc_ber (
         int64_t cin, int64_t seqno,
         struct timeval* tv, void* ipcontents, size_t iplen, uint8_t dir,
@@ -4112,6 +4680,47 @@ void wandder_encode_etsi_ipiri_ber (
 
     update_etsili_pshdr_pc(&child->header, cin, seqno, tv);
     update_etsili_ipiri(params, iritype, child);
+
+}
+
+void wandder_encode_etsi_umtsiri_ber(
+        int64_t cin, int64_t seqno,
+        struct timeval* tv, void* params, wandder_etsili_iri_type_t iritype,
+        wandder_etsili_child_t * child) {
+    
+    if (!child || !child->header.buf) {
+        //error out for not initlizing top first
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
+        return;
+    }
+    if (!child->body.buf) {
+        //error out for not initlizing umtsiri
+        fprintf(stderr,"Call init umtsiri first.\n");
+        return;
+    }
+
+    update_etsili_pshdr_pc(&child->header, cin, seqno, tv);
+    update_etsili_umtsiri(params, iritype, child);
+}
+
+void wandder_encode_etsi_umtscc_ber (
+        int64_t cin, int64_t seqno,
+        struct timeval* tv, void* ipcontents, size_t iplen, uint8_t dir,
+        wandder_etsili_child_t * child) {
+
+    if (!child || !child->header.buf) {
+        //error out for not initlizing top first
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
+        return;
+    }
+    if (!child->body.buf) {
+        //error out for not initlizing umtscc
+        fprintf(stderr,"Call init umtscc first.\n");
+        return;
+    }
+    
+    update_etsili_pshdr_pc(&child->header, cin, seqno, tv);
+    update_etsili_umtscc(ipcontents, iplen, dir, child);
 
 }
 

@@ -149,6 +149,8 @@ typedef struct wandder_etsili_top {
     wandder_generic_body_t ipmmcc;
     wandder_generic_body_t ipmmiri;
     wandder_generic_body_t ipiri;
+    wandder_generic_body_t umtscc;
+    wandder_generic_body_t umtsiri;
     size_t increment_len;
     wandder_buf_t **preencoded;
 } wandder_etsili_top_t;
@@ -171,9 +173,15 @@ typedef enum {
     WANDDER_PREENCODE_CSEQUENCE_1,
     WANDDER_PREENCODE_CSEQUENCE_2,
     WANDDER_PREENCODE_CSEQUENCE_3,
+    WANDDER_PREENCODE_CSEQUENCE_4,
+    WANDDER_PREENCODE_CSEQUENCE_5,
     WANDDER_PREENCODE_CSEQUENCE_7,	/* Microsecond timestamp */
+    WANDDER_PREENCODE_CSEQUENCE_8,
+    WANDDER_PREENCODE_CSEQUENCE_9,
     WANDDER_PREENCODE_CSEQUENCE_11,  /* IPMMIRI */
     WANDDER_PREENCODE_CSEQUENCE_12,  /* IPMMCC */
+    WANDDER_PREENCODE_CSEQUENCE_13,
+    WANDDER_PREENCODE_CSEQUENCE_26,
     WANDDER_PREENCODE_PSDOMAINID,
     WANDDER_PREENCODE_LIID,
     WANDDER_PREENCODE_AUTHCC,
@@ -185,6 +193,7 @@ typedef enum {
     WANDDER_PREENCODE_IPMMIRIOID,
     WANDDER_PREENCODE_IPCCOID,
     WANDDER_PREENCODE_IPIRIOID,
+    WANDDER_PREENCODE_UMTSIRIOID,
     WANDDER_PREENCODE_IPMMCCOID,
     WANDDER_PREENCODE_DIRFROM,
     WANDDER_PREENCODE_DIRTO,
@@ -219,6 +228,35 @@ enum {
     WANDDER_IPIRI_CONTENTS_ADDITIONAL_IPADDRESS = 21,
     WANDDER_IPIRI_CONTENTS_AUTHENTICATION_TYPE = 22,
     WANDDER_IPIRI_CONTENTS_OTHER_TARGET_IDENTIFIERS = 23,
+};
+
+enum {
+        WANDDER_UMTSIRI_CONTENTS_IMSI = 1,
+        WANDDER_UMTSIRI_CONTENTS_MSISDN = 2,
+        WANDDER_UMTSIRI_CONTENTS_IMEI = 3,
+        WANDDER_UMTSIRI_CONTENTS_APNAME = 4,
+        WANDDER_UMTSIRI_CONTENTS_TAI = 5,
+        WANDDER_UMTSIRI_CONTENTS_ECGI = 6,
+        WANDDER_UMTSIRI_CONTENTS_PDP_ADDRESS = 7,
+        WANDDER_UMTSIRI_CONTENTS_EVENT_TYPE = 8,
+        WANDDER_UMTSIRI_CONTENTS_EVENT_TIME = 9,
+        WANDDER_UMTSIRI_CONTENTS_LOCATION_TIME = 10,
+        WANDDER_UMTSIRI_CONTENTS_GPRS_CORRELATION = 11,
+        WANDDER_UMTSIRI_CONTENTS_IRI_TYPE = 12,
+        WANDDER_UMTSIRI_CONTENTS_GPRS_ERROR_CODE = 13,
+        WANDDER_UMTSIRI_CONTENTS_GGSN_IPADDRESS = 14,
+        WANDDER_UMTSIRI_CONTENTS_INITIATOR = 15,
+        WANDDER_UMTSIRI_CONTENTS_OPERATOR_IDENTIFIER = 16,
+        WANDDER_UMTSIRI_CONTENTS_PDPTYPE = 17,
+        WANDDER_UMTSIRI_CONTENTS_CGI = 18,
+        WANDDER_UMTSIRI_CONTENTS_SAI = 19,
+};
+
+enum {
+    WANDDER_UMTSIRI_EVENT_TYPE_PDPCONTEXT_ACTIVATION = 1,
+    WANDDER_UMTSIRI_EVENT_TYPE_START_WITH_PDPCONTEXT_ACTIVE = 2,
+    WANDDER_UMTSIRI_EVENT_TYPE_PDPCONTEXT_DEACTIVATION = 4,
+    WANDDER_UMTSIRI_EVENT_TYPE_PDPCONTEXT_MODIFICATION = 13,
 };
 
 typedef struct wandder_etsili_generic wandder_etsili_generic_t;
@@ -341,6 +379,15 @@ void wandder_encode_etsi_ipiri_ber(
         struct timeval *tv, void* params, wandder_etsili_iri_type_t iritype,
         wandder_etsili_child_t * child);
 
+void wandder_encode_etsi_umtsiri_ber(
+        int64_t cin, int64_t seqno,
+        struct timeval* tv, void* params, wandder_etsili_iri_type_t iritype,
+        wandder_etsili_child_t * child);
+void wandder_encode_etsi_umtscc_ber (
+        int64_t cin, int64_t seqno,
+        struct timeval* tv, void* ipcontents, size_t iplen, uint8_t dir,
+        wandder_etsili_child_t * child);
+
 void wandder_init_etsili_ipcc(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top);
@@ -351,6 +398,12 @@ void wandder_init_etsili_ipiri(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top);
 void wandder_init_etsili_ipmmiri(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top);
+void wandder_init_etsili_umtscc(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top);
+void wandder_init_etsili_umtsiri(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top);
 
