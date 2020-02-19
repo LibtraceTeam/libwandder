@@ -35,7 +35,7 @@
 #include "wandder_internal.h"
 #include "src/libwandder.h"
 
-#define MAXLENGTHOCTS 6
+#define MAXLENGTHOCTS 8
 
 #define VALALLOC(x, p) \
     if (x > p->valalloced) { \
