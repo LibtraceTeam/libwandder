@@ -493,6 +493,45 @@ static uint32_t encode_gtime_ber(void *valptr,
     return towrite + ret;
 }
 
+static uint32_t encode_utctime_ber(void *valptr,
+        uint32_t len, uint8_t *buf, uint32_t rem) {
+
+    struct timeval *tv = (struct timeval *)valptr;
+    struct tm tm;
+    time_t tstamp;
+    size_t ret;
+    char utimebuf[1024];
+    char timebuf[768];
+    int towrite = 0;
+
+    if (len != sizeof(struct timeval)) {
+        fprintf(stderr, "Encode error: unexpected length for timeval: %u\n",
+                len);
+        return 0;
+    }
+
+    tstamp = tv->tv_sec;
+    if (gmtime_r(&tstamp, &tm) == NULL) {
+        fprintf(stderr, "Encode error: failed to convert timeval to tm\n");
+        return 0;
+    }
+
+    strftime(timebuf, 768, "%y%m%d%H%M%S", &tm);
+    snprintf(utimebuf, 1024, "%s.%03ldZ", timebuf,
+            (int64_t)(tv->tv_usec / 1000));
+    towrite = strlen(utimebuf);
+
+    ret = encode_length(towrite, buf, rem);
+    buf += ret;
+    rem -= ret;
+
+    memcpy(buf, utimebuf, towrite);
+    buf += towrite;
+    rem -= towrite;
+
+    return towrite + ret;
+}
+
 static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
         uint32_t vallen) {
 
@@ -1117,6 +1156,19 @@ inline size_t encode_here_ber(uint8_t idnum, uint8_t class, uint8_t encodeas,
 
             break;
 
+        case WANDDER_TAG_UTCTIME:
+            ret = encode_identifier(class, idnum, ptr, rem);
+            ptr += ret;
+            rem -= ret;
+            ret = encode_utctime_ber(valptr, vallen, ptr, rem);
+            ptr += ret;
+            rem -= ret;
+            if (ret == 0) {
+                //TODO error or something?
+            }
+
+            break;
+
         default:
             fprintf(stderr, "Encode error: unable to encode tag type %d\n",
                     encodeas);
@@ -1316,6 +1368,7 @@ wandder_encoded_result_ber_t* wandder_encode_finish_ber(wandder_encoder_ber_t *e
     res->buf = enc_ber->buf;
     res->len = enc_ber->len;
     enc_ber->buf = NULL;
+    wandder_reset_encoder_ber(enc_ber);
     return res;
 
 }
@@ -1336,6 +1389,9 @@ void wandder_encode_endseq_ber(wandder_encoder_ber_t *enc_ber, uint32_t depth){
 
 void wandder_reset_encoder_ber(wandder_encoder_ber_t* enc_ber){
 
+    if (!enc_ber->buf) {
+        enc_ber->buf = malloc(enc_ber->alloc_len);
+    }
     enc_ber->ptr = enc_ber->buf;
     enc_ber->len = 0;
 
