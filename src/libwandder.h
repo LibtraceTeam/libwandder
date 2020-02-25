@@ -87,6 +87,11 @@ enum {
     WANDDER_TAG_CUSTOM_END,
 };
 
+enum {
+    WANDDER_G_TIME,
+    WANDDER_UTC_TIME,
+};
+
 /* Dumpers are used to describe hierarchy and data types for a particular
  * schema expressed in ASN.1, especially schemas that are primarily context
  * sensitive.

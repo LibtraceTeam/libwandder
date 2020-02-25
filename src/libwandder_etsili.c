@@ -3702,16 +3702,16 @@ static void update_etsili_ipiri(
             case WANDDER_IPIRI_CONTENTS_TARGET_IPADDRESS:
             case WANDDER_IPIRI_CONTENTS_POP_IPADDRESS:
             case WANDDER_IPIRI_CONTENTS_ADDITIONAL_IPADDRESS:
-                ret = encode_here_ber(
-                        p->itemnum,
-                        WANDDER_CLASS_CONTEXT_CONSTRUCT,
-                        WANDDER_TAG_SEQUENCE,
-                        p->itemptr,
-                        p->itemlen, 
-                        ptr, rem);
-                ptr += ret;
-                rem -= ret;
-                ENDCONSTRUCTEDBLOCK(ptr, 1)
+                encode_here_ber_update(
+                        p->itemnum, WANDDER_CLASS_CONTEXT_CONSTRUCT, WANDDER_TAG_SEQUENCE,
+                        NULL, 0,
+                        &ptr, &rem, child);
+                encode_ipaddress_inplace(
+                        &ptr, 
+                        &rem, 
+                        child, 
+                        (wandder_etsili_ipaddress_t *)(p->itemptr));
+                ENDCONSTRUCTEDBLOCK(ptr,1)
                 break;
 
             case WANDDER_IPIRI_CONTENTS_POP_IDENTIFIER:
@@ -3881,6 +3881,7 @@ static void update_etsili_umtsiri(
     ptrdiff_t data_ptr_diff = ptr - child->buf;
     ptrdiff_t rem;
     
+    ptr += check_body_size(child, (ptr - child->body.buf) + 512);
     ret = ber_rebuild_integer(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0, 
@@ -3888,7 +3889,6 @@ static void update_etsili_umtsiri(
             sizeof iritype,
             child->body.meta);
     ptr += ret;
-    ptr += check_body_size(child, (ptr - child->body.buf) + 512);
     rem = child->alloc_len - (ptr - child->buf);
     
 /* timeStamp -- as generalized time */
@@ -4750,6 +4750,7 @@ wandder_etsili_child_freelist_t *wandder_create_etsili_child_freelist() {
             sizeof(wandder_etsili_child_freelist_t));
 
     //setting recursive as lock operations happen across a linked list
+    pthread_mutexattr_init(&attr);
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(&(flist->mutex), &attr);
     flist->first = NULL;
