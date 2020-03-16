@@ -3951,8 +3951,8 @@ static void update_etsili_umtsiri(
     lookup = WANDDER_UMTSIRI_CONTENTS_CGI;
     HASH_FIND(hh, params, &lookup, sizeof(lookup), p);
     if (p) {
-        encode_here_ber_update( //TODO forgot number
-                0, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+        encode_here_ber_update(
+                2, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
                 p->itemptr, p->itemlen,
                 &ptr, &rem, child);
     }
