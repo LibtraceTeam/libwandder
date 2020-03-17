@@ -3930,7 +3930,7 @@ static void update_etsili_umtsiri(
                 savedtime->itemptr, savedtime->itemlen,
                 &ptr, &rem, child);
     }
-    ENDCONSTRUCTEDBLOCK(ptr, 1) //TODO double check this
+    ENDCONSTRUCTEDBLOCK(ptr, 1)
 
     /* initiator (4) */
     lookup = WANDDER_UMTSIRI_CONTENTS_INITIATOR;
@@ -4002,7 +4002,7 @@ static void update_etsili_umtsiri(
     preencoded_here(&ptr, &rem, WANDDER_PREENCODE_CSEQUENCE_9, child);
 
     encode_here_ber_update(
-                7, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+                0, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
                 &gprstarget, sizeof(gprstarget),
                 &ptr, &rem, child);
 
