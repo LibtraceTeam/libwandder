@@ -82,7 +82,14 @@ enum {
     WANDDER_TAG_ECGI = 0x35,
     WANDDER_TAG_HEX_BYTES=0x36,
     WANDDER_TAG_3G_SM_CAUSE=0x37,
+    WANDDER_TAG_CGI=0x38,
+    WANDDER_TAG_SAI=0x39,
     WANDDER_TAG_CUSTOM_END,
+};
+
+enum {
+    WANDDER_G_TIME,
+    WANDDER_UTC_TIME,
 };
 
 /* Dumpers are used to describe hierarchy and data types for a particular
