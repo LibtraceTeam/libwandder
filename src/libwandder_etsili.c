@@ -4114,7 +4114,7 @@ static void update_etsili_umtsiri(
         fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
     } else {
         encode_here_ber_update(
-                3, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+                20, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
                 p->itemptr, p->itemlen,
                 &ptr, &rem, child);
     }
