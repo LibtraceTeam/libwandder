@@ -2958,6 +2958,8 @@ static inline void encode_ipaddress(wandder_encoder_ber_t* enc_ber,
                 (uint8_t *)&(addr->v4subnetmask),
                 sizeof(addr->v4subnetmask));
     }
+
+    free(addr->ipvalue);
 }
 
 //ensures that the buffer exceeds child->body.buf + currlen in allocated memeroy
@@ -3088,6 +3090,7 @@ static inline void encode_ipaddress_inplace(
                 (uint8_t*)&(addr->v4subnetmask), sizeof(addr->v4subnetmask),
                 ptr, rem, child);
     }
+    free(addr->ipvalue);
 }
 
 static void free_generic_body(wandder_generic_body_t * body) {
@@ -3141,6 +3144,8 @@ void wandder_free_top(wandder_etsili_top_t *top){
         free_generic_body(&top->ipmmcc);
         free_generic_body(&top->ipiri);
         free_generic_body(&top->ipmmiri);
+        free_generic_body(&top->umtscc);
+        free_generic_body(&top->umtsiri);
 
         free(top);
     }
@@ -4385,10 +4390,12 @@ void wandder_init_etsili_ipmmiri(
     encipsrc.v6prefixlen = 0;
     encipsrc.v4subnetmask = 0xffffffff;
     encipsrc.valtype = WANDDER_IPADDRESS_REP_BINARY;
-    encipsrc.ipvalue = ipsrc;
+    encipsrc.ipvalue = malloc(sizeof(uint32_t));
+    memcpy(encipsrc.ipvalue, &ipsrc, sizeof(uint32_t));
 
     encipdst = encipsrc;
-    encipdst.ipvalue = ipdest;
+    encipdst.ipvalue = malloc(sizeof(uint32_t));
+    memcpy(encipdst.ipvalue, &ipdest, sizeof(uint32_t));
 
     wandder_append_preencoded_ber(enc_ber, 
             top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
