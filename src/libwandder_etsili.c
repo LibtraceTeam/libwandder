@@ -3116,6 +3116,7 @@ static void free_generic_body(wandder_generic_body_t * body) {
             wandder_free_child(head);
             head = next;
         }
+        free(body->flist);
     }
 } 
 static void clear_preencoded_fields_ber( wandder_buf_t **pendarray ) {
