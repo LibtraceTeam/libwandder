@@ -3011,7 +3011,7 @@ inline static void preencoded_here(uint8_t** ptr, ptrdiff_t * rem, int index,
     *rem = child->alloc_len - (*ptr - child->buf);
 }
 
-inline static size_t encode_here_ber_update(
+inline static void encode_here_ber_update(
         uint8_t idnum, uint8_t class, uint8_t encodeas, 
         void * valptr, size_t vallen, 
         uint8_t** ptr, ptrdiff_t* rem,
@@ -3401,7 +3401,6 @@ static uint8_t* wandder_encode_body_data_ber(
         uint8_t * valptr,
         size_t vallen){
 
-    uint8_t* new;
     ptrdiff_t currlen = calculate_length(idnum, class, encodeas, vallen); 
     
     //if new length cannot fit in old space make more
@@ -3877,8 +3876,7 @@ static void update_etsili_umtsiri(
         wandder_etsili_generic_t *params, wandder_etsili_iri_type_t iritype, 
         wandder_etsili_child_t * child) {
 
-    wandder_etsili_generic_t *p, *tmp, *savedtime;
-    wandder_ipiri_id_t* iriid;
+    wandder_etsili_generic_t *p, *savedtime;
     size_t ret;
     uint8_t lookup;
     uint32_t iriversion = 8;
@@ -4179,7 +4177,6 @@ void wandder_init_etsili_umtsiri(
         wandder_etsili_top_t* top) {
 
     wandder_encoded_result_ber_t* res_ber;
-    wandder_etsili_iri_type_t iritype = 0;
 
     if (!top || !top->preencoded || !enc_ber){
         fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
@@ -4510,8 +4507,6 @@ void wandder_init_etsili_ipiri(
         wandder_etsili_top_t* top) {
 
     wandder_encoded_result_ber_t* res_ber;
-    wandder_etsili_generic_t *p, *tmp;
-    wandder_ipiri_id_t* iriid;
     wandder_etsili_iri_type_t iritype = 0;
 
     if (!top || !top->preencoded || !enc_ber){
@@ -4734,9 +4729,6 @@ void wandder_encode_etsi_umtscc_ber (
 
 wandder_etsili_top_t* wandder_encode_init_top_ber (wandder_encoder_ber_t* enc_ber, 
         wandder_etsili_intercept_details_t* intdetails) {
-    
-    struct timeval tv = {0,0};
-
 
     wandder_etsili_top_t* top = calloc(sizeof(wandder_etsili_top_t), 1);
 

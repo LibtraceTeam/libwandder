@@ -426,7 +426,6 @@ static uint32_t encode_time(wandder_encode_job_t *p, void *valptr,
         uint32_t len, int time_format) {
 
     struct timeval *tv = (struct timeval *)valptr;
-    size_t ret;
     char timebuf[1024];
 
     int towrite = encode_time_inline(len, tv, timebuf, time_format);
