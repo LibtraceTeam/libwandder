@@ -57,7 +57,7 @@ find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 %{_libdir}/*.so
 
 %changelog
-* Fri Mar 20 2020 Shane Alcock <salcock@waikato.ac.nz> - 1.3.0-1
+* Fri May 08 2020 Shane Alcock <salcock@waikato.ac.nz> - 1.3.0-1
 - Updated to 1.3.0 release of libwandder
 
 * Thu Sep 26 2019 Shane Alcock <salcock@waikato.ac.nz> - 1.2.0-1
