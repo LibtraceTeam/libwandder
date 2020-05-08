@@ -553,7 +553,9 @@ void wandder_encode_next(wandder_encoder_t *enc, uint8_t encodeas,
         /* Must be a sibling */
         wandder_pend_t *next = new_pending(enc, NULL, enc->current->parent);
         enc->current->siblings = next;
-        enc->current->parent->lastchild = next;
+        if (enc->current->parent) {
+            enc->current->parent->lastchild = next;
+        }
         enc->current = next;
     }
 
