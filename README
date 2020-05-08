@@ -1,9 +1,9 @@
 libwandder -- C library for DER encoding and decoding.
 
-Current Stable Version: 1.1.3
+Current Stable Version: 1.3.0
 
 ---------------------------------------------------------------------------
-Copyright (c) 2017-2019 The University of Waikato, Hamilton, New Zealand.
+Copyright (c) 2017-2020 The University of Waikato, Hamilton, New Zealand.
 All rights reserved.
 
 This code has been developed by the University of Waikato WAND
@@ -18,6 +18,7 @@ issues on the libwandder github page: https://github.com/wanduow/libwandder
 
 Authors:
         Shane Alcock
+        Tyler Marriner
 
 
 Introduction
@@ -48,7 +49,7 @@ appending the --prefix=<new location> option to ./configure.
 API
 ===
 
-There are two APIs included within libwandder: the generic DER API and the
+There are two APIs included within libwandder: the generic API and the
 ETSILI-specific API. Both APIs are extremely under-documented right now, but
 hopefully this can be addressed sometime soon.
 
@@ -57,6 +58,11 @@ This API can be used to sequentially decode each field in an encoded message,
 giving the user access to the tag, class, length and values for each decoded
 field. If the message only uses universal types, the API can also convert
 the tags and values into printable strings.
+
+The generic API has now been extended to support BER encoding, so that
+users can take advantage of some of the liberties in BER (compared with DER)
+to gain better encoding performance. Indefinite-length encoding is used for
+strings, structures and sequences.
 
 The ETSILI API can be accessed by including the header file
 "libwandder_etsili.h". This API can be used to search for certain ETSI-LI
@@ -67,7 +73,7 @@ producing human-readable strings describing each field or encapsulating
 structure.
 
 Please note that the ETSI specification implemented within the libwandder API
-is not yet complete -- standard IP and IP Multimedia Communication Contents
-and Intercept Related Information records are supported, but other
+is not yet complete -- standard IP, UMTS, and IP Multimedia Communication
+Contents and Intercept Related Information records are supported, but other
 interception types are still on the TODO list (e.g. Email, etc).
 

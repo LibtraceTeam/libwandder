@@ -1,6 +1,6 @@
 # Super primitive configure script
 
-AC_INIT(libwandder, 1.1.3, salcock@waikato.ac.nz)
+AC_INIT(libwandder, 1.3.0, salcock@waikato.ac.nz)
 
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_CONFIG_SRCDIR(src/decoder.c)
@@ -9,7 +9,7 @@ AC_CONFIG_MACRO_DIR([m4])
 
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
-AC_PREFIX_DEFAULT(/usr/local/)
+AC_PREFIX_DEFAULT(/usr/local)
 
 AC_PROG_CC
 AC_PROG_INSTALL
@@ -22,6 +22,10 @@ EXTRA_LIBS=""
 
 AC_CHECK_LIB([m], [ceil],,math_found = 0)
 AC_CHECK_LIB([pthread], [pthread_mutex_trylock],,pthread_found=0)
+
+AC_CHECK_HEADERS([uthash.h], [uthash_avail=yes; break;])
+AS_IF([test "x$uthash_avail" != "xyes"],
+        [AC_MSG_ERROR([Required header uthash.h not found; install uthash and try again])])
 
 AC_CONFIG_FILES([Makefile src/Makefile])
 

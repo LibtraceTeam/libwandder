@@ -1,3 +1,26 @@
+Version 1.3.0
+=============
+  * Re-engineered BER encoding API. The BER API has almost completely
+    changed from the original experimental version in 1.2.0 -- apologies
+    to any users who were already using that API.
+  * Added ability to encode and decode UTCTime data type.
+  * Added BER encoding support for all ETSI LI record types (at least the
+    ones that we already supported with DER).
+  * wandder_get_valuestr() no longer accepts NULL as a valid value for
+    the 'space' argument.
+
+Version 1.2.0
+=============
+ * Added experimental support for encoding using BER, with fixed-length
+   integer fields that allow for easier templating of encoded records to
+   improve encoding performance.
+ * Updated decoder to properly decode indefinite-length fields.
+ * Added API functions for BER-encoding specific ETSI-LI message types
+   into libwandder_etsili.h.
+ * Added support for encoding and decoding UTCTime fields.
+ * Added decode support for the UMTSCC and UMTSIRI ETSI-LI records
+   produced by OpenLI.
+
 Version 1.1.3
 =============
 Decoding:

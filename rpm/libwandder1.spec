@@ -1,5 +1,5 @@
 Name:           libwandder1
-Version:        1.1.3
+Version:        1.3.0
 Release:        1%{?dist}
 Summary:        C Library for encoding and decoding data using DER
 
@@ -10,6 +10,7 @@ Source0:        https://github.com/wanduow/libwandder/archive/%{version}.tar.gz
 BuildRequires: gcc
 BuildRequires: gcc-c++
 BuildRequires: make
+BuildRequires: uthash-devel
 
 %description
 Libwandder is a helper library that can be used to perform some typical
@@ -56,6 +57,12 @@ find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 %{_libdir}/*.so
 
 %changelog
+* Fri May 08 2020 Shane Alcock <salcock@waikato.ac.nz> - 1.3.0-1
+- Updated to 1.3.0 release of libwandder
+
+* Thu Sep 26 2019 Shane Alcock <salcock@waikato.ac.nz> - 1.2.0-1
+- Updated to 1.2.0 release of libwandder
+
 * Tue Jun 25 2019 Shane Alcock <salcock@waikato.ac.nz> - 1.1.3-1
 - Updated to 1.1.3 release of libwandder
 

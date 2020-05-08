@@ -5,6 +5,12 @@ set -x -e -o pipefail
 export QA_RPATHS=$[ 0x0001 ]
 SOURCENAME=`echo ${CI_COMMIT_REF_NAME} | cut -d '-' -f 1`
 
+if [ "$1" = "centos8" ]; then
+        yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+	dnf install -y 'dnf-command(config-manager)' || true
+	yum config-manager --set-enabled PowerTools || true
+fi
+
 if [ "$1" = "centos7" ]; then
         yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 fi
