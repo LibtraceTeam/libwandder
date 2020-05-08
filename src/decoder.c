@@ -956,15 +956,13 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
         uint8_t interpretas) {
 
     uint8_t datatype;
-    char staticspace[2048];
 
     if (c == NULL) {
         return NULL;
     }
 
     if (space == NULL) {
-        space = staticspace;
-        len = 2048;
+        return NULL;
     }
 
     if (c->identclass == WANDDER_CLASS_UNIVERSAL_PRIMITIVE ||
