@@ -1,11 +1,13 @@
-libwandder1 (1.3.0-1) UNRELEASED; urgency=medium
+libwandder1 (1.3.0-1) unstable; urgency=medium
 
   * Re-engineered BER encoding API.
   * Added ability to encode and decode UTCTime data type.
   * Added BER encoding support for all ETSI LI record types (at least the
     ones that we already supported with DER).
+  * wandder_get_valuestr() no longer accepts NULL as a valid 'space'
+    parameter.
 
- -- Shane Alcock <salcock@waikato.ac.nz>  Fri, 20 Mar 2020 15:37:27 +1300
+ -- Shane Alcock <salcock@waikato.ac.nz>  Fri, 08 May 2020 15:05:27 +1200
 
 libwandder1 (1.2.0-1) unstable; urgency=medium
 
