@@ -1,6 +1,6 @@
 Name:           libwandder1
 Version:        1.3.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        C Library for encoding and decoding data using DER
 
 License:        LPGLv3
@@ -26,6 +26,7 @@ University, New Zealand.
 %package        devel
 Summary:        Development files for %{name}
 Requires:       %{name}%{?_isa} = %{version}-%{release}
+Requires:       uthash-devel
 
 %description devel
 The %{name}-devel package contains libraries and header files for
@@ -57,6 +58,9 @@ find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 %{_libdir}/*.so
 
 %changelog
+* Fri May 08 2020 Shane Alcock <salcock@waikato.ac.nz> - 1.3.0-2
+- Fix uthash dependency in 1.3.0-1 release
+
 * Fri May 08 2020 Shane Alcock <salcock@waikato.ac.nz> - 1.3.0-1
 - Updated to 1.3.0 release of libwandder
 

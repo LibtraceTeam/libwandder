@@ -1,3 +1,9 @@
+libwandder1 (1.3.0-2) unstable; urgency=medium
+
+  * Fix missing uthash-dev dependency for libwandder1-dev
+
+ -- Shane Alcock <salcock@waikato.ac.nz>  Fri, 08 May 2020 16:11:17 +1200
+
 libwandder1 (1.3.0-1) unstable; urgency=medium
 
   * Re-engineered BER encoding API.
