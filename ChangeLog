@@ -1,4 +1,4 @@
-Version 1.3.0
+Version 2.0.0
 =============
   * Re-engineered BER encoding API. The BER API has almost completely
     changed from the original experimental version in 1.2.0 -- apologies
