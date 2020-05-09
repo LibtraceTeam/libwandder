@@ -27,7 +27,7 @@ configure-stamp: configure
 
 	dh_autoreconf
 
-	dh_auto_configure $(CONFFLAGS) \
+	dh_auto_configure -- $(CONFFLAGS) \
 		   --prefix=/usr \
 		   --mandir=\$${prefix}/share/man \
 		   --infodir=\$${prefix}/share/info
