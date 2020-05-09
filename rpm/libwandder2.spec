@@ -1,6 +1,6 @@
-Name:           libwandder1
-Version:        1.3.0
-Release:        2%{?dist}
+Name:           libwandder2
+Version:        2.0.0
+Release:        1%{?dist}
 Summary:        C Library for encoding and decoding data using DER
 
 License:        LPGLv3
@@ -58,6 +58,9 @@ find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 %{_libdir}/*.so
 
 %changelog
+* Sat May 09 2020 Shane Alcock <salcock@waikato.ac.nz> - 2.0.0-1
+- Bump version to 2.0.0 to properly reflect API changes
+
 * Fri May 08 2020 Shane Alcock <salcock@waikato.ac.nz> - 1.3.0-2
 - Fix uthash dependency in 1.3.0-1 release
 

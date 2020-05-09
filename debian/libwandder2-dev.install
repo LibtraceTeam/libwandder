@@ -1,3 +1,3 @@
-usr/lib/libwandder.so
+usr/lib/*/libwandder*.so
 usr/include/libwandder.h
 usr/include/libwandder_etsili.h

@@ -23,19 +23,19 @@ fi
 if [[ "$1" =~ fedora* ]]; then
         dnf install -y rpm-build rpmdevtools which 'dnf-command(builddep)'
         dnf group install -y "C Development Tools and Libraries"
-        dnf builddep -y rpm/libwandder1.spec
+        dnf builddep -y rpm/libwandder2.spec
 else
         yum install -y rpm-build yum-utils rpmdevtools which
         yum groupinstall -y 'Development Tools'
-        yum-builddep -y rpm/libwandder1.spec
+        yum-builddep -y rpm/libwandder2.spec
 fi
 
 rpmdev-setuptree
 
 ./bootstrap.sh && ./configure && make dist
 cp libwandder-*.tar.gz ~/rpmbuild/SOURCES/${SOURCENAME}.tar.gz
-cp rpm/libwandder1.spec ~/rpmbuild/SPECS/
+cp rpm/libwandder2.spec ~/rpmbuild/SPECS/
 
-cd ~/rpmbuild && rpmbuild -bb --define "debug_package %{nil}" SPECS/libwandder1.spec
+cd ~/rpmbuild && rpmbuild -bb --define "debug_package %{nil}" SPECS/libwandder2.spec
 
 
