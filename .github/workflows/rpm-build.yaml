@@ -38,7 +38,7 @@ jobs:
         uses: wanduow/action-cloudsmith-upload-packages@v1
         with:
           path: packages/
-          repo: ${{ secrets.CLOUDSMITH_OWNER }}/libwandio
+          repo: ${{ secrets.CLOUDSMITH_OWNER }}/libwandder
           username: salcock
           api_key: ${{ secrets.CLOUDSMITH_API_KEY }}
       - name: Publish packages to bintray
