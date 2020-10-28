@@ -18,7 +18,6 @@ jobs:
         target:
           - "centos:7"
           - "centos:8"
-          - "fedora:33"
           - "fedora:34"
           - "fedora:35"
 
