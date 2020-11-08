@@ -1,4 +1,4 @@
-et -x -e -o pipefail
+set -x -e -o pipefail
 
 export DEBEMAIL='packaging@wand.net.nz'
 export DEBFULLNAME='WAND Packaging'
