@@ -95,6 +95,8 @@ typedef struct wandder_etsispec {
     wandder_dumper_t ipcc;
     wandder_dumper_t ipcccontents;
     wandder_dumper_t iripayloadseq;
+    wandder_dumper_t hi1operation;
+    wandder_dumper_t hi1notification;
 
     wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;

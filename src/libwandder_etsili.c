@@ -2104,6 +2104,81 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
 
+    dec->hi1notification.membercount = 7;
+    ALLOC_MEMBERS(dec->hi1notification);
+    dec->hi1notification.members[0] =
+        (struct wandder_dump_action) {
+                .name = "domainID",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OID
+        };
+    dec->hi1notification.members[1] =
+        (struct wandder_dump_action) {
+                .name = "lawfulInterceptionIdentifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->hi1notification.members[2] =
+        (struct wandder_dump_action) {
+                .name = "communicationIdentifier",
+                .descend = &(dec->cid),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->hi1notification.members[3] =
+        (struct wandder_dump_action) {
+                .name = "timeStamp",
+                .descend = &(dec->timestamp),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->hi1notification.members[4] = WANDDER_NOACTION;
+    dec->hi1notification.members[5] =
+        (struct wandder_dump_action) {
+                .name = "national-HI1-ASN1parameters",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->hi1notification.members[6] =
+        (struct wandder_dump_action) {
+                .name = "target-Information",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+    dec->hi1operation.membercount = 6;
+    ALLOC_MEMBERS(dec->hi1operation);
+    dec->hi1operation.members[0] = WANDDER_NOACTION;
+    dec->hi1operation.members[1] =
+        (struct wandder_dump_action) {
+                .name = "liActivated",
+                .descend = &(dec->hi1notification),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->hi1operation.members[2] =
+        (struct wandder_dump_action) {
+                .name = "liDeactivated",
+                .descend = &(dec->hi1notification),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->hi1operation.members[3] =
+        (struct wandder_dump_action) {
+                .name = "liModified",
+                .descend = &(dec->hi1notification),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->hi1operation.members[4] =
+        (struct wandder_dump_action) {
+                .name = "alarams-indicator",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->hi1operation.members[5] =
+        (struct wandder_dump_action) {
+                .name = "national-HI1-ASN1parameters",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
     dec->tripayload.membercount = 14;
     ALLOC_MEMBERS(dec->tripayload);
     dec->tripayload.members[0] =
@@ -2817,7 +2892,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->payload.members[3] =        // Not required
         (struct wandder_dump_action) {
                 .name = "hI1-Operation",
-                .descend = NULL,
+                .descend = &(dec->hi1operation),
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->payload.members[4] =        // TODO?
