@@ -1,3 +1,9 @@
+libwandder2 (2.0.1-1) unstable; urgency=medium
+
+  * Add decoding support for ETSI LI HI1 Operation messages.
+
+ -- Shane Alcock <salcock@waikato.ac.nz>  Tue, 10 Nov 2020 15:26:15 +1300
+
 libwandder2 (2.0.0-1) unstable; urgency=medium
 
   * Fix library version conflicts with existing dependent packages

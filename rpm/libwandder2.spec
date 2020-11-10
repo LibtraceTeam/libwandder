@@ -1,9 +1,9 @@
 Name:           libwandder2
-Version:        2.0.0
+Version:        2.0.1
 Release:        1%{?dist}
 Summary:        C Library for encoding and decoding data using DER
 
-License:        LPGLv3
+License:        LGPLv3
 URL:            https://github.com/wanduow/libwandder
 Source0:        https://github.com/wanduow/libwandder/archive/%{version}.tar.gz
 
@@ -58,6 +58,9 @@ find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 %{_libdir}/*.so
 
 %changelog
+* Tue Nov 10 2020 Shane Alcock <salcock@waikato.ac.nz> - 2.0.1-1
+- Updated to 2.0.1 release of libwandder
+
 * Sat May 09 2020 Shane Alcock <salcock@waikato.ac.nz> - 2.0.0-1
 - Bump version to 2.0.0 to properly reflect API changes
 
