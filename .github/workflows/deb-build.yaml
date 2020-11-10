@@ -21,6 +21,7 @@ jobs:
            - "ubuntu:xenial"
            - "ubuntu:bionic"
            - "ubuntu:focal"
+           - "ubuntu:groovy"
 
      steps:
       - name: Checkout repo
