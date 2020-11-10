@@ -1,3 +1,5 @@
+#!/bin/bash
+
 set -x -e -o pipefail
 
 export DEBEMAIL='packaging@wand.net.nz'
