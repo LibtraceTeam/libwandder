@@ -413,7 +413,7 @@ static inline int encode_time_inline(
             fprintf(stderr, 
                 "Encode error: unexpected format for timeval, using UTC\n");
         case WANDDER_UTC_TIME:
-            strftime(timebuf, 768, "%Y%m%d%H%M%S", &tm);
+            strftime(timebuf, 768, "%y%m%d%H%M%S", &tm);
             break;
     }
     snprintf(returnbuf, 1024, "%s.%03ldZ", timebuf,
