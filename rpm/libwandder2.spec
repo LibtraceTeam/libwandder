@@ -1,5 +1,5 @@
 Name:           libwandder2
-Version:        2.0.1
+Version:        2.0.2
 Release:        1%{?dist}
 Summary:        C Library for encoding and decoding data using DER
 
@@ -58,6 +58,9 @@ find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 %{_libdir}/*.so
 
 %changelog
+* Fri Jan 22 2021 Shane Alcock <salcock@waikato.ac.nz> - 2.0.2-1
+- Updated to 2.0.2 release of libwandder
+
 * Tue Nov 10 2020 Shane Alcock <salcock@waikato.ac.nz> - 2.0.1-1
 - Updated to 2.0.1 release of libwandder
 
