@@ -1131,7 +1131,7 @@ static inline void check_if_found_ctxt(wandder_decoder_t *dec, uint32_t ident,
         }
 
         *found = add_found_item(dec->current, *found, i,
-                actions->members[i].interpretas, dec);
+                actions->members[ident].interpretas, dec);
         targets[i].found = true;
     }
 }
