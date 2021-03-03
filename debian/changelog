@@ -1,3 +1,9 @@
+libwandder2 (2.0.3-1) unstable; urgency=medium
+
+  * Fix dodgy indexing in wandder_search_items()
+
+ -- Shane Alcock <salcock@waikato.ac.nz>  Wed, 03 Mar 2021 14:34:19 +1300
+
 libwandder2 (2.0.2-1) unstable; urgency=medium
 
   * Fix encoding bug for UTCTime fields
