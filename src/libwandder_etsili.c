@@ -1500,6 +1500,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->option.members);
     free(dec->optionreq.members);
     free(dec->optionresp.members);
+    free(dec->hi1notification.members);
+    free(dec->hi1operation.members);
     free(dec->integritycheck.members);
     free(dec->tripayload.members);
     free(dec->ipiriid.members);
