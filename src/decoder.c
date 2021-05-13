@@ -68,11 +68,11 @@ void free_cached_items(wandder_item_t *it, wandder_itemhandler_t *handler) {
         return;
     }
 
-    if (it->cachedchildren) {
+    if (it->cachedchildren && it->cachedchildren != it) {
         free_cached_items(it->cachedchildren, handler);
     }
 
-    if (it->cachednext) {
+    if (it->cachednext && it->cachednext != it) {
         free_cached_items(it->cachednext, handler);
     }
 
@@ -431,7 +431,8 @@ static inline int _decode_next(wandder_decoder_t *dec) {
 
     /* if current is a constructed type, the next item is the first child 
      * of current */
-    if ((IS_CONSTRUCTED(dec->current))) {
+    if ((IS_CONSTRUCTED(dec->current)) &&
+            dec->nextitem == dec->current->valptr) {
         ret = decode(dec, dec->nextitem, dec->current); 
     } else {
         /* if current is not a constructed type, use current's parent */
