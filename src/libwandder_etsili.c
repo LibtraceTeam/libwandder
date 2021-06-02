@@ -285,7 +285,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             {
                 if (stringify_ipaddress(etsidec, etsidec->dec->current, curr,
                         valstr, 2048) == NULL) {
-                    fprintf(stderr, "Failed to interpret IP field %d:%d\n",
+                    fprintf(stderr, "Failed to interpret IP field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -294,7 +294,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             else if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
                 if (interpret_enum(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
-                    fprintf(stderr, "Failed to interpret enum field %d:%d\n",
+                    fprintf(stderr, "Failed to interpret enum field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -303,7 +303,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (stringify_3gimei(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
-                            "Failed to interpret 3G IMEI-style field %d:%d\n",
+                            "Failed to interpret 3G IMEI-style field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -313,7 +313,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (stringify_3gcause(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
-                            "Failed to interpret 3G SM-Cause field %d:%d\n",
+                            "Failed to interpret 3G SM-Cause field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -322,7 +322,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (stringify_domain_name(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
-                            "Failed to interpret domain name field %d:%d\n",
+                            "Failed to interpret domain name field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -331,7 +331,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (stringify_bytes_as_hex(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
-                            "Failed to interpret hex bytes field %d:%d\n",
+                            "Failed to interpret hex bytes field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -340,7 +340,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (stringify_tai(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
-                            "Failed to interpret TAI field %d:%d\n",
+                            "Failed to interpret TAI field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -349,7 +349,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (stringify_ecgi(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
-                            "Failed to interpret ECGI field %d:%d\n",
+                            "Failed to interpret ECGI field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -358,7 +358,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (stringify_cgi(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
-                            "Failed to interpret CGI field %d:%d\n",
+                            "Failed to interpret CGI field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -367,7 +367,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 if (stringify_sai(etsidec, etsidec->dec->current, curr,
                             valstr, 2048) == NULL) {
                     fprintf(stderr,
-                            "Failed to interpret SAI field %d:%d\n",
+                            "Failed to interpret SAI field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -375,7 +375,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             else {
                 if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
                         curr->members[ident].interpretas)) {
-                    fprintf(stderr, "Failed to interpret field %d:%d\n",
+                    fprintf(stderr, "Failed to interpret field %d:%" PRIu32 "\n",
                             etsidec->stack->current, ident);
                     return NULL;
                 }
@@ -390,7 +390,7 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
             if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
                     wandder_get_identifier(etsidec->dec))) {
-                fprintf(stderr, "Failed to interpret standard field %d:%d\n",
+                fprintf(stderr, "Failed to interpret standard field %d:%" PRIu32 "\n",
                         etsidec->stack->current, ident);
                 return NULL;
             }
@@ -1020,7 +1020,7 @@ static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         family = AF_INET6;
         addr = &in6;
     } else {
-        fprintf(stderr, "Unexpected IP address length: %lu\n", item->length);
+        fprintf(stderr, "Unexpected IP address length: %" PRIu64 "\n", item->length);
         return NULL;
     }
 
@@ -4174,7 +4174,7 @@ static void update_etsili_umtsiri(
         fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
     } else {
         char space[24];
-        snprintf(space, 24, "%lu", *((uint64_t *)(p->itemptr)));
+        snprintf(space, 24, "%" PRIu64, *((uint64_t *)(p->itemptr)));
 
         encode_here_ber_update(
                 18, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,

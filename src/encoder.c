@@ -416,7 +416,7 @@ static inline int encode_time_inline(
             strftime(timebuf, 768, "%y%m%d%H%M%S", &tm);
             break;
     }
-    snprintf(returnbuf, 1024, "%s.%03ldZ", timebuf,
+    snprintf(returnbuf, 1024, "%s.%03" PRId64 "Z", timebuf,
             (int64_t)(tv->tv_usec / 1000));
 
     return strlen(returnbuf);
@@ -1164,7 +1164,7 @@ wandder_buf_t * wandder_encode_new_ber(
     itembuf->len = ret;
 
     if(ret != totallen){
-        printf("calc length:%4lu, real length:%4lu\n", totallen, ret);
+        printf("calc length:%4lu, real length:%4zu\n", totallen, ret);
         assert(0);
     }
 
@@ -1194,7 +1194,7 @@ size_t ber_rebuild_integer(
     } else if (vallen == 1) {
         val = *((int8_t *)valptr);
     } else {
-        fprintf(stderr, "Encode error: unexpected length for integer type: %lu\n",
+        fprintf(stderr, "Encode error: unexpected length for integer type: %zu\n",
             vallen);
         return 0;
     }

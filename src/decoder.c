@@ -321,7 +321,7 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
             //definite long form
             if (lenoctets > sizeof(item->length)) {
                 fprintf(stderr, "libwandder does not support length fields longer than %zd bytes right now\n", sizeof(item->length));
-                fprintf(stderr, "Tried to decode an item with a length field of %u bytes.\n", lenoctets);
+                fprintf(stderr, "Tried to decode an item with a length field of %" PRIu8 " bytes.\n", lenoctets);
                 if (item != dec->current) {
                     free_item(item);
                 }
@@ -615,10 +615,10 @@ const char *wandder_get_tag_string(wandder_decoder_t *dec) {
                 return "Set";
         }
     } else if (class == WANDDER_CLASS_CONTEXT_PRIMITIVE) {
-        snprintf(tmp, 2048, "[%u] (primitive)", ident);
+        snprintf(tmp, 2048, "[%" PRIu32 "] (primitive)", ident);
         return (const char *)tmp;
     } else if (class == WANDDER_CLASS_CONTEXT_CONSTRUCT) {
-        snprintf(tmp, 2048, "[%u] (construct)", ident);
+        snprintf(tmp, 2048, "[%" PRIu32 "] (construct)", ident);
         return (const char *)tmp;
     }
 
@@ -763,7 +763,7 @@ static uint32_t stringify_integer(uint8_t *start, uint32_t length, char *space,
         uint16_t spacerem) {
 
     int64_t intval = decode_integer(start, &length);
-    snprintf(space, spacerem - 1, "%ld", intval);
+    snprintf(space, spacerem - 1, "%" PRId64, intval);
     return length;
 }
 
@@ -806,7 +806,7 @@ static inline uint16_t oid_to_string(uint8_t *start, uint32_t length,
             return 0;
         }
 
-        snprintf(tmp, 1024, ".%u", nextval);
+        snprintf(tmp, 1024, ".%" PRIu32, nextval);
         strncat(space, tmp, spacerem - used);
 
         used += strlen(tmp);
@@ -971,12 +971,12 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
         if (c->identifier <= 31) {
             datatype = c->identifier;
         } else {
-            fprintf(stderr, "Unexpected identifier for supposedly universal tag: %u\n", c->identifier);
+            fprintf(stderr, "Unexpected identifier for supposedly universal tag: %" PRIu32 "\n", c->identifier);
             return NULL;
         }
     } else {
         if (interpretas > 31) {
-            fprintf(stderr, "'Interpret as' tags must be between 0-31 inclusive (not %u)\n", interpretas);
+            fprintf(stderr, "'Interpret as' tags must be between 0-31 inclusive (not %" PRIu8 ")\n", interpretas);
             return NULL;
         }
 
@@ -1033,7 +1033,7 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
         case WANDDER_TAG_REAL:
         case WANDDER_TAG_NUMERIC:
         default:
-            fprintf(stderr, "No stringify support for type %u just yet...\n",
+            fprintf(stderr, "No stringify support for type %" PRIu8 " just yet...\n",
                     datatype);
             return NULL;
     }
@@ -1301,11 +1301,11 @@ int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,
                 return -1;
             }
 
-            printf("[%u] %u %s %s\n", ident, level, act->name, space);
+            printf("[%" PRIu32 "] %" PRIu16 " %s %s\n", ident, level, act->name, space);
         }
 
         if (wandder_get_class(dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT) {
-            printf("[%u] %u %s --\n", ident, level, act->name);
+            printf("[%" PRIu32 "] %" PRIu16 " %s --\n", ident, level, act->name);
 
             assert(act->descend != NULL);
             ret = wandder_decode_dump(dec, level + 1, act->descend, act->name);
@@ -1320,11 +1320,11 @@ int wandder_decode_dump(wandder_decoder_t *dec, uint16_t level,
                 return -1;
             }
 
-            printf("[%u] %u %s %s\n", ident, level, act->name, space);
+            printf("[%" PRIu32 "] %" PRIu16 " %s %s\n", ident, level, act->name, space);
         }
 
         if (wandder_get_class(dec) == WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
-            printf("%u %s --\n", level, actions->sequence.name);
+            printf("%" PRIu16 " %s --\n", level, actions->sequence.name);
             ret = wandder_decode_dump(dec, level + 1,
                     actions->sequence.descend, actions->sequence.name);
 
