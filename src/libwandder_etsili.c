@@ -41,7 +41,7 @@
 #define INITIAL_ENCODER_SIZE 2048
 #define INCREMENT_ENCODER_SIZE 512
 
-const uint8_t etsi_lipsdomainid[9] = {
+const uint8_t etsi_lipsdomainid[8] = {
         0x00, 0x04, 0x00, 0x02, 0x02, 0x05, 0x01, 0x11};
 
 uint8_t etsi_ipccoid[4] = {0x05, 0x03, 0x0a, 0x02};

@@ -37,7 +37,7 @@
 
 #define ENDCONSTRUCTEDBLOCK(ptr,num) memset(ptr, 0, num*2);ptr+=num*2;
 
-extern const uint8_t etsi_lipsdomainid[9];
+extern const uint8_t etsi_lipsdomainid[8];
 
 typedef struct wandder_etsistack {
 
