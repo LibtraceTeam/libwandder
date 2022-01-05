@@ -16,6 +16,7 @@ chmod 0700 /run/user/${UID}
 yum install -y wget make gcc
 
 yum update -y
+yum upgrade -y ca-certificates
 
 if [ "$1" = "centos:8" ]; then
         yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm || true
