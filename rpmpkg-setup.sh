@@ -8,14 +8,14 @@ yum install -y wget make gcc
 yum update -y
 yum upgrade -y ca-certificates
 
-if [ "$1" =~ "rocky*" ]; then
-        dnf install dnf-plugins-core epel-release || true
-        dnf config-manager --set-enabled PowerTools || true
+if [[ "$1" =~ rocky* ]]; then
+        dnf install -y dnf-plugins-core epel-release || true
+        dnf config-manager --set-enabled powertools || true
 fi
 
-if [ "$1" =~ "alma*" ]; then
-        dnf install dnf-plugins-core epel-release || true
-        dnf config-manager --set-enabled PowerTools || true
+if [[ "$1" =~ alma* ]]; then
+        dnf install -y dnf-plugins-core epel-release || true
+        dnf config-manager --set-enabled powertools || true
 fi
 
 if [ "$1" = "centos:8" ]; then
