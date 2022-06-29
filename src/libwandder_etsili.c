@@ -1492,6 +1492,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->partyidentity.members);
     free(dec->servicesdatainfo.members);
     free(dec->gprsparams.members);
+    free(dec->hi2op_cid.members);
+    free(dec->hi2op_netid.members);
     free(dec->cid.members);
     free(dec->msts.members);
     free(dec->cccontents.members);
@@ -1888,6 +1890,37 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->networkidentifier.sequence = WANDDER_NOACTION;
 
+    dec->hi2op_cid.membercount = 2;
+    ALLOC_MEMBERS(dec->hi2op_cid);
+    dec->hi2op_cid.members[0] =
+        (struct wandder_dump_action) {
+                .name = "communication-Identity-Number",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->hi2op_cid.members[1] =
+        (struct wandder_dump_action) {
+                .name = "network-Identifier",
+                .descend = &(dec->hi2op_netid),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->hi2op_netid.membercount = 2;
+    ALLOC_MEMBERS(dec->hi2op_netid);
+    dec->hi2op_netid.members[0] =
+        (struct wandder_dump_action) {
+                .name = "operator-Identifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->hi2op_netid.members[1] =
+        (struct wandder_dump_action) {
+                .name = "network-Element-Identifier",
+                .descend = &(dec->netelid),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->hi2op_netid.sequence = WANDDER_NOACTION;
+
     dec->cid.membercount = 3;
     ALLOC_MEMBERS(dec->cid);
     dec->cid.members[0] =
@@ -2123,7 +2156,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->hi1notification.members[2] =
         (struct wandder_dump_action) {
                 .name = "communicationIdentifier",
-                .descend = &(dec->cid),
+                .descend = &(dec->hi2op_cid),
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->hi1notification.members[3] =
