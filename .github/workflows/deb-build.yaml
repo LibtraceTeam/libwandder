@@ -36,7 +36,7 @@ jobs:
           mkdir -p packages/${DIRNAME}
           cp ../*.deb packages/${DIRNAME}/
       - name: Publish packages to cloudsmith
-        uses: salcock/action-cloudsmith-upload-packages@v1.6
+        uses: salcock/action-cloudsmith-upload-packages@1.6
         with:
           path: packages/
           repo: ${{ secrets.CLOUDSMITH_OWNER }}/libwandder
