@@ -1,3 +1,9 @@
+libwandder2 (2.0.5-1) unstable; urgency=medium
+
+  * Fix incorrect decoding of ETSI LI HI1 Operations messages
+
+ -- Shane Alcock <salcock@waikato.ac.nz>  Wed, 29 Jun 2022 14:50:12 +1200
+
 libwandder2 (2.0.4-1) unstable; urgency=medium
 
   * Fix extra byte in encoded LI PS Domain ID OIDs
