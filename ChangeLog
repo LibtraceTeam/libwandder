@@ -1,3 +1,7 @@
+Version 2.0.5
+=============
+  * Fix incorrect decoding of ETSI LI HI1 Operations messages
+
 Version 2.0.4
 =============
   * Fix incorrect LI PS Domain ID OID in encoded ETSI LI messages

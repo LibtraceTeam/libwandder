@@ -75,6 +75,8 @@ typedef struct wandder_etsispec {
     wandder_dumper_t partyidentity;
     wandder_dumper_t servicesdatainfo;
     wandder_dumper_t gprsparams;
+    wandder_dumper_t hi2op_cid;
+    wandder_dumper_t hi2op_netid;
     wandder_dumper_t cid;
     wandder_dumper_t msts;
     wandder_dumper_t cccontents;
