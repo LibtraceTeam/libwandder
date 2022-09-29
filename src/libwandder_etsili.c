@@ -1460,6 +1460,83 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 break;
         }
     }
+    else if (item->identifier == 1 && curr == &(etsidec->emailiri)) {
+        /* email eventType */
+        switch(enumval) {
+            case 1:
+                name = "e-mail-send";
+                break;
+            case 2:
+                name = "e-mail-receive";
+                break;
+            case 3:
+                name = "e-mail-download";
+                break;
+            case 4:
+                name = "e-mail-logon-attempt";
+                break;
+            case 5:
+                name = "e-mail-logon";
+                break;
+            case 6:
+                name = "e-mail-logon-failure";
+                break;
+            case 7:
+                name = "e-mail-logoff";
+                break;
+            case 8:
+                name = "e-mail-partial-download";
+                break;
+            case 9:
+                name = "e-mail-upload";
+                break;
+        }
+    }
+    else if (item->identifier == 8 && curr == &(etsidec->emailiri)) {
+        /* E-mail-Protocol */
+        switch(enumval) {
+            case 1:
+                name = "smtp";
+                break;
+            case 2:
+                name = "pop3";
+                break;
+            case 3:
+                name = "imap4";
+                break;
+            case 4:
+                name = "webmail";
+                break;
+            case 255:
+                name = "undefined";
+                break;
+        }
+    }
+    else if (item->identifier == 11 && curr == &(etsidec->emailiri)) {
+        /* E-mail-Status */
+        switch(enumval) {
+            case 1:
+                name = "status-unknown";
+                break;
+            case 2:
+                name = "operation-failed";
+                break;
+            case 3:
+                name = "operation-succeeded";
+                break;
+        }
+    }
+    else if (item->identifier == 17 && curr == &(etsidec->emailiri)) {
+        /* e-mail-Sender-Validity */
+        switch(enumval) {
+            case 0:
+                name = "validated";
+                break;
+            case 1:
+                name = "nonvalidated";
+                break;
+        }
+    }
 
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
@@ -1509,6 +1586,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipiriid.members);
     free(dec->ipiricontents.members);
     free(dec->ipiri.members);
+    free(dec->emailiri.members);
+    free(dec->emailrecipientsingle.members);
     free(dec->umtsiri.members);
     free(dec->umtsiri_params.members);
     free(dec->iricontents.members);
@@ -2819,13 +2898,144 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->umtsiri.members[2] = WANDDER_NOACTION;
     dec->umtsiri.members[3] = WANDDER_NOACTION;
 
+    dec->emailiri.membercount = 18;
+    ALLOC_MEMBERS(dec->emailiri);
+    dec->emailiri.members[0] =
+        (struct wandder_dump_action) {
+                .name = "emailIRIObjId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_RELATIVEOID
+        };
+    dec->emailiri.members[1] =
+        (struct wandder_dump_action) {
+                .name = "eventType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->emailiri.members[2] =
+        (struct wandder_dump_action) {
+                .name = "client-Address",
+                .descend = (&dec->ipaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->emailiri.members[3] =
+        (struct wandder_dump_action) {
+                .name = "server-Address",
+                .descend = (&dec->ipaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->emailiri.members[4] =
+        (struct wandder_dump_action) {
+                .name = "client-Port",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+    dec->emailiri.members[5] =
+        (struct wandder_dump_action) {
+                .name = "server-Port",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+    dec->emailiri.members[6] =
+        (struct wandder_dump_action) {
+                .name = "server-Octets-Sent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+    dec->emailiri.members[7] =
+        (struct wandder_dump_action) {
+                .name = "client-Octets-Sent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+    dec->emailiri.members[8] =
+        (struct wandder_dump_action) {
+                .name = "protocol-ID",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->emailiri.members[9] =
+        (struct wandder_dump_action) {
+                .name = "e-mail-Sender",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_UTF8STR
+        };
+    dec->emailiri.members[10] =
+        (struct wandder_dump_action) {
+                .name = "e-mail-Recipients",
+                .descend = &(dec->emailrecipients),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->emailiri.members[11] =
+        (struct wandder_dump_action) {
+                .name = "status",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->emailiri.members[12] =
+        (struct wandder_dump_action) {
+                .name = "total-Recipient-Count",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+    dec->emailiri.members[13] =
+        (struct wandder_dump_action) {
+                .name = "message-ID",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->emailiri.members[14] =
+        (struct wandder_dump_action) {
+                .name = "nationalParameter",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->emailiri.members[15] =
+        (struct wandder_dump_action) {
+                .name = "national-EM-ASN1parameters",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->emailiri.members[16] =
+        (struct wandder_dump_action) {
+                .name = "aAAInformation",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->emailiri.members[17] =
+        (struct wandder_dump_action) {
+                .name = "e-mail-Sender-Validity",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->emailiri.sequence = WANDDER_NOACTION;
+
+    dec->emailrecipients.membercount = 0;
+    dec->emailrecipients.members = NULL;
+    dec->emailrecipients.sequence =
+        (struct wandder_dump_action) {
+                .name = "E-mail-Address-List",
+                .descend = &(dec->emailrecipientsingle),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->emailrecipientsingle.membercount = 1;
+    ALLOC_MEMBERS(dec->emailrecipientsingle);
+    dec->emailrecipientsingle.members[0] =
+        (struct wandder_dump_action) {
+                .name = "recipient",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_UTF8STR
+        };
+    dec->emailrecipientsingle.sequence = WANDDER_NOACTION;
+
     dec->iricontents.membercount = 16;
     ALLOC_MEMBERS(dec->iricontents);
     dec->iricontents.members[0] = WANDDER_NOACTION;
-    dec->iricontents.members[1] =     // TODO
+    dec->iricontents.members[1] =
         (struct wandder_dump_action) {
                 .name = "emailIRI",
-                .descend = NULL,
+                .descend = &(dec->emailiri),
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->iricontents.members[2] =
