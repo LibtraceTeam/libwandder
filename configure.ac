@@ -4,7 +4,7 @@ AC_INIT(libwandder, 2.0.5, salcock@waikato.ac.nz)
 
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_CONFIG_SRCDIR(src/decoder.c)
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([m4])
 
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
@@ -14,8 +14,7 @@ AC_PREFIX_DEFAULT(/usr/local)
 AC_PROG_CC
 AC_PROG_INSTALL
 
-AC_PROG_LIBTOOL
-
+LT_INIT
 gcc_PACKED
 
 EXTRA_LIBS=""
