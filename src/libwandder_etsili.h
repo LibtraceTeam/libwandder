@@ -100,6 +100,7 @@ typedef struct wandder_etsispec {
     wandder_dumper_t hi1operation;
     wandder_dumper_t hi1notification;
     wandder_dumper_t emailiri;
+    wandder_dumper_t emailcc;
     wandder_dumper_t emailrecipients;
     wandder_dumper_t emailrecipientsingle;
 
@@ -107,6 +108,7 @@ typedef struct wandder_etsispec {
     wandder_etsi_stack_t *stack;
 
     uint8_t decstate;
+    uint8_t ccformat;
 } wandder_etsispec_t;
 
 typedef enum {
@@ -373,6 +375,12 @@ enum {
     WANDDER_IPADDRESS_VERSION_6 = 1,
 };
 
+enum {
+    WANDDER_ETSILI_CC_FORMAT_UNKNOWN = 0,
+    WANDDER_ETSILI_CC_FORMAT_IP = 1,
+    WANDDER_ETSILI_CC_FORMAT_APPLICATION = 2,
+};
+
 wandder_etsispec_t *wandder_create_etsili_decoder(void);
 void wandder_free_etsili_decoder(wandder_etsispec_t *dec);
 void wandder_attach_etsili_buffer(wandder_etsispec_t *dec, uint8_t *buffer,
@@ -395,7 +403,7 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *dec);
 int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec);
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
-
+uint8_t wandder_etsili_get_cc_format(wandder_etsispec_t *etsidec);
 
 
 wandder_etsili_top_t* wandder_encode_init_top_ber (

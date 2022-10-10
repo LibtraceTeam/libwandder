@@ -95,9 +95,58 @@ wandder_etsispec_t *wandder_create_etsili_decoder(void) {
 
     etsidec->stack = NULL;
     etsidec->decstate = 0;
+    etsidec->ccformat = 0;
     etsidec->dec = NULL;
 
     return etsidec;
+}
+
+uint8_t wandder_etsili_get_cc_format(wandder_etsispec_t *etsidec) {
+    return etsidec->ccformat;
+}
+
+static uint8_t wandder_etsili_get_email_format(wandder_etsispec_t *etsidec) {
+    wandder_found_t *found = NULL;
+    wandder_target_t tgt;
+    uint8_t *vp = NULL;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return 0;
+    }
+
+    /* We already know the format from earlier decoding work, so just use
+     * that. This should be the most common case...
+     */
+    if (etsidec->ccformat != 0) {
+        return etsidec->ccformat;
+    }
+
+    /* Find the email-Format field in the encoded record, if present */
+    wandder_reset_decoder(etsidec->dec);
+    tgt.parent = &etsidec->emailcc;
+    tgt.itemid = 1;
+    tgt.found = false;
+
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &tgt, 1,
+                &found, 1) > 0) {
+        int64_t val;
+        uint32_t len;
+
+        len = found->list[0].item->length;
+        vp = found->list[0].item->valptr;
+
+        if (found->list[0].targetid == 0) {
+            val = wandder_decode_integer_value(vp, len);
+            if (val <= 255) {
+                etsidec->ccformat = (uint8_t) val;
+            }
+        }
+        wandder_free_found(found);
+    }
+
+    return etsidec->ccformat;
 }
 
 void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
@@ -268,6 +317,15 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             ident = wandder_get_identifier(etsidec->dec);
             (etsidec->stack->atthislevel[etsidec->stack->current])++;
 
+            if (curr == &(etsidec->emailcc) && ident == 1) {
+                int64_t val;
+                val = wandder_get_integer_value(etsidec->dec->current, NULL);
+
+                if (val <= 255) {
+                    etsidec->ccformat = (uint8_t) val;
+                }
+            }
+
             if (curr->members[ident].interpretas == WANDDER_TAG_IPPACKET) {
                 /* If we are an IP CC we can stop, but IPMM CCs have to
                  * keep going in case the optional fields are present :(
@@ -276,6 +334,9 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                     return NULL;
                 }
                 if (strcmp(curr->members[ident].name, "uMTSCC") == 0) {
+                    return NULL;
+                }
+                if (strcmp(curr->members[ident].name, "content") == 0) {
                     return NULL;
                 }
                 return wandder_etsili_get_next_fieldstr(etsidec, space,
@@ -420,7 +481,6 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             return NULL;
     }
 
-    
     return space;
 }
 
@@ -437,10 +497,12 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
                 "wandder_attach_etsili_buffer() first!\n");
         return NULL;
     }
-    /* Find IPCCContents or IPMMCCContents or UMTSCC */
+    etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_UNKNOWN;
+
+    /* Find IPCCContents or IPMMCCContents or UMTSCC or emailCC */
     wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
-    wandder_target_t cctgts[3];
+    wandder_target_t cctgts[4];
 
     cctgts[0].parent = &etsidec->ipcccontents;
     cctgts[0].itemid = 0;
@@ -454,18 +516,28 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
     cctgts[2].itemid = 4;
     cctgts[2].found = false;
 
+    cctgts[3].parent = &etsidec->emailcc;
+    cctgts[3].itemid = 2;
+    cctgts[3].found = false;
+
     *len = 0;
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 3,
+    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 4,
                 &found, 1) > 0) {
         *len = found->list[0].item->length;
         vp = found->list[0].item->valptr;
 
         if (found->list[0].targetid == 0) {
             strncpy(name, etsidec->ipcccontents.members[0].name, namelen);
+            etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
         } else if (found->list[0].targetid == 1) {
             strncpy(name, etsidec->ipmmcc.members[1].name, namelen);
+            etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
         } else if (found->list[0].targetid == 2) {
             strncpy(name, etsidec->cccontents.members[4].name, namelen);
+            etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
+        } else if (found->list[0].targetid == 3) {
+            strncpy(name, etsidec->emailcc.members[2].name, namelen);
+            wandder_etsili_get_email_format(etsidec);
         }
         wandder_free_found(found);
     }
@@ -1537,6 +1609,17 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 break;
         }
     }
+    else if (item->identifier == 1 && curr == &(etsidec->emailcc)) {
+        /* e-mail-Sender-Validity */
+        switch(enumval) {
+            case 1:
+                name = "ip-packet";
+                break;
+            case 2:
+                name = "application";
+                break;
+        }
+    }
 
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
@@ -1587,6 +1670,7 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipiricontents.members);
     free(dec->ipiri.members);
     free(dec->emailiri.members);
+    free(dec->emailcc.members);
     free(dec->emailrecipientsingle.members);
     free(dec->umtsiri.members);
     free(dec->umtsiri_params.members);
@@ -2044,7 +2128,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->cccontents.members[1] =     // TODO
         (struct wandder_dump_action) {
                 .name = "emailCC",
-                .descend = NULL,
+                .descend = &(dec->emailcc),
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->cccontents.members[2] =
@@ -2897,6 +2981,28 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->umtsiri.members[1] = WANDDER_NOACTION;
     dec->umtsiri.members[2] = WANDDER_NOACTION;
     dec->umtsiri.members[3] = WANDDER_NOACTION;
+
+    dec->emailcc.membercount = 3;
+    ALLOC_MEMBERS(dec->emailcc);
+    dec->emailcc.sequence =WANDDER_NOACTION;
+    dec->emailcc.members[0] =
+        (struct wandder_dump_action) {
+                .name = "emailCCObjId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_RELATIVEOID
+        };
+    dec->emailcc.members[1] =
+        (struct wandder_dump_action) {
+                .name = "email-Format",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->emailcc.members[2] =
+        (struct wandder_dump_action) {
+                .name = "email-Content",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_IPPACKET
+        };
 
     dec->emailiri.membercount = 18;
     ALLOC_MEMBERS(dec->emailiri);
