@@ -1619,6 +1619,36 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 name = "application";
                 break;
         }
+    } else if (
+            (item->identifier == 2 && curr == &(etsidec->pop3aaainformation)) ||
+            (item->identifier == 4 && curr == &(etsidec->asmtpaaainformation)))
+    {
+        /* aAAResult */
+        switch(enumval) {
+            case 1:
+                name = "resultUnknown";
+                break;
+            case 2:
+                name = "aAAFailed";
+                break;
+            case 3:
+                name = "aAASucceeded";
+                break;
+        }
+    } else if (item->identifier == 1 &&
+            curr == &(etsidec->asmtpaaainformation)) {
+        /* AAAauthMethod */
+        switch(enumval) {
+            case 1:
+                name = "undefinedAuthMethod";
+                break;
+            case 2:
+                name = "cramMD5";
+                break;
+            case 3:
+                name = "digestMD5";
+                break;
+        }
     }
 
     if (name != NULL) {
@@ -1672,6 +1702,9 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->emailiri.members);
     free(dec->emailcc.members);
     free(dec->emailrecipientsingle.members);
+    free(dec->aaainformation.members);
+    free(dec->pop3aaainformation.members);
+    free(dec->asmtpaaainformation.members);
     free(dec->umtsiri.members);
     free(dec->umtsiri_params.members);
     free(dec->iricontents.members);
@@ -3105,7 +3138,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->emailiri.members[16] =
         (struct wandder_dump_action) {
                 .name = "aAAInformation",
-                .descend = NULL,
+                .descend = &(dec->aaainformation),
                 .interpretas = WANDDER_TAG_NULL
         };
     dec->emailiri.members[17] =
@@ -3134,6 +3167,85 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_UTF8STR
         };
     dec->emailrecipientsingle.sequence = WANDDER_NOACTION;
+
+    dec->aaainformation.membercount = 3;
+    ALLOC_MEMBERS(dec->aaainformation);
+    dec->aaainformation.members[0] =
+        (struct wandder_dump_action) {
+                .name = "pOP3AAAInformation",
+                .descend = &(dec->pop3aaainformation),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->aaainformation.members[1] =
+        (struct wandder_dump_action) {
+                .name = "aSMTPAAAInformation",
+                .descend = &(dec->asmtpaaainformation),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->aaainformation.members[2] =
+        (struct wandder_dump_action) {
+                .name = "iMAPAAAInformation",
+                // not an error! uses the same sequence structure as pop3!
+                .descend = &(dec->pop3aaainformation),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->aaainformation.sequence = WANDDER_NOACTION;
+
+    dec->pop3aaainformation.membercount = 3;
+    ALLOC_MEMBERS(dec->pop3aaainformation);
+    dec->pop3aaainformation.members[0] =
+        (struct wandder_dump_action) {
+                .name = "username",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_UTF8STR
+        };
+    dec->pop3aaainformation.members[1] =
+        (struct wandder_dump_action) {
+                .name = "password",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_UTF8STR
+        };
+    dec->pop3aaainformation.members[2] =
+        (struct wandder_dump_action) {
+                .name = "aAAResult",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->pop3aaainformation.sequence = WANDDER_NOACTION;
+
+    dec->asmtpaaainformation.membercount = 5;
+    ALLOC_MEMBERS(dec->asmtpaaainformation);
+    dec->asmtpaaainformation.members[0] =
+        (struct wandder_dump_action) {
+                .name = "username",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_UTF8STR
+        };
+    dec->asmtpaaainformation.members[1] =
+        (struct wandder_dump_action) {
+                .name = "authMethod",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->asmtpaaainformation.members[2] =
+        (struct wandder_dump_action) {
+                .name = "challenge",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->asmtpaaainformation.members[3] =
+        (struct wandder_dump_action) {
+                .name = "response",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->asmtpaaainformation.members[4] =
+        (struct wandder_dump_action) {
+                .name = "aAAResult",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->asmtpaaainformation.sequence = WANDDER_NOACTION;
 
     dec->iricontents.membercount = 16;
     ALLOC_MEMBERS(dec->iricontents);
