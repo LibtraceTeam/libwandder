@@ -1,3 +1,11 @@
+libwandder2 (2.0.6-1) unstable; urgency=medium
+
+  * Add support for decoding ETSI LI email IRIs and CCs
+  * Add new API method: wandder_etsili_get_cc_format()
+  * Add new API method: wandder_decode_integer_value()
+
+ -- Shane Alcock <shane@alcock.co.nz>  Wed, 02 Nov 2022 16:07:54 +1300
+
 libwandder2 (2.0.5-1) unstable; urgency=medium
 
   * Fix incorrect decoding of ETSI LI HI1 Operations messages

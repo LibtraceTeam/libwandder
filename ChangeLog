@@ -1,3 +1,9 @@
+Version 2.0.6
+=============
+  * Add support for decoding ETSI LI Email IRIs and CCs
+  * Add new API method: wandder_decode_integer_value()
+  * Add new API method: wandder_etsili_get_cc_format()
+
 Version 2.0.5
 =============
   * Fix incorrect decoding of ETSI LI HI1 Operations messages

@@ -1,11 +1,11 @@
 Name:           libwandder2
-Version:        2.0.5
+Version:        2.0.6
 Release:        1%{?dist}
 Summary:        C Library for encoding and decoding data using DER
 
 License:        LGPLv3
-URL:            https://github.com/wanduow/libwandder
-Source0:        https://github.com/wanduow/libwandder/archive/%{version}.tar.gz
+URL:            https://github.com/LibtraceTeam/libwandder
+Source0:        https://github.com/LibtraceTeam/libwandder/archive/%{version}.tar.gz
 
 BuildRequires: gcc
 BuildRequires: gcc-c++
@@ -20,8 +20,8 @@ using the ASN.1 format.
 This library also includes some routines that are specifically useful for
 capturing and processing records using the ETSI Lawful Intercept standards.
 
-libwandder is developed by the WAND Network Research Group at Waikato
-University, New Zealand.
+libwandder was originally developed by the WAND Network Research Group at
+Waikato University, New Zealand.
 
 %package        devel
 Summary:        Development files for %{name}
@@ -58,6 +58,9 @@ find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 %{_libdir}/*.so
 
 %changelog
+* Wed Nov 02 2022 Shane Alcock <shane@alcock.co.nz> - 2.0.6-1
+- Updated to 2.0.6 release of libwandder
+
 * Wed Jun 29 2022 Shane Alcock <salcock@waikato.ac.nz> - 2.0.5-1
 - Updated to 2.0.5 release of libwandder
 

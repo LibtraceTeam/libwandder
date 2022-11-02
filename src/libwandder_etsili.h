@@ -99,11 +99,19 @@ typedef struct wandder_etsispec {
     wandder_dumper_t iripayloadseq;
     wandder_dumper_t hi1operation;
     wandder_dumper_t hi1notification;
+    wandder_dumper_t emailiri;
+    wandder_dumper_t emailcc;
+    wandder_dumper_t emailrecipients;
+    wandder_dumper_t emailrecipientsingle;
+    wandder_dumper_t aaainformation;
+    wandder_dumper_t pop3aaainformation;
+    wandder_dumper_t asmtpaaainformation;
 
     wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;
 
     uint8_t decstate;
+    uint8_t ccformat;
 } wandder_etsispec_t;
 
 typedef enum {
@@ -263,6 +271,45 @@ enum {
     WANDDER_UMTSIRI_EVENT_TYPE_PDPCONTEXT_MODIFICATION = 13,
 };
 
+enum {
+    WANDDER_EMAIL_STATUS_UNKNOWN = 1,
+    WANDDER_EMAIL_STATUS_FAILED = 2,
+    WANDDER_EMAIL_STATUS_SUCCESS = 3
+};
+
+enum {
+    WANDDER_EMAIL_EVENT_SEND = 1,
+    WANDDER_EMAIL_EVENT_RECEIVE = 2,
+    WANDDER_EMAIL_EVENT_DOWNLOAD = 3,
+    WANDDER_EMAIL_EVENT_LOGON_ATTEMPT = 4,
+    WANDDER_EMAIL_EVENT_LOGON = 5,
+    WANDDER_EMAIL_EVENT_LOGON_FAILURE = 6,
+    WANDDER_EMAIL_EVENT_LOGOFF = 7,
+    WANDDER_EMAIL_EVENT_PARTIAL_DOWNLOAD = 8,
+    WANDDER_EMAIL_EVENT_UPLOAD = 9,
+};
+
+enum {
+    WANDDER_EMAILIRI_CONTENTS_EVENT_TYPE = 1,
+    WANDDER_EMAILIRI_CONTENTS_CLIENT_ADDRESS = 2,
+    WANDDER_EMAILIRI_CONTENTS_SERVER_ADDRESS = 3,
+    WANDDER_EMAILIRI_CONTENTS_CLIENT_PORT = 4,
+    WANDDER_EMAILIRI_CONTENTS_SERVER_PORT = 5,
+    WANDDER_EMAILIRI_CONTENTS_SERVER_OCTETS_SENT = 6,
+    WANDDER_EMAILIRI_CONTENTS_CLIENT_OCTETS_SENT = 7,
+    WANDDER_EMAILIRI_CONTENTS_PROTOCOL_ID = 8,
+    WANDDER_EMAILIRI_CONTENTS_SENDER = 9,
+    WANDDER_EMAILIRI_CONTENTS_RECIPIENTS = 10,
+    WANDDER_EMAILIRI_CONTENTS_STATUS = 11,
+    WANDDER_EMAILIRI_CONTENTS_TOTAL_RECIPIENTS = 12,
+    WANDDER_EMAILIRI_CONTENTS_MESSAGE_ID = 13,
+    WANDDER_EMAILIRI_CONTENTS_NATIONAL_PARAMETER = 14,
+    WANDDER_EMAILIRI_CONTENTS_NATIONAL_ASN1_PARAMETERS = 15,
+    WANDDER_EMAILIRI_CONTENTS_AAA_INFORMATION = 16,
+    WANDDER_EMAILIRI_CONTENTS_SENDER_VALIDITY = 17,
+};
+
+
 typedef struct wandder_etsili_generic wandder_etsili_generic_t;
 typedef struct wandder_etsili_generic_freelist wandder_etsili_generic_freelist_t;
 
@@ -331,6 +378,12 @@ enum {
     WANDDER_IPADDRESS_VERSION_6 = 1,
 };
 
+enum {
+    WANDDER_ETSILI_CC_FORMAT_UNKNOWN = 0,
+    WANDDER_ETSILI_CC_FORMAT_IP = 1,
+    WANDDER_ETSILI_CC_FORMAT_APPLICATION = 2,
+};
+
 wandder_etsispec_t *wandder_create_etsili_decoder(void);
 void wandder_free_etsili_decoder(wandder_etsispec_t *dec);
 void wandder_attach_etsili_buffer(wandder_etsispec_t *dec, uint8_t *buffer,
@@ -353,7 +406,7 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *dec);
 int wandder_etsili_is_keepalive(wandder_etsispec_t *etsidec);
 int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec);
 int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec);
-
+uint8_t wandder_etsili_get_cc_format(wandder_etsispec_t *etsidec);
 
 
 wandder_etsili_top_t* wandder_encode_init_top_ber (

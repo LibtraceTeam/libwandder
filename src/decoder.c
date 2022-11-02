@@ -767,6 +767,10 @@ static uint32_t stringify_integer(uint8_t *start, uint32_t length, char *space,
     return length;
 }
 
+int64_t wandder_decode_integer_value(uint8_t *intstart, uint32_t len) {
+    return decode_integer(intstart, &len);
+}
+
 int64_t wandder_get_integer_value(wandder_item_t *c, uint32_t *intlen) {
 
     int64_t intval = 0;
