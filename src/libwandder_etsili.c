@@ -1655,7 +1655,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
 	 * Adding encryptionType and encryptedPayloadType, WPvS
 	 *
 	 */
-    else if (item->identifier == 0 && curr == &(etsidec->encryptedpayload)) {
+    else if (item->identifier == 0 && curr == &(etsidec->encryptioncontainer)) {
         /* EncryptionType */
         switch(enumval) {
             case 1:
@@ -1682,11 +1682,11 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    else if (item->identifier == 2 && curr == &(etsidec->encryptedpayload)) {
+    else if (item->identifier == 2 && curr == &(etsidec->encryptioncontainer)) {
         /* EncryptionPayloadType */
         switch(enumval) {
             case 1:
-                name = "Unknown";
+                name = "Unknown";	
                 break;
             case 2:
                 name = "part2";
@@ -1721,7 +1721,6 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
     return NULL;
 }
 
-/*TODO: add encrypted payload type*/
 static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipvalue.members);
     free(dec->timestamp.members);
@@ -3450,7 +3449,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "encryptedPayload",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_NULL
+                .interpretas = WANDDER_TAG_HEX_BYTES
         };
 /*
                 .descend = &(dec->encryptedpayload),
@@ -3476,7 +3475,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "payload",
                 .descend = &(dec->payload),
-                .interpretas = WANDDER_TAG_ENUM
+                .interpretas = WANDDER_TAG_NULL
         };
     
     /* End of encrypted payload, WPvS */
