@@ -1655,7 +1655,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
 	 * Adding encryptionType and encryptedPayloadType, WPvS
 	 *
 	 */
-    else if (item->identifier == 0 && curr == &(etsidec->encryptionpayload)) {
+    else if (item->identifier == 0 && curr == &(etsidec->encryptedpayload)) {
         /* EncryptionType */
         switch(enumval) {
             case 1:
@@ -1682,7 +1682,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    else if (item->identifier == 2 && curr == &(etsidec->encryptionpayload)) {
+    else if (item->identifier == 2 && curr == &(etsidec->encryptedpayload)) {
         /* EncryptionPayloadType */
         switch(enumval) {
             case 1:
@@ -1776,7 +1776,7 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->psheader.members);
     free(dec->pspdu.members);
     free(dec->encryptioncontainer.members);
-    free(dec->encryptionpayload.members);
+    free(dec->encryptedpayload.members);
 
 }
 
