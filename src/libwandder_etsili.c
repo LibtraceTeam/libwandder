@@ -3465,14 +3465,14 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         
 	dec->encryptedpayload.membercount = 2;
 	ALLOC_MEMBERS(dec->encryptionpayload);
-	dec->encryptionpayload.sequence = WANDDER_NOACTION;
-	dec->encryptionpayload.members[0] = 
+	dec->encryptedpayload.sequence = WANDDER_NOACTION;
+	dec->encryptedpayload.members[0] = 
         (struct wandder_dump_action) {
                 .name = "byteCounter",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_INTEGER
         };
-	dec->encryptionpayload.members[1] = 
+	dec->encryptedpayload.members[1] = 
         (struct wandder_dump_action) {
                 .name = "payload",
                 .descend = &(dec->payload),
