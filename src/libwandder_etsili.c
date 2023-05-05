@@ -1092,7 +1092,7 @@ static const char *stringify_ipaddress(wandder_etsispec_t *etsidec,
         family = AF_INET6;
         addr = &in6;
     } else {
-        fprintf(stderr, "Unexpected IP address length: %lu\n", item->length);
+        fprintf(stderr, "Unexpected IP address length: %lu\n", (long) item->length);
         return NULL;
     }
 
@@ -1651,6 +1651,68 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
+	/*
+	 * Adding encryptionType and encryptedPayloadType, WPvS
+	 *
+	 */
+    else if (item->identifier == 0 && curr == &(etsidec->encryptionpayload)) {
+        /* EncryptionType */
+        switch(enumval) {
+            case 1:
+                name = "None";
+                break;
+            case 2:
+                name = "national-option";
+                break;
+            case 3:
+                name = "AES-192-CBC";
+                break;
+            case 4:
+                name = "AES-256-CBC";
+                break;
+            case 5:
+                name = "blowfish-192-CBC";
+                break;
+            case 6:
+                name = "blowfish-256-CBC";
+                break;
+            case 7:
+                name = "threedes-cbc";
+                break;
+        }
+    }
+
+    else if (item->identifier == 2 && curr == &(etsidec->encryptionpayload)) {
+        /* EncryptionPayloadType */
+        switch(enumval) {
+            case 1:
+                name = "Unknown";
+                break;
+            case 2:
+                name = "part2";
+                break;
+            case 3:
+                name = "part3";
+                break;
+            case 4:
+                name = "part4";
+                break;
+            case 5:
+                name = "part5";
+                break;
+            case 6:
+                name = "part6";
+                break;
+            case 7:
+                name = "part7";
+                break;
+            case 8:
+                name = "part1";
+                break;
+        }
+    }
+
+
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
         return name;
@@ -1659,6 +1721,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
     return NULL;
 }
 
+/*TODO: add encrypted payload type*/
 static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipvalue.members);
     free(dec->timestamp.members);
@@ -1712,6 +1775,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->payload.members);
     free(dec->psheader.members);
     free(dec->pspdu.members);
+    free(dec->encryptioncontainer.members);
+    free(dec->encryptionpayload.members);
 
 }
 
@@ -3361,9 +3426,60 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->payload.members[4] =        // TODO?
         (struct wandder_dump_action) {
                 .name = "encryptionContainer",
+                .descend = &(dec->encryptioncontainer),
+                .interpretas = WANDDER_TAG_NULL
+        };
+        
+    /*
+     * Handling of encrypted payload
+     * WPvS, 04-05-2023
+     *
+    */
+
+	dec->encryptioncontainer.membercount = 3;
+	ALLOC_MEMBERS(dec->encryptioncontainer);
+	dec->encryptioncontainer.sequence = WANDDER_NOACTION;
+	dec->encryptioncontainer.members[0] = 
+        (struct wandder_dump_action) {
+                .name = "encryptionType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    /* encrypted payload needs to be decrypted first, before descending into payload */
+	dec->encryptioncontainer.members[1] =
+        (struct wandder_dump_action) {
+                .name = "encryptedPayload",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_NULL
         };
+/*
+                .descend = &(dec->encryptedpayload),
+                .interpretas = WANDDER_TAG_ENCRYPTED
+*/
+	dec->encryptioncontainer.members[2] = 
+        (struct wandder_dump_action) {
+                .name = "encryptedPayloadType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+        
+	dec->encryptedpayload.membercount = 2;
+	ALLOC_MEMBERS(dec->encryptionpayload);
+	dec->encryptionpayload.sequence = WANDDER_NOACTION;
+	dec->encryptionpayload.members[0] = 
+        (struct wandder_dump_action) {
+                .name = "byteCounter",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+	dec->encryptionpayload.members[1] = 
+        (struct wandder_dump_action) {
+                .name = "payload",
+                .descend = &(dec->payload),
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    
+    /* End of encrypted payload, WPvS */
 
     dec->psheader.membercount = 9;
     ALLOC_MEMBERS(dec->psheader);
@@ -4635,7 +4751,7 @@ static void update_etsili_umtsiri(
         fprintf(stderr, "wandder: UMTS IRI record may be invalid...\n");
     } else {
         char space[24];
-        snprintf(space, 24, "%lu", *((uint64_t *)(p->itemptr)));
+        snprintf(space, 24, "%lu", *((long *)(p->itemptr)));
 
         encode_here_ber_update(
                 18, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
