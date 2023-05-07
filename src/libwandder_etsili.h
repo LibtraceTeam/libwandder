@@ -106,6 +106,8 @@ typedef struct wandder_etsispec {
     wandder_dumper_t aaainformation;
     wandder_dumper_t pop3aaainformation;
     wandder_dumper_t asmtpaaainformation;
+    wandder_dumper_t encryptioncontainer;
+    wandder_dumper_t encryptedpayload;
 
     wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;
