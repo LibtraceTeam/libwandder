@@ -416,7 +416,7 @@ static inline int encode_time_inline(
             strftime(timebuf, 768, "%y%m%d%H%M%S", &tm);
             break;
     }
-    snprintf(returnbuf, 1024, "%s.%03ldZ", timebuf,
+    snprintf(returnbuf, 1024, "%s.%03" PRId64 "Z", timebuf,
             (int64_t)(tv->tv_usec / 1000));
 
     return strlen(returnbuf);
