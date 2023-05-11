@@ -38,6 +38,20 @@
 #include "wandder_internal.h"
 #include "libwandder_etsili.h"
 
+#include <openssl/conf.h>
+#include <openssl/evp.h>
+#include <openssl/err.h>
+#include <openssl/bio.h>
+
+#if defined(__APPLE__)
+// Mac OS X / Darwin features
+#include <libkern/OSByteOrder.h>
+#define bswap_32(x) OSSwapInt32(x)
+#define bswap_64(x) OSSwapInt64(x)
+#else
+#include <byteswap.h>
+#endif
+
 #define INITIAL_ENCODER_SIZE 2048
 #define INCREMENT_ENCODER_SIZE 512
 
@@ -63,7 +77,7 @@ static char *stringify_3gcause(wandder_etsispec_t *etsidec,
 static char *stringify_domain_name(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
-        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+        wandder_item_t *item, char *valstr, int len);
 static char *stringify_tai(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_cgi(wandder_etsispec_t *etsidec,
@@ -72,13 +86,49 @@ static char *stringify_ecgi(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_sai(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, char *valstr, int len);
+static char *stringify_sequenced_primitives(char *sequence_name,
+        wandder_decoder_t *dec, char *space, int spacelen, int interpretas);
 
 #define QUICK_DECODE(fail) \
-    ret = wandder_decode_next(etsidec->dec); \
+    ret = wandder_decode_next(dec); \
     if (ret <= 0) { \
         return fail; \
     } \
-    ident = wandder_get_identifier(etsidec->dec);
+    ident = wandder_get_identifier(dec);
+
+
+/*
+*  hex2bin() - Convert Hex string into a binary array.
+*  2 hex characters (2 x 4 bit) are translated to a binary char (8 bit), in the same order
+*  Input: hex string
+*  Output: binary char array
+*
+*  NB: memory allocation and freeing memory must be done before calling this routine
+*
+*  Contributed by Pim van Stam
+*/
+static unsigned char * hex2bin (char *hexstr, unsigned char *binvalue,
+        int hexstr_size) {
+    int i, j;
+    char ch, value;
+
+    for (i=0; i < (int) hexstr_size/2; i++) {
+        value =0;
+        for (j=0; j<2; j++) {
+            ch = hexstr[i*2+j];
+            if (ch >= '0' && ch <= '9')
+                value = (value << 4) + (ch - '0');
+            else if (ch >= 'A' && ch <= 'F')
+                value = (value << 4) + (ch - 'A' + 10);
+            else if (ch >= 'a' && ch <= 'f')
+                value = (value << 4) + (ch - 'a' + 10);
+        }
+        binvalue[i] = (unsigned char) value;
+    }
+    return(binvalue);
+}
 
 
 static void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
@@ -97,6 +147,10 @@ wandder_etsispec_t *wandder_create_etsili_decoder(void) {
     etsidec->decstate = 0;
     etsidec->ccformat = 0;
     etsidec->dec = NULL;
+    etsidec->decrypt_dec = NULL;
+    etsidec->decrypted = NULL;
+    etsidec->decrypt_size = 0;
+    etsidec->decrypt_stack = NULL;
 
     return etsidec;
 }
@@ -160,8 +214,17 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
     if (etsidec->stack) {
         wandder_etsili_free_stack(etsidec->stack);
     }
+    if (etsidec->decrypt_stack) {
+        wandder_etsili_free_stack(etsidec->decrypt_stack);
+    }
     if (etsidec->decstate) {
         free_wandder_decoder(etsidec->dec);
+    }
+    if (etsidec->decrypt_dec) {
+        free_wandder_decoder(etsidec->decrypt_dec);
+    }
+    if (etsidec->decrypted) {
+        free(etsidec->decrypted);
     }
     free(etsidec);
 }
@@ -182,6 +245,7 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
     struct timeval tv;
     uint32_t ident;
     int ret;
+    wandder_decoder_t *dec = etsidec->dec;
 
     tv.tv_sec = 0;
     tv.tv_usec = 0;
@@ -192,7 +256,7 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
     }
 
     /* Find PSHeader */
-    wandder_reset_decoder(etsidec->dec);
+    wandder_reset_decoder(dec);
     QUICK_DECODE(tv);
     QUICK_DECODE(tv);
 
@@ -201,14 +265,14 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
         return tv;
     }
 
-    if ((ret = wandder_decode_sequence_until(etsidec->dec, 5)) < 0) {
+    if ((ret = wandder_decode_sequence_until(dec, 5)) < 0) {
         return tv;
     }
 
     if (ret == 1) {
-        tv = wandder_generalizedts_to_timeval(etsidec->dec,
-                (char *)(wandder_get_itemptr(etsidec->dec)),
-                wandder_get_itemlen(etsidec->dec));
+        tv = wandder_generalizedts_to_timeval(dec,
+                (char *)(wandder_get_itemptr(dec)),
+                wandder_get_itemlen(dec));
         return tv;
     } else if ((ret = wandder_decode_sequence_until(etsidec->dec, 7)) < 0) {
         return tv;
@@ -216,9 +280,9 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
 
     if (ret == 1) {
         QUICK_DECODE(tv);
-        tv.tv_sec = wandder_get_integer_value(etsidec->dec->current, NULL);
+        tv.tv_sec = wandder_get_integer_value(dec->current, NULL);
         QUICK_DECODE(tv);
-        tv.tv_usec = wandder_get_integer_value(etsidec->dec->current, NULL);
+        tv.tv_usec = wandder_get_integer_value(dec->current, NULL);
         return tv;
     }
     return tv;
@@ -271,55 +335,99 @@ static inline void push_stack(wandder_etsi_stack_t *stack,
 
 }
 
-char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
-        int spacelen) {
+/* Most of the code for this function is derived from example code provided
+ * by Pim van Stam.
+ */
+static int decrypt_payload_content(uint8_t *ciphertext, int ciphertext_len,
+        char *key_hex, int32_t seqno, unsigned char *plainspace, int plainlen) {
+
+    EVP_CIPHER_CTX *ctx;
+    int32_t swap_seqno = htonl(seqno);
+    uint8_t iv[16];
+    int i, key_hex_size;
+    uint8_t *key_bin;
+    int finallen = 0, interimlen = 0;
+
+    assert(sizeof(int32_t) == 4);
+
+    for (i = 0; i < 4; i++) {
+        memcpy(&(iv[i * sizeof(int32_t)]), &swap_seqno, sizeof(int32_t));
+    }
+
+    key_hex_size = strlen(key_hex);
+    key_bin = calloc(1, key_hex_size);     // twice as much as we need
+
+    hex2bin(key_hex, key_bin, key_hex_size);
+
+    ctx = EVP_CIPHER_CTX_new();
+    if (ctx == NULL) {
+        fprintf(stderr, "Unable to create EVP context for decryption: %s\n",
+                strerror(errno));
+        return -1;
+    }
+
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_192_cbc(), NULL, key_bin, iv) != 1) {
+        fprintf(stderr, "Unable to initialise EVP context for decryption: %s\n",
+                strerror(errno));
+        return -1;
+    }
+
+    /* Disable padding because the ciphertext should already be a multiple
+     * of the block size.
+     */
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+
+    if (EVP_DecryptUpdate(ctx, plainspace, &interimlen, ciphertext,
+            ciphertext_len) != 1) {
+        fprintf(stderr, "Error while decrypting CC payload content: %s\n",
+                strerror(errno));
+        return -1;
+    }
+    finallen = interimlen;
+
+    if (EVP_DecryptFinal_ex(ctx, plainspace + finallen, &interimlen) != 1) {
+        fprintf(stderr, "Error while finishing decryption of CC payload: %s\n",
+                strerror(errno));
+        return -1;
+    }
+
+    finallen += interimlen;
+    EVP_CIPHER_CTX_free(ctx);
+    free(key_bin);
+
+    return finallen;
+}
+
+static char *decode_field_to_str(wandder_etsispec_t *etsidec,
+        wandder_decoder_t *dec,
+        wandder_etsi_stack_t *stack, char *space, int spacelen) {
     uint32_t ident;
     wandder_dumper_t *curr = NULL;
-    char valstr[2048];
+    char valstr[16384];
 
-    if (etsidec->decstate == 0) {
-        fprintf(stderr, "No buffer attached to this decoder -- please call"
-                "wandder_attach_etsili_buffer() first!\n");
+    if (wandder_decode_next(dec) <= 0) {
         return NULL;
     }
 
-    if (etsidec->stack == NULL) {
-        etsidec->stack = (wandder_etsi_stack_t *)malloc(
-                sizeof(wandder_etsi_stack_t));
-        etsidec->stack->stk = (wandder_dumper_t **)malloc(
-                sizeof(wandder_dumper_t *) * 10);
-        etsidec->stack->atthislevel = (int *)malloc(sizeof(int *) * 10);
-
-        etsidec->stack->alloced = 10;
-        etsidec->stack->stk[0] = &etsidec->root;
-        etsidec->stack->current = 0;
-        etsidec->stack->atthislevel[0] = 0;
+    while (wandder_get_level(dec) < stack->current) {
+        assert(stack->current > 0);
+        stack->current --;
     }
 
-    if (wandder_decode_next(etsidec->dec) <= 0) {
-        return NULL;
-    }
-
-
-    while (wandder_get_level(etsidec->dec) < etsidec->stack->current) {
-        assert(etsidec->stack->current > 0);
-        etsidec->stack->current --;
-    }
-
-    curr = etsidec->stack->stk[etsidec->stack->current];
+    curr = stack->stk[stack->current];
     if (curr == NULL) {
         return NULL;
     }
 
-    switch(wandder_get_class(etsidec->dec)) {
+    switch(wandder_get_class(dec)) {
 
         case WANDDER_CLASS_CONTEXT_PRIMITIVE:
-            ident = wandder_get_identifier(etsidec->dec);
-            (etsidec->stack->atthislevel[etsidec->stack->current])++;
+            ident = wandder_get_identifier(dec);
+            (etsidec->stack->atthislevel[stack->current])++;
 
             if (curr == &(etsidec->emailcc) && ident == 1) {
                 int64_t val;
-                val = wandder_get_integer_value(etsidec->dec->current, NULL);
+                val = wandder_get_integer_value(dec->current, NULL);
 
                 if (val <= 255) {
                     etsidec->ccformat = (uint8_t) val;
@@ -344,100 +452,117 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             }
             else if (curr->members[ident].interpretas == WANDDER_TAG_BINARY_IP)
             {
-                if (stringify_ipaddress(etsidec, etsidec->dec->current, curr,
-                        valstr, 2048) == NULL) {
+                if (stringify_ipaddress(etsidec, dec->current, curr,
+                        valstr, 16384) == NULL) {
                     fprintf(stderr, "Failed to interpret IP field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
 
             else if (curr->members[ident].interpretas == WANDDER_TAG_ENUM) {
-                if (interpret_enum(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (interpret_enum(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr, "Failed to interpret enum field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
             else if (curr->members[ident].interpretas == WANDDER_TAG_3G_IMEI) {
-                if (stringify_3gimei(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (stringify_3gimei(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret 3G IMEI-style field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
             else if (curr->members[ident].interpretas ==
                     WANDDER_TAG_3G_SM_CAUSE) {
-                if (stringify_3gcause(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (stringify_3gcause(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret 3G SM-Cause field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
             else if (curr->members[ident].interpretas == WANDDER_TAG_DOMAIN_NAME) {
-                if (stringify_domain_name(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (stringify_domain_name(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret domain name field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
             else if (curr->members[ident].interpretas == WANDDER_TAG_HEX_BYTES) {
-                if (stringify_bytes_as_hex(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (stringify_bytes_as_hex(etsidec, dec->current,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret hex bytes field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
             else if (curr->members[ident].interpretas == WANDDER_TAG_TAI) {
-                if (stringify_tai(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (stringify_tai(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret TAI field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
             else if (curr->members[ident].interpretas == WANDDER_TAG_ECGI) {
-                if (stringify_ecgi(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (stringify_ecgi(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret ECGI field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
             else if (curr->members[ident].interpretas == WANDDER_TAG_CGI) {
-                if (stringify_cgi(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (stringify_cgi(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret CGI field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
             else if (curr->members[ident].interpretas == WANDDER_TAG_SAI) {
-                if (stringify_sai(etsidec, etsidec->dec->current, curr,
-                            valstr, 2048) == NULL) {
+                if (stringify_sai(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret SAI field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
+            else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_ENCRYPTED) {
+                assert(etsidec->decrypted == NULL);
+                if (decrypt_encrypted_payload_item(etsidec,
+                        dec->current, valstr, 16384) == NULL) {
+                    /* Decryption was successful -- go ahead with
+                     * processing the decrypted data... */
+
+                    return wandder_etsili_get_next_fieldstr(etsidec, space,
+                            spacelen);
+                }
+
+                /* Otherwise, we will have fallen back to just a hex
+                 * dump of the encrypted data so we can return that inside
+                 * 'space'.
+                 */
+            }
             else {
-                if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
+                if (!wandder_get_valuestr(dec->current, valstr, 16384,
                         curr->members[ident].interpretas)) {
                     fprintf(stderr, "Failed to interpret field %d:%d\n",
-                            etsidec->stack->current, ident);
+                            stack->current, ident);
                     return NULL;
                 }
             }
@@ -447,12 +572,12 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
             break;
 
         case WANDDER_CLASS_UNIVERSAL_PRIMITIVE:
-            ident = (uint32_t)etsidec->stack->atthislevel[etsidec->stack->current];
-            (etsidec->stack->atthislevel[etsidec->stack->current])++;
-            if (!wandder_get_valuestr(etsidec->dec->current, valstr, 2048,
-                    wandder_get_identifier(etsidec->dec))) {
+            ident = (uint32_t)stack->atthislevel[stack->current];
+            (stack->atthislevel[stack->current])++;
+            if (!wandder_get_valuestr(dec->current, valstr, 16384,
+                    wandder_get_identifier(dec))) {
                 fprintf(stderr, "Failed to interpret standard field %d:%d\n",
-                        etsidec->stack->current, ident);
+                        stack->current, ident);
                 return NULL;
             }
             snprintf(space, spacelen, "%s: %s", curr->members[ident].name,
@@ -464,28 +589,95 @@ char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
                 return NULL;
             }
             snprintf(space, spacelen, "%s:", curr->sequence.name);
-            (etsidec->stack->atthislevel[etsidec->stack->current])++;
-            push_stack(etsidec->stack, curr->sequence.descend);
+            (stack->atthislevel[stack->current])++;
+            push_stack(stack, curr->sequence.descend);
             break;
 
         case WANDDER_CLASS_CONTEXT_CONSTRUCT:
             if (curr == NULL) {
                 return NULL;
             }
-            ident = wandder_get_identifier(etsidec->dec);
-            (etsidec->stack->atthislevel[etsidec->stack->current])++;
-            snprintf(space, spacelen, "%s:", curr->members[ident].name);
-            push_stack(etsidec->stack, curr->members[ident].descend);
+            ident = wandder_get_identifier(dec);
+            if (curr->members[ident].descend) {
+                (stack->atthislevel[stack->current])++;
+                snprintf(space, spacelen, "%s:", curr->members[ident].name);
+                push_stack(stack, curr->members[ident].descend);
+            } else {
+                if (stringify_sequenced_primitives(curr->members[ident].name,
+                        dec, space, spacelen,
+                        curr->members[ident].interpretas) == NULL) {
+                    return NULL;
+                }
+                wandder_decode_skip(dec);
+            }
             break;
         default:
             return NULL;
     }
-
     return space;
+}
+
+char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *etsidec, char *space,
+        int spacelen) {
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return NULL;
+    }
+
+    if (etsidec->stack == NULL) {
+        etsidec->stack = (wandder_etsi_stack_t *)malloc(
+                sizeof(wandder_etsi_stack_t));
+        etsidec->stack->stk = (wandder_dumper_t **)malloc(
+                sizeof(wandder_dumper_t *) * 10);
+        etsidec->stack->atthislevel = (int *)malloc(sizeof(int *) * 10);
+
+        etsidec->stack->alloced = 10;
+        etsidec->stack->stk[0] = &etsidec->root;
+        etsidec->stack->current = 0;
+        etsidec->stack->atthislevel[0] = 0;
+    }
+
+    if (etsidec->decrypted) {
+        if (etsidec->decrypt_stack == NULL) {
+            etsidec->decrypt_stack = (wandder_etsi_stack_t *)malloc(
+                    sizeof(wandder_etsi_stack_t));
+            etsidec->decrypt_stack->stk = (wandder_dumper_t **)malloc(
+                    sizeof(wandder_dumper_t *) * 10);
+            etsidec->decrypt_stack->atthislevel = (int *)malloc(sizeof(int *) * 10);
+
+            etsidec->decrypt_stack->alloced = 10;
+            etsidec->decrypt_stack->stk[0] = &etsidec->encryptedpayloadroot;
+            etsidec->decrypt_stack->current = 0;
+            etsidec->decrypt_stack->atthislevel[0] = 0;
+        }
+
+        if (decode_field_to_str(etsidec, etsidec->decrypt_dec,
+                etsidec->decrypt_stack, space, spacelen) == NULL) {
+
+            /* we either failed or we ran out of decrypted content... */
+            free(etsidec->decrypted);
+            etsidec->decrypted = NULL;
+            return wandder_etsili_get_next_fieldstr(etsidec, space, spacelen);
+        }
+        return space;
+    }
+
+    return decode_field_to_str(etsidec, etsidec->dec, etsidec->stack, space,
+            spacelen);
 }
 
 wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec) {
     return (dec->dec);
+}
+
+int wandder_etsili_get_nesting_level(wandder_etsispec_t *dec) {
+    if (dec->decrypted) {
+        return wandder_get_level(dec->decrypt_dec) +
+                wandder_get_level(dec->dec);
+    }
+    return wandder_get_level(dec->dec);
 }
 
 uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
@@ -605,6 +797,7 @@ uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
 
     uint32_t ident;
     int ret;
+    wandder_decoder_t *dec = etsidec->dec;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -652,6 +845,7 @@ char *wandder_etsili_get_liid(wandder_etsispec_t *etsidec, char *space,
 
     uint32_t ident;
     int ret;
+    wandder_decoder_t *dec = etsidec->dec;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -686,6 +880,7 @@ static inline int _wandder_etsili_is_ka(wandder_etsispec_t *etsidec,
 
     int ret = -1;
     uint32_t ident;
+    wandder_decoder_t *dec = etsidec->dec;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -735,18 +930,13 @@ int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec) {
     return _wandder_etsili_is_ka(etsidec, 1);
 }
 
-int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
+static inline int decode_sequence_number(wandder_decoder_t *dec) {
+
     uint32_t ident;
     int64_t res;
     int ret;
 
-    if (etsidec->decstate == 0) {
-        fprintf(stderr, "No buffer attached to this decoder -- please call"
-                "wandder_attach_etsili_buffer() first!\n");
-        return -1;
-    }
-
-    wandder_reset_decoder(etsidec->dec);
+    wandder_reset_decoder(dec);
     QUICK_DECODE(-1);
     QUICK_DECODE(-1);
     if (ident != 1) {
@@ -755,10 +945,10 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
 
     do {
         QUICK_DECODE(-1);
-        if (wandder_get_class(etsidec->dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT
-                || wandder_get_class(etsidec->dec) ==
-                        WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
-            wandder_decode_skip(etsidec->dec);
+        if (wandder_get_class(dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT
+                || wandder_get_class(dec) == WANDDER_CLASS_UNIVERSAL_CONSTRUCT)
+        {
+            wandder_decode_skip(dec);
         }
     } while (ident < 4);
 
@@ -766,8 +956,19 @@ int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
         return -1;
     }
 
-    res = wandder_get_integer_value(etsidec->dec->current, NULL);
+    res = wandder_get_integer_value(dec->current, NULL);
     return res;
+}
+
+int64_t wandder_etsili_get_sequence_number(wandder_etsispec_t *etsidec) {
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return -1;
+    }
+
+    return decode_sequence_number(etsidec->dec);
 }
 
 static char *stringify_3gcause(wandder_etsispec_t *etsidec,
@@ -1012,8 +1213,65 @@ static char *stringify_cgi(wandder_etsispec_t *etsidec,
     return valstr;
 }
 
+static char *stringify_sequenced_primitives(char *sequence_name,
+        wandder_decoder_t *dec, char *space, int spacelen, int interpretas) {
+
+    wandder_item_t *parent = dec->current;
+    uint8_t *ptr = (uint8_t *)(parent->valptr);
+    int64_t nextint;
+    uint32_t nextintlen;
+    char *writer = space;
+    int namelen = strlen(sequence_name);
+    int first = 1;
+
+    memset(space, 0, spacelen);
+
+    assert(spacelen > namelen + 2);
+    memcpy(writer, sequence_name, namelen);
+    writer += namelen;
+
+    *writer = ':';
+    writer ++;
+    *writer = ' ';
+    writer ++;
+
+    if (interpretas == WANDDER_TAG_INTEGER_SEQUENCE) {
+        while (ptr - parent->valptr < parent->length) {
+            char tmp[1024];
+            int tmplen;
+            assert((*ptr) == WANDDER_TAG_INTEGER);
+            ptr ++;
+            /* integer len should always be a single byte (?) */
+            nextintlen = (uint8_t)(*ptr);
+            ptr ++;
+
+            nextint = wandder_decode_integer_value(ptr, nextintlen);
+            tmplen = snprintf(tmp, 1024, "%" PRId64, nextint);
+
+            if (tmplen > 0 && spacelen - (writer - space) > tmplen + 2) {
+                if (!first) {
+                    *writer = ',';
+                    writer ++;
+                    *writer = ' ';
+                    writer ++;
+                } else {
+                    first = 0;
+                }
+                memcpy(writer, tmp, tmplen);
+                writer += tmplen;
+            }
+            ptr += nextintlen;
+        }
+    }
+
+    /* TODO add code for other primitive types if they crop up */
+
+    return space;
+
+}
+
 static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
-        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+        wandder_item_t *item, char *valstr, int len) {
 
     int i;
     char *nextwrite;
@@ -1040,6 +1298,55 @@ static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
 
     return valstr;
 
+}
+
+static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, char *valstr, int len) {
+
+    uint8_t *ciphertext;
+    wandder_decoder_t *seqdec = NULL;
+    int64_t seqno;
+    int32_t seq32;
+    char *keyenv;
+    uint8_t *decrypted;
+    int decrypt_size;
+
+    keyenv = getenv("LIBWANDDER_ETSILI_DECRYPTION_KEY");
+    if (keyenv == NULL || strcmp(keyenv, "") == 0) {
+        /* No decryption key available, fall back to hex decoding */
+        return stringify_bytes_as_hex(etsidec, item, valstr, len);
+    }
+
+    decrypted = calloc(1, item->length * 2);
+    decrypt_size = item->length * 2;
+
+    ciphertext = calloc(1, item->length + 1);
+    memcpy(ciphertext, (uint8_t *)(item->valptr), item->length);
+
+    seqdec = init_wandder_decoder(seqdec, etsidec->dec->source,
+            etsidec->dec->sourcelen, 0);
+
+    seqno = decode_sequence_number(seqdec);
+    seq32 = (int32_t)(seqno & 0xFFFFFFFF);
+
+    free_wandder_decoder(seqdec);
+
+    if (decrypt_payload_content(ciphertext, item->length, keyenv,
+            seq32, (unsigned char *)decrypted, decrypt_size) < 0) {
+        free(ciphertext);
+        free(decrypted);
+        /* error while decrypting, fall back to hex decoding */
+        return stringify_bytes_as_hex(etsidec, item, valstr, len);
+    }
+
+    free(ciphertext);
+
+    etsidec->decrypted = decrypted;
+    etsidec->decrypt_size = decrypt_size;
+    etsidec->decrypt_dec = init_wandder_decoder(etsidec->decrypt_dec,
+            etsidec->decrypted, etsidec->decrypt_size, 0);
+
+    return NULL;
 }
 
 static char *stringify_domain_name(wandder_etsispec_t *etsidec,
@@ -1174,7 +1481,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         /* checkType */
         switch (enumval) {
             case 1:
-                name = "SHA-1 Hash";
+                name = "Hash";
                 break;
             case 2:
                 name = "DSS/DSA signature";
@@ -1190,6 +1497,26 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 break;
             case 2:
                 name = "CC";
+                break;
+            case 3:
+                name = "ILHI";
+                break;
+        }
+    }
+    else if (item->identifier == 4 && curr == &(etsidec->integritycheck)) {
+        /* dataType */
+        switch (enumval) {
+            case 1:
+                name = "SHA-1";
+                break;
+            case 2:
+                name = "SHA-256";
+                break;
+            case 3:
+                name = "SHA-384";
+                break;
+            case 4:
+                name = "SHA-512";
                 break;
         }
     }
@@ -2320,22 +2647,13 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
 
-    dec->inclseqnos.membercount = 0;
-    dec->inclseqnos.members = NULL;
-    dec->inclseqnos.sequence =
-        (struct wandder_dump_action) {
-                .name = "sequenceNumber",
-                .descend = NULL,
-                .interpretas = WANDDER_TAG_INTEGER
-        };
-
-    dec->integritycheck.membercount = 4;
+    dec->integritycheck.membercount = 5;
     ALLOC_MEMBERS(dec->integritycheck);
     dec->integritycheck.members[0] =
         (struct wandder_dump_action) {
                 .name = "includedSequenceNumbers",
-                .descend = &(dec->inclseqnos),
-                .interpretas = WANDDER_TAG_NULL
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER_SEQUENCE
         };
     dec->integritycheck.members[1] =
         (struct wandder_dump_action) {
@@ -2353,7 +2671,13 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         (struct wandder_dump_action) {
                 .name = "checkValue",
                 .descend = NULL,
-                .interpretas = WANDDER_TAG_OCTETSTRING
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+    dec->integritycheck.members[4] =
+        (struct wandder_dump_action) {
+                .name = "hashAlgorithm",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
         };
 
     dec->option.membercount = 1;
@@ -3448,20 +3772,25 @@ static void init_dumpers(wandder_etsispec_t *dec) {
 	dec->encryptioncontainer.members[1] =
         (struct wandder_dump_action) {
                 .name = "encryptedPayload",
-                .descend = NULL,
-                .interpretas = WANDDER_TAG_HEX_BYTES
-        };
-/*
                 .descend = &(dec->encryptedpayload),
                 .interpretas = WANDDER_TAG_ENCRYPTED
-*/
+        };
 	dec->encryptioncontainer.members[2] = 
         (struct wandder_dump_action) {
                 .name = "encryptedPayloadType",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
-        
+
+    dec->encryptedpayloadroot.membercount = 0;
+    dec->encryptedpayloadroot.members = NULL;
+    dec->encryptedpayloadroot.sequence =
+        (struct wandder_dump_action) {
+                .name = "encryptedPayload",
+                .descend = &dec->encryptedpayload,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
 	dec->encryptedpayload.membercount = 2;
 	ALLOC_MEMBERS(dec->encryptedpayload);
 	dec->encryptedpayload.sequence = WANDDER_NOACTION;

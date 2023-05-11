@@ -87,7 +87,6 @@ typedef struct wandder_etsispec {
     wandder_dumper_t optionseq;
     wandder_dumper_t optionreq;
     wandder_dumper_t optionresp;
-    wandder_dumper_t inclseqnos;
     wandder_dumper_t integritycheck;
     wandder_dumper_t tripayload;
     wandder_dumper_t payload;
@@ -108,12 +107,18 @@ typedef struct wandder_etsispec {
     wandder_dumper_t asmtpaaainformation;
     wandder_dumper_t encryptioncontainer;
     wandder_dumper_t encryptedpayload;
+    wandder_dumper_t encryptedpayloadroot;
 
     wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;
 
     uint8_t decstate;
     uint8_t ccformat;
+
+    uint8_t *decrypted;
+    uint32_t decrypt_size;
+    wandder_decoder_t *decrypt_dec;
+    wandder_etsi_stack_t *decrypt_stack;
 } wandder_etsispec_t;
 
 typedef enum {

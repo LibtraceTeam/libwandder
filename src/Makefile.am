@@ -6,5 +6,5 @@ libwandder_la_SOURCES=encoder.c decoder.c libwandder.h libwandder_etsili.c \
 
 libwandder_la_LIBADD = @ADD_LIBS@
 libwandder_la_LDFLAGS = @ADD_LDFLAGS@ -version-info 3:0:1
-libwandder_la_CPPFLAGS = -Werror
+libwandder_la_CPPFLAGS = -Werror -Wall
 
