@@ -91,6 +91,9 @@ static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
 static char *stringify_sequenced_primitives(char *sequence_name,
         wandder_decoder_t *dec, char *space, int spacelen, int interpretas);
 
+static int decrypt_encryption_container(wandder_etsispec_t *etsidec,
+        wandder_item_t *item);
+
 #define QUICK_DECODE(fail) \
     ret = wandder_decode_next(dec); \
     if (ret <= 0) { \
@@ -147,10 +150,14 @@ wandder_etsispec_t *wandder_create_etsili_decoder(void) {
     etsidec->decstate = 0;
     etsidec->ccformat = 0;
     etsidec->dec = NULL;
+    etsidec->encrypt_method = WANDDER_ENCRYPTION_TYPE_NOT_STATED;
     etsidec->decrypt_dec = NULL;
     etsidec->decrypted = NULL;
     etsidec->decrypt_size = 0;
     etsidec->decrypt_stack = NULL;
+    etsidec->saved_decrypted_payload = NULL;
+    etsidec->saved_payload_size = 0;
+    etsidec->saved_payload_name = NULL;
 
     return etsidec;
 }
@@ -222,6 +229,9 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
     }
     if (etsidec->decrypt_dec) {
         free_wandder_decoder(etsidec->decrypt_dec);
+    }
+    if (etsidec->saved_decrypted_payload) {
+        free(etsidec->saved_decrypted_payload);
     }
     if (etsidec->decrypted) {
         free(etsidec->decrypted);
@@ -338,7 +348,8 @@ static inline void push_stack(wandder_etsi_stack_t *stack,
 /* Most of the code for this function is derived from example code provided
  * by Pim van Stam.
  */
-static int decrypt_payload_content(uint8_t *ciphertext, int ciphertext_len,
+static int decrypt_payload_content_aes_192_cbc(uint8_t *ciphertext,
+        int ciphertext_len,
         char *key_hex, int32_t seqno, unsigned char *plainspace, int plainlen) {
 
     EVP_CIPHER_CTX *ctx;
@@ -435,6 +446,19 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
             }
 
             if (curr->members[ident].interpretas == WANDDER_TAG_IPPACKET) {
+                if (dec == etsidec->decrypt_dec) {
+                    /* cache the decrypted payload content */
+                    etsidec->saved_payload_size = dec->current->length;
+                    etsidec->saved_payload_name = curr->members[ident].name;
+                    if (etsidec->saved_decrypted_payload) {
+                        free(etsidec->saved_decrypted_payload);
+                    }
+                    etsidec->saved_decrypted_payload = calloc(1,
+                            dec->current->length);
+                    memcpy(etsidec->saved_decrypted_payload,
+                            dec->current->valptr, dec->current->length);
+                }
+
                 /* If we are an IP CC we can stop, but IPMM CCs have to
                  * keep going in case the optional fields are present :(
                  */
@@ -680,9 +704,14 @@ int wandder_etsili_get_nesting_level(wandder_etsispec_t *dec) {
     return wandder_get_level(dec->dec);
 }
 
-uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
-        uint32_t *len, char *name, int namelen) {
+static uint8_t *internal_get_cc_contents(wandder_etsispec_t *etsidec,
+        wandder_decoder_t *dec, uint32_t *len, char *name, int namelen) {
+
     uint8_t *vp = NULL;
+    int tgtcount;
+    wandder_found_t *found = NULL;
+    wandder_target_t cctgts[5];
+    wandder_dumper_t *startpoint;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -692,10 +721,6 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
     etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_UNKNOWN;
 
     /* Find IPCCContents or IPMMCCContents or UMTSCC or emailCC */
-    wandder_reset_decoder(etsidec->dec);
-    wandder_found_t *found = NULL;
-    wandder_target_t cctgts[4];
-
     cctgts[0].parent = &etsidec->ipcccontents;
     cctgts[0].itemid = 0;
     cctgts[0].found = false;
@@ -712,9 +737,25 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
     cctgts[3].itemid = 2;
     cctgts[3].found = false;
 
+    if (dec == etsidec->dec) {
+        /* Also look for encrypted payload */
+        tgtcount = 5;
+        cctgts[4].parent = &etsidec->payload;
+        cctgts[4].itemid = 4;
+        cctgts[4].found = false;
+        startpoint = &(etsidec->root);
+    } else if (dec == etsidec->decrypt_dec) {
+        tgtcount = 4;
+        startpoint = &(etsidec->encryptedpayloadroot);
+    } else {
+        tgtcount = 4;
+        startpoint = &(etsidec->root);
+    }
+
+    wandder_reset_decoder(dec);
     *len = 0;
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), cctgts, 4,
-                &found, 1) > 0) {
+    if (wandder_search_items(dec, 0, startpoint, cctgts,
+                tgtcount, &found, 1) > 0) {
         *len = found->list[0].item->length;
         vp = found->list[0].item->valptr;
 
@@ -730,11 +771,38 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
         } else if (found->list[0].targetid == 3) {
             strncpy(name, etsidec->emailcc.members[2].name, namelen);
             wandder_etsili_get_email_format(etsidec);
+        } else if (found->list[0].targetid == 4) {
+            if (decrypt_encryption_container(etsidec, found->list[0].item)) {
+                return internal_get_cc_contents(etsidec, etsidec->decrypt_dec,
+                        len, name, namelen);
+            }
         }
         wandder_free_found(found);
     }
 
     return vp;
+}
+
+uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
+        uint32_t *len, char *name, int namelen) {
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return NULL;
+    }
+
+    /* If our payload is encrypted, maybe we've already decrypted it
+     * and cached the content to save time? */
+    if (etsidec->saved_decrypted_payload) {
+        assert(etsidec->saved_payload_name != NULL);
+        strncpy(name, etsidec->saved_payload_name, namelen);
+        *len = etsidec->saved_payload_size;
+        etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
+        return etsidec->saved_decrypted_payload;
+    }
+
+    return internal_get_cc_contents(etsidec, etsidec->dec, len, name, namelen);
 
 }
 
@@ -1300,53 +1368,109 @@ static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
 
 }
 
+static int decrypt_encryption_container(wandder_etsispec_t *etsidec,
+        wandder_item_t *item) {
+
+    wandder_decoder_t *dec = NULL;
+    int thisret = 0, ret;
+    uint32_t ident;
+    char valstr[16384];
+
+    dec = init_wandder_decoder(dec, item->valptr, item->length, 0);
+
+    /* get the encryption type */
+    QUICK_DECODE(thisret);
+    if (ident != 0) {
+        return 0;
+    }
+
+    etsidec->encrypt_method = wandder_get_integer_value(dec->current, NULL);
+
+    /* decrypt the encrypted payload */
+    QUICK_DECODE(thisret);
+    if (ident != 1) {
+        return 0;
+    }
+
+    if (decrypt_encrypted_payload_item(etsidec, dec->current, valstr,
+            16384) == NULL) {
+        thisret = 1;
+    }
+    free_wandder_decoder(dec);
+    return thisret;
+}
+
+#define DECRYPT_INIT \
+    decrypted = calloc(1, item->length * 2); \
+    decrypt_size = item->length * 2; \
+    ciphertext = calloc(1, item->length + 1); \
+    memcpy(ciphertext, (uint8_t *)(item->valptr), item->length); \
+    seqdec = init_wandder_decoder(seqdec, etsidec->dec->source, \
+            etsidec->dec->sourcelen, 0); \
+    seqno = decode_sequence_number(seqdec); \
+    seq32 = (int32_t)(seqno & 0xFFFFFFFF); \
+    free_wandder_decoder(seqdec); \
+
 static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
         wandder_item_t *item, char *valstr, int len) {
 
-    uint8_t *ciphertext;
+    uint8_t *ciphertext = NULL;
     wandder_decoder_t *seqdec = NULL;
     int64_t seqno;
     int32_t seq32;
     char *keyenv;
-    uint8_t *decrypted;
+    uint8_t *decrypted = NULL;
     int decrypt_size;
 
-    keyenv = getenv("LIBWANDDER_ETSILI_DECRYPTION_KEY");
-    if (keyenv == NULL || strcmp(keyenv, "") == 0) {
-        /* No decryption key available, fall back to hex decoding */
-        return stringify_bytes_as_hex(etsidec, item, valstr, len);
+    if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_NONE) {
+        etsidec->decrypted = calloc(1, item->length);
+        memcpy(etsidec->decrypted, item->valptr, item->length);
+        etsidec->decrypt_size = item->length;
+        goto decryptsuccess;
+    } else if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_AES_192_CBC) {
+
+        keyenv = getenv("LIBWANDDER_ETSILI_DECRYPTION_KEY");
+        if (keyenv == NULL || strcmp(keyenv, "") == 0) {
+            /* No decryption key available, fall back to hex decoding */
+            fprintf(stderr, "Cannot decrypt because key has not been provided in LIBWANDDER_ETSILI_DECRYPTION_KEY env variable.\n");
+            goto decryptfail;
+        }
+        DECRYPT_INIT
+    } else if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_NOT_STATED) {
+        goto decryptfail;
+    } else {
+        fprintf(stderr, "Unsupported encryption method: %d\n",
+                etsidec->encrypt_method);
+        goto decryptfail;
     }
 
-    decrypted = calloc(1, item->length * 2);
-    decrypt_size = item->length * 2;
-
-    ciphertext = calloc(1, item->length + 1);
-    memcpy(ciphertext, (uint8_t *)(item->valptr), item->length);
-
-    seqdec = init_wandder_decoder(seqdec, etsidec->dec->source,
-            etsidec->dec->sourcelen, 0);
-
-    seqno = decode_sequence_number(seqdec);
-    seq32 = (int32_t)(seqno & 0xFFFFFFFF);
-
-    free_wandder_decoder(seqdec);
-
-    if (decrypt_payload_content(ciphertext, item->length, keyenv,
-            seq32, (unsigned char *)decrypted, decrypt_size) < 0) {
-        free(ciphertext);
-        free(decrypted);
-        /* error while decrypting, fall back to hex decoding */
-        return stringify_bytes_as_hex(etsidec, item, valstr, len);
+    if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_AES_192_CBC) {
+        if (decrypt_payload_content_aes_192_cbc(ciphertext, item->length,
+                keyenv, seq32, (unsigned char *)decrypted, decrypt_size) < 0) {
+            goto decryptfail;
+        }
     }
 
     free(ciphertext);
-
     etsidec->decrypted = decrypted;
     etsidec->decrypt_size = decrypt_size;
+
+decryptsuccess:
     etsidec->decrypt_dec = init_wandder_decoder(etsidec->decrypt_dec,
             etsidec->decrypted, etsidec->decrypt_size, 0);
 
     return NULL;
+
+decryptfail:
+    if (ciphertext) {
+        free(ciphertext);
+    }
+    if (decrypted) {
+        free(decrypted);
+    }
+    /* unable to decrypt, fall back to hex decoding */
+    return stringify_bytes_as_hex(etsidec, item, valstr, len);
+
 }
 
 static char *stringify_domain_name(wandder_etsispec_t *etsidec,
@@ -2007,6 +2131,9 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 name = "threedes-cbc";
                 break;
         }
+
+        /* Save the encryption type so we can decrypt the upcoming payload. */
+        etsidec->encrypt_method = enumval;
     }
 
     else if (item->identifier == 2 && curr == &(etsidec->encryptioncontainer)) {
@@ -3746,7 +3873,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .descend = &(dec->hi1operation),
                 .interpretas = WANDDER_TAG_NULL
         };
-    dec->payload.members[4] =        // TODO?
+    dec->payload.members[4] =
         (struct wandder_dump_action) {
                 .name = "encryptionContainer",
                 .descend = &(dec->encryptioncontainer),

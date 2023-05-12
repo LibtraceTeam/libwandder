@@ -115,10 +115,14 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
     uint8_t ccformat;
 
+    int encrypt_method;
     uint8_t *decrypted;
     uint32_t decrypt_size;
     wandder_decoder_t *decrypt_dec;
     wandder_etsi_stack_t *decrypt_stack;
+    uint8_t *saved_decrypted_payload;
+    uint32_t saved_payload_size;
+    char *saved_payload_name;
 } wandder_etsispec_t;
 
 typedef enum {
@@ -282,6 +286,17 @@ enum {
     WANDDER_EMAIL_STATUS_UNKNOWN = 1,
     WANDDER_EMAIL_STATUS_FAILED = 2,
     WANDDER_EMAIL_STATUS_SUCCESS = 3
+};
+
+enum {
+    WANDDER_ENCRYPTION_TYPE_NOT_STATED = 0,
+    WANDDER_ENCRYPTION_TYPE_NONE = 1,
+    WANDDER_ENCRYPTION_TYPE_NATIONAL = 2,
+    WANDDER_ENCRYPTION_TYPE_AES_192_CBC = 3,
+    WANDDER_ENCRYPTION_TYPE_AES_256_CBC = 4,
+    WANDDER_ENCRYPTION_TYPE_BLOWFISH_192_CBC = 5,
+    WANDDER_ENCRYPTION_TYPE_BLOWFISH_256_CBC = 6,
+    WANDDER_ENCRYPTION_TYPE_THREEDES_CBC = 7,
 };
 
 enum {
