@@ -21,6 +21,7 @@ EXTRA_LIBS=""
 
 AC_CHECK_LIB([m], [ceil],,math_found = 0)
 AC_CHECK_LIB([pthread], [pthread_mutex_trylock],,pthread_found=0)
+AC_CHECK_LIB([crypto], [OPENSSL_init_crypto], , [have_libcrypto="0"])
 
 AC_CHECK_HEADERS([uthash.h], [uthash_avail=yes; break;])
 AS_IF([test "x$uthash_avail" != "xyes"],
