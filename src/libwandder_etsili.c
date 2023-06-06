@@ -998,7 +998,7 @@ int wandder_etsili_is_keepalive_response(wandder_etsispec_t *etsidec) {
     return _wandder_etsili_is_ka(etsidec, 1);
 }
 
-static inline int decode_sequence_number(wandder_decoder_t *dec) {
+static inline int64_t decode_sequence_number(wandder_decoder_t *dec) {
 
     uint32_t ident;
     int64_t res;
