@@ -796,6 +796,15 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
      * and cached the content to save time? */
     if (etsidec->saved_decrypted_payload) {
         assert(etsidec->saved_payload_name != NULL);
+        if (strcmp(etsidec->saved_payload_name, "sIPContent") == 0) {
+            return NULL;
+        }
+        if (strcmp(etsidec->saved_payload_name, "originalIPMMMessage") == 0) {
+            return NULL;
+        }
+        if (strcmp(etsidec->saved_payload_name, "h323Message") == 0) {
+            return NULL;
+        }
         strncpy(name, etsidec->saved_payload_name, namelen);
         *len = etsidec->saved_payload_size;
         etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
@@ -815,6 +824,29 @@ uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
         fprintf(stderr, "No buffer attached to this decoder -- please call"
                 "wandder_attach_etsili_buffer() first!\n");
         return NULL;
+    }
+    if (etsidec->saved_decrypted_payload) {
+        assert(etsidec->saved_payload_name != NULL);
+        if (strcmp(etsidec->saved_payload_name, "sIPContent") == 0) {
+            strncpy(name, etsidec->saved_payload_name, namelen);
+            *len = etsidec->saved_payload_size;
+            *ident = WANDDER_IRI_CONTENT_SIP;
+            return etsidec->saved_decrypted_payload;
+        } else if (strcmp(etsidec->saved_payload_name,
+                "originalIPMMMessage") == 0) {
+            strncpy(name, etsidec->saved_payload_name, namelen);
+            *len = etsidec->saved_payload_size;
+            *ident = WANDDER_IRI_CONTENT_IP;
+            return etsidec->saved_decrypted_payload;
+        } else if (strcmp(etsidec->saved_payload_name,
+                "h323Message") == 0) {
+            strncpy(name, etsidec->saved_payload_name, namelen);
+            *len = etsidec->saved_payload_size;
+            *ident = WANDDER_IRI_CONTENT_IP;
+            return etsidec->saved_decrypted_payload;
+        } else {
+            return NULL;
+        }
     }
     wandder_reset_decoder(etsidec->dec);
     wandder_found_t *found = NULL;
