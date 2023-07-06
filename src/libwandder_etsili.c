@@ -166,7 +166,8 @@ uint8_t wandder_etsili_get_cc_format(wandder_etsispec_t *etsidec) {
     return etsidec->ccformat;
 }
 
-static uint8_t wandder_etsili_get_email_format(wandder_etsispec_t *etsidec) {
+static uint8_t wandder_etsili_get_email_format(wandder_etsispec_t *etsidec,
+        wandder_decoder_t *dec, wandder_dumper_t *startpoint) {
     wandder_found_t *found = NULL;
     wandder_target_t tgt;
     uint8_t *vp = NULL;
@@ -185,13 +186,12 @@ static uint8_t wandder_etsili_get_email_format(wandder_etsispec_t *etsidec) {
     }
 
     /* Find the email-Format field in the encoded record, if present */
-    wandder_reset_decoder(etsidec->dec);
+    wandder_reset_decoder(dec);
     tgt.parent = &etsidec->emailcc;
     tgt.itemid = 1;
     tgt.found = false;
 
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), &tgt, 1,
-                &found, 1) > 0) {
+    if (wandder_search_items(dec, 0, startpoint, &tgt, 1, &found, 1) > 0) {
         int64_t val;
         uint32_t len;
 
@@ -439,7 +439,6 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
             if (curr == &(etsidec->emailcc) && ident == 1) {
                 int64_t val;
                 val = wandder_get_integer_value(dec->current, NULL);
-
                 if (val <= 255) {
                     etsidec->ccformat = (uint8_t) val;
                 }
@@ -770,7 +769,7 @@ static uint8_t *internal_get_cc_contents(wandder_etsispec_t *etsidec,
             etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
         } else if (found->list[0].targetid == 3) {
             strncpy(name, etsidec->emailcc.members[2].name, namelen);
-            wandder_etsili_get_email_format(etsidec);
+            wandder_etsili_get_email_format(etsidec, dec, startpoint);
         } else if (found->list[0].targetid == 4) {
             if (decrypt_encryption_container(etsidec, found->list[0].item)) {
                 return internal_get_cc_contents(etsidec, etsidec->decrypt_dec,
@@ -807,7 +806,7 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
         }
         strncpy(name, etsidec->saved_payload_name, namelen);
         *len = etsidec->saved_payload_size;
-        etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
+        //etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
         return etsidec->saved_decrypted_payload;
     }
 
