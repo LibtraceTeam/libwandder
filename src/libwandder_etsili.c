@@ -452,6 +452,9 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
                     if (etsidec->saved_decrypted_payload) {
                         free(etsidec->saved_decrypted_payload);
                     }
+                    if (etsidec->ccformat == WANDDER_ETSILI_CC_FORMAT_UNKNOWN) {
+                        etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
+                    }
                     etsidec->saved_decrypted_payload = calloc(1,
                             dec->current->length);
                     memcpy(etsidec->saved_decrypted_payload,
@@ -806,7 +809,6 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
         }
         strncpy(name, etsidec->saved_payload_name, namelen);
         *len = etsidec->saved_payload_size;
-        //etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
         return etsidec->saved_decrypted_payload;
     }
 
