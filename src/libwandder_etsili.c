@@ -133,6 +133,52 @@ static unsigned char * hex2bin (char *hexstr, unsigned char *binvalue,
     return(binvalue);
 }
 
+static inline int decrypt_length_sanity_check(uint8_t *data, uint64_t dlen) {
+
+    uint64_t obslen = 0, headerlen = 0;
+    int blen, i;
+
+    if (dlen < 2) {
+        return 0;
+    }
+
+    /* single byte length field */
+    if (data[1] < 0x80) {
+        obslen = data[1];
+        headerlen += 2;  /* 1 byte for identifier, 1 for length */
+    } else {
+        blen = (data[1] & 0x7f);
+        if (blen == 0 || blen > 8) {
+            return 0;
+        }
+
+        if (dlen <= 2 + blen) {
+            return 0;
+        }
+
+        for (i = 0; i < blen; i ++) {
+            obslen += (data[2 + i] << ( 8 * (blen - (i + 1)) ) );
+        }
+        headerlen += (2 + blen);
+    }
+
+    if (obslen + headerlen > dlen) {
+        return 0;
+    }
+
+    /* dlen will be increased to the nearest multiple of 16 because of
+     * padding at encryption time.
+     */
+    if (dlen - (obslen + headerlen) > 16) {
+        return 0;
+    }
+    if (dlen - (obslen + headerlen) != (16 - ((obslen + headerlen) % 16))) {
+        return 0;
+    }
+
+    return 1;
+
+}
 
 static void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
     free(stack->stk);
@@ -1454,6 +1500,7 @@ static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
     char *keyenv;
     uint8_t *decrypted = NULL;
     int decrypt_size;
+    int dlen = 0;
 
     if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_NONE) {
         etsidec->decrypted = calloc(1, item->length);
@@ -1478,10 +1525,25 @@ static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
     }
 
     if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_AES_192_CBC) {
-        if (decrypt_payload_content_aes_192_cbc(ciphertext, item->length,
-                keyenv, seq32, (unsigned char *)decrypted, decrypt_size) < 0) {
+        if ((dlen = decrypt_payload_content_aes_192_cbc(ciphertext,
+                item->length,
+                keyenv, seq32, (unsigned char *)decrypted, decrypt_size)) < 0) {
             goto decryptfail;
         }
+    }
+
+    /* Do some sanity checks on the decrypted content, just in case we
+     * were given the wrong key...
+     */
+
+    if (decrypted[0] != 0x30) {
+        fprintf(stderr, "Decrypted payload does not begin with expected 0x30 byte -- provided key is probably incorrect?\n");
+        goto decryptfail;
+    }
+
+    if (decrypt_length_sanity_check(decrypted, (uint64_t)dlen) == 0) {
+        fprintf(stderr, "Decrypted payload does not appear to have a valid length field -- provided key is probably incorrect?\n");
+        goto decryptfail;
     }
 
     free(ciphertext);
