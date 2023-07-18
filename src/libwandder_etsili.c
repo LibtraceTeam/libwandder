@@ -204,6 +204,7 @@ wandder_etsispec_t *wandder_create_etsili_decoder(void) {
     etsidec->saved_decrypted_payload = NULL;
     etsidec->saved_payload_size = 0;
     etsidec->saved_payload_name = NULL;
+    etsidec->decryption_key = NULL;
 
     return etsidec;
 }
@@ -281,6 +282,9 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *etsidec) {
     }
     if (etsidec->decrypted) {
         free(etsidec->decrypted);
+    }
+    if (etsidec->decryption_key) {
+        free(etsidec->decryption_key);
     }
     free(etsidec);
 }
@@ -372,6 +376,15 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
     }
 }
 
+int wandder_set_etsili_decryption_key(wandder_etsispec_t *etsidec, char *key) {
+
+    if (etsidec->decryption_key) {
+        free(etsidec->decryption_key);
+    }
+    etsidec->decryption_key = strdup(key);
+    return 1;
+}
+
 static inline void push_stack(wandder_etsi_stack_t *stack,
         wandder_dumper_t *next) {
 
@@ -406,6 +419,11 @@ static int decrypt_payload_content_aes_192_cbc(uint8_t *ciphertext,
     int finallen = 0, interimlen = 0;
 
     assert(sizeof(int32_t) == 4);
+
+    if (key_hex == NULL) {
+        fprintf(stderr, "Unable to decrypt payload content as no encryption key has been provided.\nUse LIBWANDDER_ETSILI_DECRYPTION_KEY environment variable or\nwandder_set_etsili_decryption_key() function to provide the key.\n");
+        return -1;
+    }
 
     for (i = 0; i < 4; i++) {
         memcpy(&(iv[i * sizeof(int32_t)]), &swap_seqno, sizeof(int32_t));
@@ -1502,19 +1520,13 @@ static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
     int decrypt_size;
     int dlen = 0;
 
+    keyenv = getenv("LIBWANDDER_ETSILI_DECRYPTION_KEY");
     if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_NONE) {
         etsidec->decrypted = calloc(1, item->length);
         memcpy(etsidec->decrypted, item->valptr, item->length);
         etsidec->decrypt_size = item->length;
         goto decryptsuccess;
     } else if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_AES_192_CBC) {
-
-        keyenv = getenv("LIBWANDDER_ETSILI_DECRYPTION_KEY");
-        if (keyenv == NULL || strcmp(keyenv, "") == 0) {
-            /* No decryption key available, fall back to hex decoding */
-            fprintf(stderr, "Cannot decrypt because key has not been provided in LIBWANDDER_ETSILI_DECRYPTION_KEY env variable.\n");
-            goto decryptfail;
-        }
         DECRYPT_INIT
     } else if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_NOT_STATED) {
         goto decryptfail;
@@ -1525,9 +1537,16 @@ static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
     }
 
     if (etsidec->encrypt_method == WANDDER_ENCRYPTION_TYPE_AES_192_CBC) {
+        char *dkey = NULL;
+        if (etsidec->decryption_key) {
+            dkey = etsidec->decryption_key;
+        } else {
+            dkey = keyenv;
+        }
+
         if ((dlen = decrypt_payload_content_aes_192_cbc(ciphertext,
                 item->length,
-                keyenv, seq32, (unsigned char *)decrypted, decrypt_size)) < 0) {
+                dkey, seq32, (unsigned char *)decrypted, decrypt_size)) < 0) {
             goto decryptfail;
         }
     }

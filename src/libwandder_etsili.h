@@ -115,6 +115,7 @@ typedef struct wandder_etsispec {
     uint8_t decstate;
     uint8_t ccformat;
 
+    char *decryption_key;
     int encrypt_method;
     uint8_t *decrypted;
     uint32_t decrypt_size;
@@ -411,6 +412,7 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *dec);
 void wandder_attach_etsili_buffer(wandder_etsispec_t *dec, uint8_t *buffer,
         uint32_t len, bool copy);
 
+int wandder_set_etsili_decryption_key(wandder_etsispec_t *dec, char *key);
 wandder_dumper_t *wandder_get_etsili_structure(wandder_etsispec_t *dec);
 
 wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec);
