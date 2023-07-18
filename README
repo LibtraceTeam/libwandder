@@ -1,9 +1,9 @@
 libwandder -- C library for DER encoding and decoding.
 
-Current Stable Version: 2.0.6
+Current Stable Version: 2.0.7
 
 ---------------------------------------------------------------------------
-Copyright (c) 2017-2022 The University of Waikato, Hamilton, New Zealand.
+Copyright (c) 2017-2023 The University of Waikato, Hamilton, New Zealand.
 All rights reserved.
 
 This code was originally developed by the University of Waikato WAND
