@@ -763,7 +763,7 @@ static uint32_t stringify_integer(uint8_t *start, uint32_t length, char *space,
         uint16_t spacerem) {
 
     int64_t intval = decode_integer(start, &length);
-    snprintf(space, spacerem - 1, "%ld", intval);
+    snprintf(space, spacerem - 1, "%" PRId64, intval);
     return length;
 }
 

@@ -1,8 +1,11 @@
-libwandder was primarily written by Shane Alcock, on behalf of the
+libwandder was primarily written by Shane Alcock, initially on behalf of the
 WAND network research group at the University of Waikato, Hamilton, New
 Zealand.
 
 BER encoding was added by Tyler Marriner, again on behalf of WAND.
+
+Code to support decryption of ETSI LI payload content was written with
+the assistance of Pim van Stam.
 
 Please email contact@wand.net.nz if you need to get in touch with us
 regarding this software.

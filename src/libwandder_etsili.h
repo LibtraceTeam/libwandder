@@ -87,7 +87,6 @@ typedef struct wandder_etsispec {
     wandder_dumper_t optionseq;
     wandder_dumper_t optionreq;
     wandder_dumper_t optionresp;
-    wandder_dumper_t inclseqnos;
     wandder_dumper_t integritycheck;
     wandder_dumper_t tripayload;
     wandder_dumper_t payload;
@@ -108,12 +107,23 @@ typedef struct wandder_etsispec {
     wandder_dumper_t asmtpaaainformation;
     wandder_dumper_t encryptioncontainer;
     wandder_dumper_t encryptedpayload;
+    wandder_dumper_t encryptedpayloadroot;
 
     wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;
 
     uint8_t decstate;
     uint8_t ccformat;
+
+    char *decryption_key;
+    int encrypt_method;
+    uint8_t *decrypted;
+    uint32_t decrypt_size;
+    wandder_decoder_t *decrypt_dec;
+    wandder_etsi_stack_t *decrypt_stack;
+    uint8_t *saved_decrypted_payload;
+    uint32_t saved_payload_size;
+    char *saved_payload_name;
 } wandder_etsispec_t;
 
 typedef enum {
@@ -280,6 +290,17 @@ enum {
 };
 
 enum {
+    WANDDER_ENCRYPTION_TYPE_NOT_STATED = 0,
+    WANDDER_ENCRYPTION_TYPE_NONE = 1,
+    WANDDER_ENCRYPTION_TYPE_NATIONAL = 2,
+    WANDDER_ENCRYPTION_TYPE_AES_192_CBC = 3,
+    WANDDER_ENCRYPTION_TYPE_AES_256_CBC = 4,
+    WANDDER_ENCRYPTION_TYPE_BLOWFISH_192_CBC = 5,
+    WANDDER_ENCRYPTION_TYPE_BLOWFISH_256_CBC = 6,
+    WANDDER_ENCRYPTION_TYPE_THREEDES_CBC = 7,
+};
+
+enum {
     WANDDER_EMAIL_EVENT_SEND = 1,
     WANDDER_EMAIL_EVENT_RECEIVE = 2,
     WANDDER_EMAIL_EVENT_DOWNLOAD = 3,
@@ -391,6 +412,7 @@ void wandder_free_etsili_decoder(wandder_etsispec_t *dec);
 void wandder_attach_etsili_buffer(wandder_etsispec_t *dec, uint8_t *buffer,
         uint32_t len, bool copy);
 
+int wandder_set_etsili_decryption_key(wandder_etsispec_t *dec, char *key);
 wandder_dumper_t *wandder_get_etsili_structure(wandder_etsispec_t *dec);
 
 wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec);

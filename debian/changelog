@@ -1,3 +1,13 @@
+libwandder2 (2.0.7-1) unstable; urgency=medium
+
+  * ETSILI: add support for decrypting EncryptionContainers
+  * ETSILI: add new API method: wandder_set_etsili_decryption_key()
+  * ETSILI: add new method: wandder_etsili_get_nesting_level()
+  * ETSILI: fix decoding errors for integrityCheck inside TRIPayloads
+  * add support for decoding sequences of integers
+
+ -- Shane Alcock <shane@alcock.co.nz>  Wed, 19 Jul 2023 11:33:10 +1200
+
 libwandder2 (2.0.6-1) unstable; urgency=medium
 
   * Add support for decoding ETSI LI email IRIs and CCs

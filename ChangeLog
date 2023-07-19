@@ -1,3 +1,11 @@
+Version 2.0.7
+=============
+  * ETSILI: add support for decrypting EncryptionContainers
+  * ETSILI: add new API method: wandder_set_etsili_decryption_key()
+  * ETSILI: add new method: wandder_etsili_get_nesting_level()
+  * ETSILI: fix decoding errors for integrityCheck inside TRIPayloads
+  * add support for decoding sequences of integers
+
 Version 2.0.6
 =============
   * Add support for decoding ETSI LI Email IRIs and CCs

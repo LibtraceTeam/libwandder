@@ -1,6 +1,6 @@
 # Super primitive configure script
 
-AC_INIT(libwandder, 2.0.6, shane@alcock.co.nz)
+AC_INIT(libwandder, 2.0.7, shane@alcock.co.nz)
 
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_CONFIG_SRCDIR(src/decoder.c)
@@ -21,6 +21,7 @@ EXTRA_LIBS=""
 
 AC_CHECK_LIB([m], [ceil],,math_found = 0)
 AC_CHECK_LIB([pthread], [pthread_mutex_trylock],,pthread_found=0)
+AC_CHECK_LIB([crypto], [OPENSSL_init_crypto], , [have_libcrypto="0"])
 
 AC_CHECK_HEADERS([uthash.h], [uthash_avail=yes; break;])
 AS_IF([test "x$uthash_avail" != "xyes"],
