@@ -11,6 +11,7 @@ BuildRequires: gcc
 BuildRequires: gcc-c++
 BuildRequires: make
 BuildRequires: uthash-devel
+BuildRequires: openssl-devel
 
 %description
 Libwandder is a helper library that can be used to perform some typical
