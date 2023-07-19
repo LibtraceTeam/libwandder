@@ -887,10 +887,75 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
 
 }
 
+static uint8_t *internal_get_iri_contents(wandder_etsispec_t *etsidec,
+        wandder_decoder_t *dec, uint32_t *len, uint8_t *ident,
+        char *name, int namelen) {
+
+    uint8_t *vp = NULL;
+    wandder_found_t *found = NULL;
+    wandder_target_t iritgts[4];
+    wandder_dumper_t *startpoint;
+    int tgtcount = 4;
+
+    if (dec == etsidec->decrypt_dec) {
+        startpoint = &(etsidec->encryptedpayloadroot);
+        tgtcount = 3;
+    } else {
+        startpoint = &(etsidec->root);
+    }
+
+    wandder_reset_decoder(dec);
+    /* originalIPMMMessage */
+    iritgts[0].parent = &etsidec->ipmmiricontents;
+    iritgts[0].itemid = 0;
+    iritgts[0].found = false;
+
+    /* sIPContents */
+    iritgts[1].parent = &etsidec->sipmessage;
+    iritgts[1].itemid = 2;
+    iritgts[1].found = false;
+
+    /* rawAAAData */
+    iritgts[2].parent = &etsidec->ipiricontents;
+    iritgts[2].itemid = 15;
+    iritgts[2].found = false;
+
+    /* encryptedContainer */
+    iritgts[3].parent = &etsidec->payload;
+    iritgts[3].itemid = 4;
+    iritgts[3].found = false;
+
+    /* TODO H323 contents... */
+
+    *len = 0;
+    if (wandder_search_items(dec, 0, startpoint, iritgts, tgtcount,
+                &found, 1) > 0) {
+        *len = found->list[0].item->length;
+        vp = found->list[0].item->valptr;
+
+        if (found->list[0].targetid == 0) {
+            strncpy(name, etsidec->ipmmiricontents.members[0].name, namelen);
+            *ident = WANDDER_IRI_CONTENT_IP;
+        } else if (found->list[0].targetid == 1) {
+            strncpy(name, etsidec->sipmessage.members[2].name, namelen);
+            *ident = WANDDER_IRI_CONTENT_SIP;
+        } else if (found->list[0].targetid == 2) {
+            strncpy(name, etsidec->ipiricontents.members[15].name, namelen);
+            *ident = WANDDER_IRI_CONTENT_IP;   // right?
+        } else if (found->list[0].targetid == 3) {
+            if (decrypt_encryption_container(etsidec, found->list[0].item)) {
+                return internal_get_iri_contents(etsidec, etsidec->decrypt_dec,
+                        len, ident, name, namelen);
+            }
+        }
+        wandder_free_found(found);
+    }
+    return vp;
+}
+
 uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
         uint32_t *len, uint8_t *ident, char *name, int namelen) {
 
-    uint8_t *vp = NULL;
 
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
@@ -920,49 +985,9 @@ uint8_t *wandder_etsili_get_iri_contents(wandder_etsispec_t *etsidec,
             return NULL;
         }
     }
-    wandder_reset_decoder(etsidec->dec);
-    wandder_found_t *found = NULL;
-    wandder_target_t iritgts[3];
 
-    /* originalIPMMMessage */
-    iritgts[0].parent = &etsidec->ipmmiricontents;
-    iritgts[0].itemid = 0;
-    iritgts[0].found = false;
-
-    /* sIPContents */
-    iritgts[1].parent = &etsidec->sipmessage;
-    iritgts[1].itemid = 2;
-    iritgts[1].found = false;
-
-    /* rawAAAData */
-    iritgts[2].parent = &etsidec->ipiricontents;
-    iritgts[2].itemid = 15;
-    iritgts[2].found = false;
-
-    /* TODO H323 contents... */
-
-    *len = 0;
-    if (wandder_search_items(etsidec->dec, 0, &(etsidec->root), iritgts, 2,
-                &found, 1) > 0) {
-        *len = found->list[0].item->length;
-        vp = found->list[0].item->valptr;
-
-        if (found->list[0].targetid == 0) {
-            strncpy(name, etsidec->ipmmiricontents.members[0].name, namelen);
-            *ident = WANDDER_IRI_CONTENT_IP;
-        } else if (found->list[0].targetid == 1) {
-            strncpy(name, etsidec->sipmessage.members[2].name, namelen);
-            *ident = WANDDER_IRI_CONTENT_SIP;
-        } else if (found->list[0].targetid == 2) {
-            strncpy(name, etsidec->ipiricontents.members[15].name, namelen);
-            *ident = WANDDER_IRI_CONTENT_IP;   // right?
-        }
-        wandder_free_found(found);
-    }
-
-    return vp;
-
-
+    return internal_get_iri_contents(etsidec, etsidec->dec, len, ident,
+            name, namelen);
 }
 
 uint32_t wandder_etsili_get_cin(wandder_etsispec_t *etsidec) {
