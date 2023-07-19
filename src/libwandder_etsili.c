@@ -135,7 +135,7 @@ static unsigned char * hex2bin (char *hexstr, unsigned char *binvalue,
 
 static inline int decrypt_length_sanity_check(uint8_t *data, uint64_t dlen) {
 
-    uint64_t obslen = 0, headerlen = 0;
+    uint64_t obslen = 0, headerlen = 0, gap = 0;
     int blen, i;
 
     if (dlen < 2) {
@@ -172,7 +172,14 @@ static inline int decrypt_length_sanity_check(uint8_t *data, uint64_t dlen) {
     if (dlen - (obslen + headerlen) > 16) {
         return 0;
     }
-    if (dlen - (obslen + headerlen) != (16 - ((obslen + headerlen) % 16))) {
+
+    if ((obslen + headerlen) % 16 == 0) {
+        gap = 0;
+    } else {
+        gap = 16 - ((obslen + headerlen) % 16);
+    }
+
+    if (dlen - (obslen + headerlen) != gap) {
         return 0;
     }
 
