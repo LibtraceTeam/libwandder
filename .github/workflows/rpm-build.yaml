@@ -83,6 +83,7 @@ jobs:
            find . -name "*.rpm" | xargs yum install -y
        - name: Test package removal
          run: |
+           rpm -e libwandder2-devel
            rpm -e libwandder2
 
 
