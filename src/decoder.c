@@ -606,6 +606,8 @@ const char *wandder_get_tag_string(wandder_decoder_t *dec) {
                 return "IA5 String";
             case WANDDER_TAG_UTCTIME:
                 return "UTC Time";
+            case WANDDER_TAG_ULI:
+                return "User Location Information";
         }
     } else if (class == WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
         switch(ident) {
@@ -1031,6 +1033,7 @@ char * wandder_get_valuestr(wandder_item_t *c, char *space, uint16_t len,
             }
             break;
 
+        case WANDDER_TAG_ULI:
         case WANDDER_TAG_BOOLEAN:
         case WANDDER_TAG_BITSTRING:
         case WANDDER_TAG_OBJDESC:

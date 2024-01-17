@@ -86,6 +86,8 @@ static char *stringify_ecgi(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_sai(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_uli(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
         wandder_item_t *item, char *valstr, int len);
 static char *stringify_sequenced_primitives(char *sequence_name,
@@ -634,6 +636,15 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
                             valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret SAI field %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_ULI) {
+                if (stringify_uli(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret ULI field %d:%d\n",
                             stack->current, ident);
                     return NULL;
                 }
@@ -1465,6 +1476,13 @@ static char *stringify_sequenced_primitives(char *sequence_name,
 
     return space;
 
+}
+
+static char *stringify_uli(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    memset(valstr, 0, len);
+    return valstr;
 }
 
 static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
@@ -2331,6 +2349,9 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->sipmessage.members);
     free(dec->ipmmiricontents.members);
     free(dec->ipmmiri.members);
+    free(dec->additionalsignalling.members);
+    free(dec->lipspdulocation.members);
+    free(dec->epslocation.members);
     free(dec->datanodeaddress.members);
     free(dec->ipaddress.members);
     free(dec->ipcccontents.members);
@@ -2587,7 +2608,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->ipmmiricontents.sequence = WANDDER_NOACTION;
 
-    dec->ipmmiri.membercount = 2;
+    dec->ipmmiri.membercount = 4;
     ALLOC_MEMBERS(dec->ipmmiri);
     dec->ipmmiri.members[0] =
         (struct wandder_dump_action) {
@@ -2601,8 +2622,136 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .descend = &dec->ipmmiricontents,
                 .interpretas = WANDDER_TAG_NULL
         };
+    dec->ipmmiri.members[2] =
+        (struct wandder_dump_action) {
+                .name = "targetLocation",
+                .descend = &dec->lipspdulocation,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->ipmmiri.members[3] =
+        (struct wandder_dump_action) {
+                .name = "additionalSignalingSeq",
+                .descend = &dec->additionalsignallingseq,
+                .interpretas = WANDDER_TAG_NULL
+        };
     dec->ipmmiri.sequence = WANDDER_NOACTION;
 
+    dec->lipspdulocation.membercount=5;
+    ALLOC_MEMBERS(dec->lipspdulocation);
+    dec->lipspdulocation.members[0] =
+        (struct wandder_dump_action) {
+                .name = "umtsHI2Location",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.members[1] =
+        (struct wandder_dump_action) {
+                .name = "epsLocation",
+                .descend = &dec->epslocation,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.members[2] =
+        (struct wandder_dump_action) {
+                .name = "wlanLocationAttributes",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.members[3] =
+        (struct wandder_dump_action) {
+                .name = "eTSI671HI2Location",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.members[4] =
+        (struct wandder_dump_action) {
+                .name = "threeGPP33128UserLocation",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.sequence = WANDDER_NOACTION;
+
+    dec->epslocation.membercount = 11;
+    ALLOC_MEMBERS(dec->epslocation);
+    dec->epslocation.members[0] = WANDDER_NOACTION;
+    dec->epslocation.members[1] =
+        (struct wandder_dump_action) {
+                .name = "userLocationInfo",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ULI
+        };
+    dec->epslocation.members[2] =
+        (struct wandder_dump_action) {
+                .name = "gsmLocation",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epslocation.members[3] =
+        (struct wandder_dump_action) {
+                .name = "umtsLocation",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epslocation.members[4] =
+        (struct wandder_dump_action) {
+                .name = "olduserLocationInfo",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ULI
+        };
+    dec->epslocation.members[5] =
+        (struct wandder_dump_action) {
+                .name = "lastVisitedTAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_TAI
+        };
+    dec->epslocation.members[6] =
+        (struct wandder_dump_action) {
+                .name = "tAIlist",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epslocation.members[7] =
+        (struct wandder_dump_action) {
+                .name = "threeGPP2Bsid",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->epslocation.members[8] =
+        (struct wandder_dump_action) {
+                .name = "civicAddress",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epslocation.members[9] =
+        (struct wandder_dump_action) {
+                .name = "operatorSpecificInfo",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->epslocation.members[10] =
+        (struct wandder_dump_action) {
+                .name = "uELocationTimestamp",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
+    dec->additionalsignallingseq.membercount = 0;
+    dec->additionalsignallingseq.members = NULL;
+    dec->additionalsignallingseq.sequence =
+        (struct wandder_dump_action) {
+            .name = "additionalSignalling",
+            .descend = &dec->additionalsignalling,
+            .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->additionalsignalling.membercount = 1;
+    ALLOC_MEMBERS(dec->additionalsignalling);
+    dec->additionalsignalling.members[0] =
+        (struct wandder_dump_action) {
+                .name = "sipHeaderLine",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
 
     dec->ipcccontents.membercount = 1;
     ALLOC_MEMBERS(dec->ipcccontents);
@@ -3936,7 +4085,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->iricontents.members[8] = WANDDER_NOACTION;
     dec->iricontents.members[9] = WANDDER_NOACTION;
     dec->iricontents.members[10] = WANDDER_NOACTION;
-    dec->iricontents.members[11] =   // TODO
+    dec->iricontents.members[11] =
         (struct wandder_dump_action) {
                 .name = "iPMMIRI",
                 .descend = &dec->ipmmiri,
@@ -3995,7 +4144,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->payload.membercount = 5;
     ALLOC_MEMBERS(dec->payload);
     dec->payload.sequence = WANDDER_NOACTION;
-    dec->payload.members[0] =        // TODO
+    dec->payload.members[0] =
         (struct wandder_dump_action) {
                 .name = "iRIPayloadSequence",
                 .descend = &dec->iripayloadseq,
@@ -4007,7 +4156,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .descend = &dec->ccpayloadseq,
                 .interpretas = WANDDER_TAG_NULL
         };
-    dec->payload.members[2] =        // Not required
+    dec->payload.members[2] =
         (struct wandder_dump_action) {
                 .name = "tRIPayload",
                 .descend = &(dec->tripayload),
