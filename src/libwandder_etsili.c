@@ -1355,7 +1355,7 @@ static inline int decode_macro_enodeb_to_string(uint8_t *macrostart, int rem,
     int used = 0;
     char enodeb[24];
     uint8_t id[4];
-    uint32_t id_32;
+    uint32_t id_32, *id_32_ptr;
 
     used = stringify_mcc_mnc(macrostart, rem, writeptr, writelen);
 
@@ -1370,9 +1370,9 @@ static inline int decode_macro_enodeb_to_string(uint8_t *macrostart, int rem,
 
     /* mask SMeNB bit in extended version */
     id[1] &= (0x1F);
-    id_32 = ntohl(*((uint32_t *)id));
+    memcpy(&id_32, id, sizeof(uint32_t));
 
-    snprintf(enodeb, 24, "%07x", id_32);
+    snprintf(enodeb, 24, "%07x", ntohl(id_32));
 
     if (strlen(enodeb) > writelen - used) {
         return 0;
