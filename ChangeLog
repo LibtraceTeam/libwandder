@@ -1,3 +1,8 @@
+Version 2.0.9
+=============
+  * ETSILI: add decode support for targetLocation, epsLocation and
+            userLocationInformation elements.
+
 Version 2.0.8
 =============
   * ETSILI: fix decryption failure bug for certain payload sizes
