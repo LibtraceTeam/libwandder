@@ -108,6 +108,10 @@ typedef struct wandder_etsispec {
     wandder_dumper_t encryptioncontainer;
     wandder_dumper_t encryptedpayload;
     wandder_dumper_t encryptedpayloadroot;
+    wandder_dumper_t additionalsignallingseq;
+    wandder_dumper_t additionalsignalling;
+    wandder_dumper_t lipspdulocation;
+    wandder_dumper_t epslocation;
 
     wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;
