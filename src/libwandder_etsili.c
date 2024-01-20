@@ -1355,7 +1355,7 @@ static inline int decode_macro_enodeb_to_string(uint8_t *macrostart, int rem,
     int used = 0;
     char enodeb[24];
     uint8_t id[4];
-    uint32_t id_32, *id_32_ptr;
+    uint32_t id_32;
 
     used = stringify_mcc_mnc(macrostart, rem, writeptr, writelen);
 
