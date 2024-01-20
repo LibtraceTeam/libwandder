@@ -1,3 +1,10 @@
+libwandder2 (2.0.9-1) unstable; urgency=medium
+
+  * ETSILI: add decode support for targetLocation, epsLocation and
+            UserLocationInformation fields.
+
+ -- Shane Alcock <shane@alcock.co.nz>  Sat, 20 Jan 2023 14:53:19 +1300
+
 libwandder2 (2.0.8-1) unstable; urgency=medium
 
   * ETSILI: fix decryption failure bug for certain payload sizes
