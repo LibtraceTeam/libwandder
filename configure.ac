@@ -1,6 +1,6 @@
 # Super primitive configure script
 
-AC_INIT(libwandder, 2.0.8, shane@alcock.co.nz)
+AC_INIT(libwandder, 2.0.9, shane@alcock.co.nz)
 
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_CONFIG_SRCDIR(src/decoder.c)

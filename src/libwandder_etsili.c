@@ -86,6 +86,8 @@ static char *stringify_ecgi(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_sai(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_uli(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
         wandder_item_t *item, char *valstr, int len);
 static char *stringify_sequenced_primitives(char *sequence_name,
@@ -634,6 +636,15 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
                             valstr, 16384) == NULL) {
                     fprintf(stderr,
                             "Failed to interpret SAI field %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas == WANDDER_TAG_ULI) {
+                if (stringify_uli(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret ULI field %d:%d\n",
                             stack->current, ident);
                     return NULL;
                 }
@@ -1227,7 +1238,7 @@ static char *stringify_3gimei(wandder_etsispec_t *etsidec,
     return valstr;
 }
 
-static inline int stringify_lai(uint8_t *todecode, int decodelen,
+static inline int stringify_mcc_mnc(uint8_t *todecode, int decodelen,
         char *valstr, int len) {
 
     char *nextwrite = valstr;
@@ -1289,124 +1300,193 @@ static inline int stringify_lai(uint8_t *todecode, int decodelen,
     return nextwrite - valstr;
 }
 
-static char *stringify_tai(wandder_etsispec_t *etsidec,
-        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
-
+static inline int decode_tai_to_string(uint8_t *taistart, int rem,
+        char *writeptr, int writelen) {
     char *nextwrite;
     int used = 0;
     char tac[24];
 
-    memset(valstr, 0, len);
+    used = stringify_mcc_mnc(taistart, rem, writeptr, writelen);
 
-    used = stringify_lai(item->valptr + 1, item->length - 1, valstr, len);
-
-    if (used == 0 || used >= len) {
-        return NULL;
+    if (used == 0 || used >= writelen) {
+        return 0;
     }
 
-    nextwrite = valstr + used;
-    snprintf(tac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 4))));
+    nextwrite = writeptr + used;
+    snprintf(tac, 24, "%04x", ntohs(*((uint16_t *)(taistart + 3))));
 
-    if (strlen(tac) > len - used) {
-        return NULL;
+    if (strlen(tac) > writelen - used) {
+        return 0;
     }
 
     memcpy(nextwrite, tac, strlen(tac));
-    return valstr;
+    used += strlen(tac);
+    return used;
 }
 
-static char *stringify_ecgi(wandder_etsispec_t *etsidec,
-        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+static inline int decode_ecgi_to_string(uint8_t *ecgistart, int rem,
+        char *writeptr, int writelen) {
 
     char *nextwrite;
     int used = 0;
     char eci[24];
 
-    memset(valstr, 0, len);
-
-    used = stringify_lai(item->valptr + 1, item->length - 1, valstr, len);
-
-    if (used == 0 || used >= len) {
-        return NULL;
+    used = stringify_mcc_mnc(ecgistart, rem, writeptr, writelen);
+    if (used == 0 || used >= writelen) {
+        return 0;
     }
 
-    nextwrite = valstr + used;
-    snprintf(eci, 24, "%u", ntohl(*((uint32_t *)(item->valptr + 4))));
+    nextwrite = writeptr + used;
+    snprintf(eci, 24, "%07x", ntohl(*((uint32_t *)(ecgistart + 3))));
 
-    if (strlen(eci) > len - used) {
-        return NULL;
+    if (strlen(eci) > writelen - used) {
+        return 0;
     }
-
     memcpy(nextwrite, eci, strlen(eci));
-    return valstr;
+    used += strlen(eci);
+
+    return used;
 }
 
-static char *stringify_sai(wandder_etsispec_t *etsidec,
-        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+static inline int decode_macro_enodeb_to_string(uint8_t *macrostart, int rem,
+        char *writeptr, int writelen) {
+
+    char *nextwrite;
+    int used = 0;
+    char enodeb[24];
+    uint8_t id[4];
+    uint32_t id_32;
+
+    used = stringify_mcc_mnc(macrostart, rem, writeptr, writelen);
+
+    if (used == 0 || used >= writelen) {
+        return 0;
+    }
+
+    nextwrite = writeptr + used;
+
+    id[0] = 0;
+    memcpy(&(id[1]), macrostart + 3, 3);
+
+    /* mask SMeNB bit in extended version */
+    id[1] &= (0x1F);
+    memcpy(&id_32, id, sizeof(uint32_t));
+
+    snprintf(enodeb, 24, "%07x", ntohl(id_32));
+
+    if (strlen(enodeb) > writelen - used) {
+        return 0;
+    }
+    memcpy(nextwrite, enodeb, strlen(enodeb));
+    used += strlen(enodeb);
+
+    return used;
+}
+
+static inline int decode_lai_to_string(uint8_t *laistart, int rem,
+        char *writeptr, int writelen) {
 
     char *nextwrite;
     int used = 0;
     char lac[24];
-    char sac[24];
 
-    memset(valstr, 0, len);
+    used = stringify_mcc_mnc(laistart, rem, writeptr, writelen);
 
-    used = stringify_lai(item->valptr, item->length, valstr, len);
-
-    if (used == 0 || used >= len) {
-        return NULL;
+    if (used == 0 || used >= writelen) {
+        return 0;
     }
 
-    nextwrite = valstr + used;
-    snprintf(lac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 3))));
-    snprintf(sac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 5))));
+    nextwrite = writeptr + used;
+    snprintf(lac, 24, "%04x", ntohs(*((uint16_t *)(laistart + 3))));
 
-    if (strlen(lac) + strlen(sac) + 1 > len - used) {
-        return NULL;
+    if (strlen(lac) > writelen - used) {
+        return 0;
     }
-
     memcpy(nextwrite, lac, strlen(lac));
-    nextwrite += strlen(lac);
+    used += strlen(lac);
 
-    *nextwrite = '-';
-    nextwrite ++;
-
-    memcpy(nextwrite, sac, strlen(sac));
-    return valstr;
+    return used;
 }
 
-
-static char *stringify_cgi(wandder_etsispec_t *etsidec,
-        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+static inline int decode_cgi_to_string(uint8_t *cgistart, int rem,
+        char *writeptr, int writelen) {
 
     char *nextwrite;
     int used = 0;
     char lac[24];
     char cellid[24];
 
-    memset(valstr, 0, len);
+    /* NOTE: SAI, RAI and CGI are basically the same format.
+     * SAI has a SAC instead of a cell ID.
+     * RAI has a RAC instead of a cell ID.
+     * We can reuse this method to decode all of these location types.
+     */
 
-    used = stringify_lai(item->valptr, item->length, valstr, len);
+    used = stringify_mcc_mnc(cgistart, rem, writeptr, writelen);
 
-    if (used == 0 || used >= len) {
-        return NULL;
+    if (used == 0 || used >= writelen) {
+        return 0;
     }
 
-    nextwrite = valstr + used;
-    snprintf(lac, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 3))));
-    snprintf(cellid, 24, "%u", ntohs(*((uint16_t *)(item->valptr + 5))));
+    nextwrite = writeptr + used;
+    snprintf(lac, 24, "%04x", ntohs(*((uint16_t *)(cgistart + 3))));
+    snprintf(cellid, 24, "%04x", ntohs(*((uint16_t *)(cgistart + 5))));
 
-    if (strlen(lac) + strlen(cellid) + 1 > len - used) {
-        return NULL;
+    if (strlen(lac) + strlen(cellid) + 1 > writelen - used) {
+        return 0;
     }
 
     memcpy(nextwrite, lac, strlen(lac));
     nextwrite += strlen(lac);
+    used += strlen(lac);
 
     *nextwrite = '-';
     nextwrite ++;
 
     memcpy(nextwrite, cellid, strlen(cellid));
+    used += strlen(cellid) + 1;
+    return used;
+
+}
+
+static char *stringify_tai(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    memset(valstr, 0, len);
+    if (decode_tai_to_string(item->valptr, item->length, valstr, len) == 0) {
+        return NULL;
+    }
+    return valstr;
+}
+
+static char *stringify_ecgi(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    memset(valstr, 0, len);
+    if (decode_ecgi_to_string(item->valptr, item->length, valstr, len) == 0) {
+        return NULL;
+    }
+    return valstr;
+}
+
+static char *stringify_sai(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    memset(valstr, 0, len);
+    /* INTENTIONAL use of "cgi" here */
+    if (decode_cgi_to_string(item->valptr, item->length, valstr, len) == 0) {
+        return NULL;
+    }
+    return valstr;
+}
+
+static char *stringify_cgi(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    memset(valstr, 0, len);
+    if (decode_cgi_to_string(item->valptr, item->length, valstr, len) == 0) {
+        return NULL;
+    }
     return valstr;
 }
 
@@ -1465,6 +1545,141 @@ static char *stringify_sequenced_primitives(char *sequence_name,
 
     return space;
 
+}
+
+static char *stringify_uli(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = item->valptr;
+    uint8_t flags;
+    uint8_t used = 0;
+    uint16_t f = 0x01;
+    char *write = valstr;
+    int write_rem = len - 1;
+    int res;
+
+    memset(valstr, 0, len);
+    if (len < 4) {
+        return NULL;
+    }
+    flags = item->valptr[3];
+
+    ptr = ptr + 4;
+    used = 4;
+
+    while (f < 256) {
+        res = -1;
+        ptr = item->valptr + used;
+
+        if (f == 0x01 && (f & flags)) {
+            /* CGI */
+            if (write_rem < 6) {
+                return NULL;
+            }
+            memcpy(write, " CGI: ", 6);
+            write += 6;
+            write_rem -= 6;
+
+            res = decode_cgi_to_string(ptr, item->length - used,
+                    write, write_rem);
+            used += 7;
+        } else if (f == 0x02 && (f & flags)) {
+            /* SAI */
+            if (write_rem < 6) {
+                return NULL;
+            }
+            memcpy(write, " SAI: ", 6);
+            write += 6;
+            write_rem -= 6;
+            /* INTENTIONAL use of "cgi" here */
+            res = decode_cgi_to_string(ptr, item->length - used,
+                    write, write_rem);
+            used += 7;
+        } else if (f == 0x04 && (f & flags)) {
+            /* RAI */
+            if (write_rem < 6) {
+                return NULL;
+            }
+            memcpy(write, " RAI: ", 6);
+            write += 6;
+            write_rem -= 6;
+            /* INTENTIONAL use of "cgi" here */
+            res = decode_cgi_to_string(ptr, item->length - used,
+                    write, write_rem);
+            used += 7;
+        } else if (f == 0x08 && (f & flags)) {
+            /* TAI */
+            if (write_rem < 6) {
+                return NULL;
+            }
+            memcpy(write, " TAI: ", 6);
+            write += 6;
+            write_rem -= 6;
+            res = decode_tai_to_string(ptr, item->length - used,
+                    write, write_rem);
+            used += 5;
+        } else if (f == 0x10 && (f & flags)) {
+            /* ECGI */
+            if (write_rem < 7) {
+                return NULL;
+            }
+            memcpy(write, " ECGI: ", 7);
+            write += 7;
+            write_rem -= 7;
+            res = decode_ecgi_to_string(ptr, item->length - used,
+                    write, write_rem);
+            used += 7;
+        } else if (f == 0x20 && (f & flags)) {
+            /* LAI */
+            if (write_rem < 6) {
+                return NULL;
+            }
+            memcpy(write, " LAI: ", 6);
+            write += 6;
+            write_rem -= 6;
+            res = decode_lai_to_string(ptr, item->length - used,
+                    write, write_rem);
+            used += 5;
+        } else if (f == 0x40 && (f & flags)) {
+            /* Macro eNodeB ID */
+            if (write_rem < 18) {
+                return NULL;
+            }
+            memcpy(write, " Macro eNodeB ID: ", 18);
+            write += 18;
+            write_rem -= 18;
+            res = decode_macro_enodeb_to_string(ptr, item->length - used,
+                    write, write_rem);
+            used += 6;
+        } else if (f == 0x80 && (f & flags)) {
+            /* Extended Macro eNodeB ID */
+            if (write_rem < 22) {
+                return NULL;
+            }
+            memcpy(write, " Ext Macro eNodeB ID: ", 22);
+            write += 22;
+            write_rem -= 22;
+            /* same decoding method as macro_enodeb (intentional) */
+            res = decode_macro_enodeb_to_string(ptr, item->length - used,
+                    write, write_rem);
+            used += 6;
+        }
+
+        if (res == -1) {
+            f *= 2;
+            continue;
+        }
+
+        if (res == 0) {
+            return NULL;
+        }
+        assert(res <= write_rem);
+
+        write += res;
+        write_rem -= res;
+        f *= 2;
+    }
+    return valstr;
 }
 
 static char *stringify_bytes_as_hex(wandder_etsispec_t *etsidec,
@@ -2331,6 +2546,9 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->sipmessage.members);
     free(dec->ipmmiricontents.members);
     free(dec->ipmmiri.members);
+    free(dec->additionalsignalling.members);
+    free(dec->lipspdulocation.members);
+    free(dec->epslocation.members);
     free(dec->datanodeaddress.members);
     free(dec->ipaddress.members);
     free(dec->ipcccontents.members);
@@ -2587,7 +2805,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->ipmmiricontents.sequence = WANDDER_NOACTION;
 
-    dec->ipmmiri.membercount = 2;
+    dec->ipmmiri.membercount = 4;
     ALLOC_MEMBERS(dec->ipmmiri);
     dec->ipmmiri.members[0] =
         (struct wandder_dump_action) {
@@ -2601,8 +2819,136 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .descend = &dec->ipmmiricontents,
                 .interpretas = WANDDER_TAG_NULL
         };
+    dec->ipmmiri.members[2] =
+        (struct wandder_dump_action) {
+                .name = "targetLocation",
+                .descend = &dec->lipspdulocation,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->ipmmiri.members[3] =
+        (struct wandder_dump_action) {
+                .name = "additionalSignalingSeq",
+                .descend = &dec->additionalsignallingseq,
+                .interpretas = WANDDER_TAG_NULL
+        };
     dec->ipmmiri.sequence = WANDDER_NOACTION;
 
+    dec->lipspdulocation.membercount=5;
+    ALLOC_MEMBERS(dec->lipspdulocation);
+    dec->lipspdulocation.members[0] =
+        (struct wandder_dump_action) {
+                .name = "umtsHI2Location",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.members[1] =
+        (struct wandder_dump_action) {
+                .name = "epsLocation",
+                .descend = &dec->epslocation,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.members[2] =
+        (struct wandder_dump_action) {
+                .name = "wlanLocationAttributes",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.members[3] =
+        (struct wandder_dump_action) {
+                .name = "eTSI671HI2Location",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.members[4] =
+        (struct wandder_dump_action) {
+                .name = "threeGPP33128UserLocation",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->lipspdulocation.sequence = WANDDER_NOACTION;
+
+    dec->epslocation.membercount = 11;
+    ALLOC_MEMBERS(dec->epslocation);
+    dec->epslocation.members[0] = WANDDER_NOACTION;
+    dec->epslocation.members[1] =
+        (struct wandder_dump_action) {
+                .name = "userLocationInfo",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ULI
+        };
+    dec->epslocation.members[2] =
+        (struct wandder_dump_action) {
+                .name = "gsmLocation",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epslocation.members[3] =
+        (struct wandder_dump_action) {
+                .name = "umtsLocation",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epslocation.members[4] =
+        (struct wandder_dump_action) {
+                .name = "olduserLocationInfo",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ULI
+        };
+    dec->epslocation.members[5] =
+        (struct wandder_dump_action) {
+                .name = "lastVisitedTAI",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_TAI
+        };
+    dec->epslocation.members[6] =
+        (struct wandder_dump_action) {
+                .name = "tAIlist",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epslocation.members[7] =
+        (struct wandder_dump_action) {
+                .name = "threeGPP2Bsid",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->epslocation.members[8] =
+        (struct wandder_dump_action) {
+                .name = "civicAddress",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epslocation.members[9] =
+        (struct wandder_dump_action) {
+                .name = "operatorSpecificInfo",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->epslocation.members[10] =
+        (struct wandder_dump_action) {
+                .name = "uELocationTimestamp",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+
+    dec->additionalsignallingseq.membercount = 0;
+    dec->additionalsignallingseq.members = NULL;
+    dec->additionalsignallingseq.sequence =
+        (struct wandder_dump_action) {
+            .name = "additionalSignalling",
+            .descend = &dec->additionalsignalling,
+            .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->additionalsignalling.membercount = 1;
+    ALLOC_MEMBERS(dec->additionalsignalling);
+    dec->additionalsignalling.members[0] =
+        (struct wandder_dump_action) {
+                .name = "sipHeaderLine",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
 
     dec->ipcccontents.membercount = 1;
     ALLOC_MEMBERS(dec->ipcccontents);
@@ -3936,7 +4282,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->iricontents.members[8] = WANDDER_NOACTION;
     dec->iricontents.members[9] = WANDDER_NOACTION;
     dec->iricontents.members[10] = WANDDER_NOACTION;
-    dec->iricontents.members[11] =   // TODO
+    dec->iricontents.members[11] =
         (struct wandder_dump_action) {
                 .name = "iPMMIRI",
                 .descend = &dec->ipmmiri,
@@ -3995,7 +4341,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->payload.membercount = 5;
     ALLOC_MEMBERS(dec->payload);
     dec->payload.sequence = WANDDER_NOACTION;
-    dec->payload.members[0] =        // TODO
+    dec->payload.members[0] =
         (struct wandder_dump_action) {
                 .name = "iRIPayloadSequence",
                 .descend = &dec->iripayloadseq,
@@ -4007,7 +4353,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .descend = &dec->ccpayloadseq,
                 .interpretas = WANDDER_TAG_NULL
         };
-    dec->payload.members[2] =        // Not required
+    dec->payload.members[2] =
         (struct wandder_dump_action) {
                 .name = "tRIPayload",
                 .descend = &(dec->tripayload),
