@@ -1,9 +1,15 @@
+libwandder2 (2.0.10-1) unstable; urgency=medium
+
+  * Fix incorrect encoding of UTCTime fields
+
+ -- Shane Alcock <shane@alcock.co.nz>  Fri, 16 Feb 2024 15:52:10 +1300
+
 libwandder2 (2.0.9-1) unstable; urgency=medium
 
   * ETSILI: add decode support for targetLocation, epsLocation and
             UserLocationInformation fields.
 
- -- Shane Alcock <shane@alcock.co.nz>  Sat, 20 Jan 2023 14:53:19 +1300
+ -- Shane Alcock <shane@alcock.co.nz>  Sat, 20 Jan 2024 14:53:19 +1300
 
 libwandder2 (2.0.8-1) unstable; urgency=medium
 
