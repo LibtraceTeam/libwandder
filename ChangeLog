@@ -1,3 +1,7 @@
+Version 2.0.10
+=============
+  * Fix incorrect encoding of UTCTime fields
+
 Version 2.0.9
 =============
   * ETSILI: add decode support for targetLocation, epsLocation and

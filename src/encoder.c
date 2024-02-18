@@ -405,19 +405,20 @@ static inline int encode_time_inline(
         return 0;
     }
 
+    strftime(timebuf, 768, "%y%m%d%H%M%S", &tm);
+
     switch (time_format) {
         case WANDDER_G_TIME: 
-            strftime(timebuf, 768, "%y%m%d%H%M%S", &tm);
+            snprintf(returnbuf, 1024, "%s.%03" PRId64 "Z", timebuf,
+                    (int64_t)(tv->tv_usec / 1000));
             break;
         default:
             fprintf(stderr, 
                 "Encode error: unexpected format for timeval, using UTC\n");
         case WANDDER_UTC_TIME:
-            strftime(timebuf, 768, "%y%m%d%H%M%S", &tm);
+            snprintf(returnbuf, 1024, "%sZ", timebuf);
             break;
     }
-    snprintf(returnbuf, 1024, "%s.%03" PRId64 "Z", timebuf,
-            (int64_t)(tv->tv_usec / 1000));
 
     return strlen(returnbuf);
 }
