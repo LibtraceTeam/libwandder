@@ -135,6 +135,53 @@ static unsigned char * hex2bin (char *hexstr, unsigned char *binvalue,
     return(binvalue);
 }
 
+static uint32_t decode_length_field(uint8_t *lenstart, uint32_t maxrem,
+        int *lenlen) {
+
+    uint8_t lenoctets;
+    uint8_t byte;
+    uint32_t result = 0;
+    int i;
+
+    if (maxrem == 0) {
+        *lenlen = 0;
+        return 0;
+    }
+
+    byte = *lenstart;
+    if ((byte & 0x80) == 0) {
+        /* definite short form */
+        *lenlen = 1;
+        return (byte & 0x7f);
+    }
+    lenoctets = byte;
+    if (lenoctets) {
+        /* definite long form */
+        if (lenoctets > 8) {
+            fprintf(stderr, "libwandder cannot decode length fields longer than 8 bytes!\n");
+            *lenlen = 0;
+            return 0;
+        }
+        if (lenoctets > maxrem) {
+            fprintf(stderr, "libwandder: length field size is larger than the amount of bytes remaining in the current field? (%u vs %u)\n", lenoctets, maxrem);
+            *lenlen = 0;
+            return 0;
+        }
+        *lenlen = lenoctets + 1;
+        for (i = 0; i < (int)lenoctets; i++) {
+            byte = *(lenstart + i + 1);
+            result = result << 8;
+            result |= (byte);
+        }
+    } else {
+        /* indefinite form */
+        *lenlen = 1;
+        result = 0xFFFFFFFF;
+    }
+
+    return result;
+}
+
 static inline int decrypt_length_sanity_check(uint8_t *data, uint64_t dlen) {
 
     uint64_t obslen = 0, headerlen = 0, gap = 0;
@@ -1495,8 +1542,6 @@ static char *stringify_sequenced_primitives(char *sequence_name,
 
     wandder_item_t *parent = dec->current;
     uint8_t *ptr = (uint8_t *)(parent->valptr);
-    int64_t nextint;
-    uint32_t nextintlen;
     char *writer = space;
     int namelen = strlen(sequence_name);
     int first = 1;
@@ -1516,6 +1561,9 @@ static char *stringify_sequenced_primitives(char *sequence_name,
         while (ptr - parent->valptr < parent->length) {
             char tmp[1024];
             int tmplen;
+            int64_t nextint;
+            uint32_t nextintlen;
+
             assert((*ptr) == WANDDER_TAG_INTEGER);
             ptr ++;
             /* integer len should always be a single byte (?) */
@@ -1538,6 +1586,38 @@ static char *stringify_sequenced_primitives(char *sequence_name,
                 writer += tmplen;
             }
             ptr += nextintlen;
+        }
+    } else if (interpretas == WANDDER_TAG_UTF8STR) {
+        while (ptr - parent->valptr < parent->length) {
+            int lenlen = 0;
+            uint32_t strlength = 0;
+
+            assert((*ptr) == WANDDER_TAG_UTF8STR);
+            ptr ++;
+
+            strlength = decode_length_field(ptr,
+                    parent->length - (ptr - parent->valptr), &lenlen);
+
+            if (strlength == 0) {
+                break;
+            } else if (strlength == 0xFFFFFFFF) {
+                /* TODO handle indefinite length fields... */
+                break;
+            }
+            ptr += lenlen;
+            if (spacelen - (writer - space) > strlength + 2) {
+                if (!first) {
+                    *writer = ',';
+                    writer ++;
+                    *writer = ' ';
+                    writer ++;
+                } else {
+                    first = 0;
+                }
+                memcpy(writer, ptr, strlength);
+                writer += strlength;
+            }
+            ptr += strlength;
         }
     }
 
@@ -2581,7 +2661,6 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipiri.members);
     free(dec->emailiri.members);
     free(dec->emailcc.members);
-    free(dec->emailrecipientsingle.members);
     free(dec->aaainformation.members);
     free(dec->pop3aaainformation.members);
     free(dec->asmtpaaainformation.members);
@@ -4109,8 +4188,8 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->emailiri.members[10] =
         (struct wandder_dump_action) {
                 .name = "e-mail-Recipients",
-                .descend = &(dec->emailrecipients),
-                .interpretas = WANDDER_TAG_NULL
+                NULL,
+                .interpretas = WANDDER_TAG_UTF8STR
         };
     dec->emailiri.members[11] =
         (struct wandder_dump_action) {
@@ -4160,20 +4239,10 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->emailrecipients.members = NULL;
     dec->emailrecipients.sequence =
         (struct wandder_dump_action) {
-                .name = "E-mail-Address-List",
-                .descend = &(dec->emailrecipientsingle),
-                .interpretas = WANDDER_TAG_NULL
-        };
-
-    dec->emailrecipientsingle.membercount = 1;
-    ALLOC_MEMBERS(dec->emailrecipientsingle);
-    dec->emailrecipientsingle.members[0] =
-        (struct wandder_dump_action) {
                 .name = "recipient",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_UTF8STR
         };
-    dec->emailrecipientsingle.sequence = WANDDER_NOACTION;
 
     dec->aaainformation.membercount = 3;
     ALLOC_MEMBERS(dec->aaainformation);
