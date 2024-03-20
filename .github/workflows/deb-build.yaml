@@ -21,6 +21,7 @@ jobs:
            - "debian:bullseye"
            - "ubuntu:focal"
            - "ubuntu:jammy"
+           - "ubuntu:noble"
 
      steps:
       - name: Checkout repo
@@ -57,6 +58,7 @@ jobs:
            - "ubuntu:focal"
            - "ubuntu:jammy"
            - "debian:bookworm"
+           - "ubuntu:noble"
      needs: build
      steps:
        - name: Set environment variables for download
@@ -96,6 +98,7 @@ jobs:
            - "debian:bookworm"
            - "ubuntu:focal"
            - "ubuntu:jammy"
+           - "ubuntu:noble"
      needs: test
      steps:
        - name: Set environment variables for download

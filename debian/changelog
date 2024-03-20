@@ -1,3 +1,10 @@
+libwandder2 (2.0.11-1) unstable; urgency=medium
+
+  * Add support for decoding sequences of UTF8Strings
+  * ETSILI: fix incorrect decoding hierarchy for Email Address Lists
+
+ -- Shane Alcock <shane@alcock.co.nz>  Wed, 20 Mar 2024 16:23:51 +1300
+
 libwandder2 (2.0.10-1) unstable; urgency=medium
 
   * Fix incorrect encoding of UTCTime fields

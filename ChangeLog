@@ -1,3 +1,7 @@
+Version 2.0.11
+  * Add support for decoding sequences of UTF8Strings
+  * ETSILI: fix broken decoding hierarchy for Email Address Lists
+
 Version 2.0.10
 =============
   * Fix incorrect encoding of UTCTime fields

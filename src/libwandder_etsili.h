@@ -101,7 +101,6 @@ typedef struct wandder_etsispec {
     wandder_dumper_t emailiri;
     wandder_dumper_t emailcc;
     wandder_dumper_t emailrecipients;
-    wandder_dumper_t emailrecipientsingle;
     wandder_dumper_t aaainformation;
     wandder_dumper_t pop3aaainformation;
     wandder_dumper_t asmtpaaainformation;
