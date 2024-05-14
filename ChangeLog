@@ -1,4 +1,9 @@
+Version 2.0.12
+===============
+  * ETSILI: fix incorrect decoding of userLocationInformation
+
 Version 2.0.11
+===============
   * Add support for decoding sequences of UTF8Strings
   * ETSILI: fix broken decoding hierarchy for Email Address Lists
 
