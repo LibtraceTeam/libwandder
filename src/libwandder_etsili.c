@@ -1638,14 +1638,14 @@ static char *stringify_uli(wandder_etsispec_t *etsidec,
     int write_rem = len - 1;
     int res;
 
-    memset(valstr, 0, len);
-    if (len < 4) {
+    if (len == 0 || valstr == NULL) {
         return NULL;
     }
-    flags = item->valptr[3];
+    memset(valstr, 0, len);
+    flags = item->valptr[0];
 
-    ptr = ptr + 4;
-    used = 4;
+    ptr = ptr + 1;
+    used = 1;
 
     while (f < 256) {
         res = -1;
