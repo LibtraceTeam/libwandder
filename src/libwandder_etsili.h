@@ -64,6 +64,11 @@ typedef struct wandder_etsispec {
     wandder_dumper_t ipiri;
     wandder_dumper_t umtsiri;
     wandder_dumper_t umtsiri_params;
+    wandder_dumper_t epsiri;
+    wandder_dumper_t epsiri_params;
+    wandder_dumper_t eps_gtpv2_params;
+    wandder_dumper_t umtsqos;
+    wandder_dumper_t eps_protconfigoptions;
     wandder_dumper_t iricontents;
     wandder_dumper_t iripayload;
     wandder_dumper_t netelid;
