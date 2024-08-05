@@ -268,9 +268,9 @@ static uint32_t encode_identifier(uint8_t class, uint32_t ident,
         }
 
         if (i > 0) {
-            *buf = (0x80 | encarray[ind]);
+            *buf = (0x80 | encarray[i]);
         } else {
-            *buf = encarray[ind];
+            *buf = encarray[i];
         }
 
         buf += 1;
