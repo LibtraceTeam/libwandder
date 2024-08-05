@@ -93,6 +93,8 @@ static char *stringify_eps_attach_type(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_eps_rat_type(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_eps_cause(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
         wandder_item_t *item, char *valstr, int len);
 static char *stringify_sequenced_primitives(char *sequence_name,
@@ -702,6 +704,16 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
                 }
             }
             else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_EPS_CAUSE) {
+                if (stringify_eps_cause(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret EPS Cause field: %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
                     WANDDER_TAG_EPS_ATTACH_TYPE) {
                 if (stringify_eps_attach_type(etsidec, dec->current, curr,
                             valstr, 16384) == NULL) {
@@ -1262,6 +1274,46 @@ static char *stringify_3gcause(wandder_etsispec_t *etsidec,
             break;
         default:
             strncpy(valstr, "Unknown", len);
+            break;
+    }
+    return valstr;
+}
+
+static char *stringify_eps_cause(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = (uint8_t *)item->valptr;
+
+    switch(*ptr) {
+        case 16:
+            strncpy(valstr, "Request Accepted", len);
+            break;
+        case 64:
+            strncpy(valstr, "Context Not Found", len);
+            break;
+        case 65:
+            strncpy(valstr, "Invalid Message Format", len);
+            break;
+        case 67:
+            strncpy(valstr, "Invalid Length", len);
+            break;
+        case 66:
+            strncpy(valstr, "Version not supported by next peer", len);
+            break;
+        case 72:
+            strncpy(valstr, "System Failure", len);
+            break;
+        case 68:
+            strncpy(valstr, "Service not supported", len);
+            break;
+        case 69:
+            strncpy(valstr, "Mandatory IE incorrect", len);
+            break;
+        case 70:
+            strncpy(valstr, "Mandatory IE missing", len);
+            break;
+        default:
+            snprintf(valstr, len, "%u", *ptr);
             break;
     }
     return valstr;
@@ -2462,8 +2514,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 break;
         }
     }
-    else if (item->identifier == 20 && (curr == &(etsidec->umtsiri_params) ||
-                curr == &(etsidec->epsiri_params))) {
+    else if (item->identifier == 20 && curr == &(etsidec->umtsiri_params)) {
         /* gPRSevent for uMTSIRI */
         switch (enumval) {
             case 1:
@@ -2928,7 +2979,18 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 name = "targetLeavesIA";
                 break;
         }
+    } else if (item->identifier == 10 && curr == &(etsidec->eps_gtpv2_params)) {
+        /* typeOfBearer */
+        switch(enumval) {
+            case 1:
+                name = "defaultBearer";
+                break;
+            case 2:
+                name = "dedicatedBearer";
+                break;
+        }
     }
+
 
 
     if (name != NULL) {
@@ -4224,6 +4286,27 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .name = "rATType",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_EPS_RAT_TYPE
+        };
+
+    dec->eps_gtpv2_params.members[8] =
+        (struct wandder_dump_action) {
+                .name = "failedBearerActivationReason",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_CAUSE
+        };
+
+    dec->eps_gtpv2_params.members[9] =
+        (struct wandder_dump_action) {
+                .name = "ePSBearerQoS",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+
+    dec->eps_gtpv2_params.members[10] =
+        (struct wandder_dump_action) {
+                .name = "bearerActivationType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
         };
 
 
