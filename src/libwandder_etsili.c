@@ -95,6 +95,8 @@ static char *stringify_eps_rat_type(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_eps_cause(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_eps_pdntype(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_eps_ambr(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
@@ -726,6 +728,16 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
                 }
             }
             else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_EPS_PDN_TYPE) {
+                if (stringify_eps_pdntype(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret EPS PDN Type field: %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
                     WANDDER_TAG_EPS_ATTACH_TYPE) {
                 if (stringify_eps_attach_type(etsidec, dec->current, curr,
                             valstr, 16384) == NULL) {
@@ -1286,6 +1298,35 @@ static char *stringify_3gcause(wandder_etsispec_t *etsidec,
             break;
         default:
             strncpy(valstr, "Unknown", len);
+            break;
+    }
+    return valstr;
+}
+
+static char *stringify_eps_pdntype(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = (uint8_t *)item->valptr;
+
+    switch(*ptr) {
+        case 1:
+            strncpy(valstr, "IPv4", len);
+            break;
+        case 2:
+            strncpy(valstr, "IPv6", len);
+            break;
+        case 3:
+            strncpy(valstr, "IPv4v6", len);
+            break;
+        case 4:
+            strncpy(valstr, "Non-IP", len);
+            break;
+        case 5:
+            strncpy(valstr, "Ethernet", len);
+            break;
+
+        default:
+            snprintf(valstr, len, "%u", *ptr);
             break;
     }
     return valstr;
@@ -4384,6 +4425,19 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_EPS_CAUSE
         };
 
+    dec->eps_gtpv2_params.members[23] =
+        (struct wandder_dump_action) {
+                .name = "ePSlocationOfTheTarget",
+                .descend = &(dec->epslocation),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->eps_gtpv2_params.members[24] =
+        (struct wandder_dump_action) {
+                .name = "pDNType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_PDN_TYPE
+        };
 
 
     /* TODO eps_gtpv2_params.members */
