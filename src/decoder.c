@@ -284,7 +284,7 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
     if ((tagbyte & 0x1f) == 0x1f) {
         ptr ++;
         i = 0;
-        prelen += 1;
+        prelen = 2;
 
         item->identifier = (*ptr) & 0x7f;
         while ((*ptr) & 0x80) {
@@ -301,6 +301,7 @@ static int decode(wandder_decoder_t *dec, uint8_t *ptr, wandder_item_t *parent) 
                 return -1;
             }
         }
+        ptr++;
     } else {
         item->identifier = (tagbyte & 0x1f);
         prelen += 1;

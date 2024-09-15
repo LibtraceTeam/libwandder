@@ -63,6 +63,7 @@ uint8_t etsi_ipirioid[4] = {0x05, 0x03, 0x0a, 0x01};
 uint8_t etsi_ipmmccoid[4] = {0x05, 0x05, 0x06, 0x02};
 uint8_t etsi_ipmmirioid[4] = {0x05, 0x05, 0x06, 0x01};
 uint8_t etsi_umtsirioid[9] = {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x01, 0x0f, 0x05};
+uint8_t etsi_epsirioid[9] = {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x08, 0x11, 0x00};
 
 static void init_dumpers(wandder_etsispec_t *dec);
 static void free_dumpers(wandder_etsispec_t *dec);
@@ -87,6 +88,16 @@ static char *stringify_ecgi(wandder_etsispec_t *etsidec,
 static char *stringify_sai(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *stringify_uli(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_eps_attach_type(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_eps_rat_type(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_eps_cause(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_eps_pdntype(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
+static char *stringify_eps_ambr(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len);
 static char *decrypt_encrypted_payload_item(wandder_etsispec_t *etsidec,
         wandder_item_t *item, char *valstr, int len);
@@ -697,6 +708,56 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
                 }
             }
             else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_EPS_APN_AMBR) {
+                if (stringify_eps_ambr(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret EPS APN-AMBR field: %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_EPS_CAUSE) {
+                if (stringify_eps_cause(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret EPS Cause field: %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_EPS_PDN_TYPE) {
+                if (stringify_eps_pdntype(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret EPS PDN Type field: %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_EPS_ATTACH_TYPE) {
+                if (stringify_eps_attach_type(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret EPS Attach Type field: %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
+                    WANDDER_TAG_EPS_RAT_TYPE) {
+                if (stringify_eps_rat_type(etsidec, dec->current, curr,
+                            valstr, 16384) == NULL) {
+                    fprintf(stderr,
+                            "Failed to interpret EPS RAT Type field: %d:%d\n",
+                            stack->current, ident);
+                    return NULL;
+                }
+            }
+            else if (curr->members[ident].interpretas ==
                     WANDDER_TAG_ENCRYPTED) {
                 assert(etsidec->decrypted == NULL);
                 if (decrypt_encrypted_payload_item(etsidec,
@@ -1242,6 +1303,102 @@ static char *stringify_3gcause(wandder_etsispec_t *etsidec,
     return valstr;
 }
 
+static char *stringify_eps_pdntype(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = (uint8_t *)item->valptr;
+
+    switch(*ptr) {
+        case 1:
+            strncpy(valstr, "IPv4", len);
+            break;
+        case 2:
+            strncpy(valstr, "IPv6", len);
+            break;
+        case 3:
+            strncpy(valstr, "IPv4v6", len);
+            break;
+        case 4:
+            strncpy(valstr, "Non-IP", len);
+            break;
+        case 5:
+            strncpy(valstr, "Ethernet", len);
+            break;
+
+        default:
+            snprintf(valstr, len, "%u", *ptr);
+            break;
+    }
+    return valstr;
+}
+
+static char *stringify_eps_cause(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = (uint8_t *)item->valptr;
+
+    switch(*ptr) {
+        case 13:
+            strncpy(valstr, "Network Failure", len);
+            break;
+        case 16:
+            strncpy(valstr, "Request Accepted", len);
+            break;
+        case 64:
+            strncpy(valstr, "Context Not Found", len);
+            break;
+        case 65:
+            strncpy(valstr, "Invalid Message Format", len);
+            break;
+        case 67:
+            strncpy(valstr, "Invalid Length", len);
+            break;
+        case 66:
+            strncpy(valstr, "Version not supported by next peer", len);
+            break;
+        case 72:
+            strncpy(valstr, "System Failure", len);
+            break;
+        case 68:
+            strncpy(valstr, "Service not supported", len);
+            break;
+        case 69:
+            strncpy(valstr, "Mandatory IE incorrect", len);
+            break;
+        case 70:
+            strncpy(valstr, "Mandatory IE missing", len);
+            break;
+        case 94:
+            strncpy(valstr, "Request rejected (reason not specified)", len);
+            break;
+        case 110:
+            strncpy(valstr, "Temporarily rejected due to handover procedure in progress", len);
+            break;
+        default:
+            snprintf(valstr, len, "%u", *ptr);
+            break;
+    }
+    return valstr;
+}
+
+static char *stringify_eps_ambr(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint32_t *uplink, *downlink;
+
+    if (item->length < 8) {
+        strncpy(valstr, "INVALID", len);
+        return valstr;
+    }
+
+    uplink = (uint32_t *)item->valptr;
+    downlink = uplink + 1;
+
+    snprintf(valstr, len, "Uplink=%u  Downlink=%u", ntohl(*uplink),
+            ntohl(*downlink));
+    return valstr;
+}
+
 static char *stringify_3gimei(wandder_etsispec_t *etsidec,
         wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
 
@@ -1625,6 +1782,97 @@ static char *stringify_sequenced_primitives(char *sequence_name,
 
     return space;
 
+}
+
+static char *stringify_eps_rat_type(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = item->valptr;
+
+    if (len <= 0 || valstr == NULL) {
+        return NULL;
+    }
+    memset(valstr, 0, len);
+
+    if (item->length < 1) {
+        return NULL;
+    }
+
+    switch(*ptr) {
+        case 1:
+            strncpy(valstr, "UTRAN", len);
+            break;
+        case 2:
+            strncpy(valstr, "GERAN", len);
+            break;
+        case 3:
+            strncpy(valstr, "WLAN", len);
+            break;
+        case 4:
+            strncpy(valstr, "GAN", len);
+            break;
+        case 5:
+            strncpy(valstr, "HSPA Evolution", len);
+            break;
+        case 6:
+            strncpy(valstr, "EUTRAN", len);
+            break;
+        case 7:
+            strncpy(valstr, "Virtual", len);
+            break;
+        case 8:
+            strncpy(valstr, "EUTRAN-NB-IoT", len);
+            break;
+        case 9:
+            strncpy(valstr, "LTE-M", len);
+            break;
+        case 10:
+            strncpy(valstr, "NR", len);
+            break;
+        default:
+            snprintf(valstr, len, "Unknown RAT Type: %u\n", *ptr);
+            break;
+    }
+
+    return valstr;
+}
+
+
+static char *stringify_eps_attach_type(wandder_etsispec_t *etsidec,
+        wandder_item_t *item, wandder_dumper_t *curr, char *valstr, int len) {
+
+    uint8_t *ptr = item->valptr;
+    uint8_t epsval = (*ptr) & 0x07;
+
+    if (len <= 0 || valstr == NULL) {
+        return NULL;
+    }
+    memset(valstr, 0, len);
+
+    if (item->length != 1) {
+        return NULL;
+    }
+    switch(epsval) {
+        case 1:
+            strncpy(valstr, "EPS Attach", len);
+            break;
+        case 2:
+            strncpy(valstr, "Combined EPS/IMSI Attach", len);
+            break;
+        case 3:
+            strncpy(valstr, "EPS RLOS Attach", len);
+            break;
+        case 6:
+            strncpy(valstr, "EPS Emergency Attach", len);
+            break;
+        case 7:
+            strncpy(valstr, "(reserved)", len);
+            break;
+        default:
+            strncpy(valstr, "EPS Attach (defaulted)", len);
+    }
+
+    return valstr;
 }
 
 static char *stringify_uli(wandder_etsispec_t *etsidec,
@@ -2311,7 +2559,8 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    else if (item->identifier == 4 && curr == &(etsidec->umtsiri_params)) {
+    else if (item->identifier == 4 && (curr == &(etsidec->umtsiri_params) ||
+                curr == &(etsidec->epsiri_params))) {
         /* initiator for uMTSIRI */
         switch(enumval) {
             case 0:
@@ -2605,7 +2854,224 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 name = "part1";
                 break;
         }
+    } else if (item->identifier == 20 && curr == &(etsidec->epsiri_params)) {
+        /* ePSEvent */
+        switch(enumval) {
+            case 1:
+                name = "pDPContextActivation";
+                break;
+            case 2:
+                name = "startOfInterceptionWithPDPContextActive";
+                break;
+            case 4:
+                name = "pDPContextDeactivation";
+                break;
+            case 5:
+                name = "gPRSAttach";
+                break;
+            case 6:
+                name = "gPRSDetach";
+                break;
+            case 10:
+                name = "locationInfoUpdate";
+                break;
+            case 11:
+                name = "sMS";
+                break;
+            case 13:
+                name = "pDPContextModification";
+                break;
+            case 14:
+                name = "servingSystem";
+                break;
+            case 15:
+                name = "startofInterceptionWithMSAttached";
+                break;
+            case 16:
+                name = "e-UTRANAttach";
+                break;
+            case 17:
+                name = "e-UTRANDetach";
+                break;
+            case 18:
+                name = "bearerActivation";
+                break;
+            case 19:
+                name = "startOfInterceptionWithActiveBearer";
+                break;
+            case 20:
+                name = "bearerModification";
+                break;
+            case 21:
+                name = "bearerDeactivation";
+                break;
+            case 22:
+                name = "uERequestedBearerResourceModification";
+                break;
+            case 23:
+                name = "uERequestedPDNConnectivity";
+                break;
+            case 24:
+                name = "uERequestedPDNDisconnection";
+                break;
+            case 25:
+                name = "trackingAreaEpsLocationUpdate";
+                break;
+            case 26:
+                name = "servingEvolvedPacketSystem";
+                break;
+            case 27:
+                name = "pMIPAttachTunnelActivation";
+                break;
+            case 28:
+                name = "pMIPDetachTunnelDeactivation";
+                break;
+            case 29:
+                name = "startOfInterceptionWithActivePMIPTunnel";
+                break;
+            case 30:
+                name = "pMIPPdnGwInitiatedPdnDisconnection";
+                break;
+            case 31:
+                name = "mIPRegistrationTunnelActivation";
+                break;
+            case 32:
+                name = "mIPDeregistrationTunnelDeactivation";
+                break;
+            case 33:
+                name = "startOfInterceptionWithActiveMIPTunnel";
+                break;
+            case 34:
+                name = "dSMIPRegistrationTunnelActivation";
+                break;
+            case 35:
+                name = "dSMIPDeregistrationTunnelDeactivation";
+                break;
+            case 36:
+                name = "startOfInterceptionWithActiveDsmipTunnel";
+                break;
+            case 37:
+                name = "dSMipHaSwitch";
+                break;
+            case 38:
+                name = "pMIPResourceAllocationDeactivation";
+                break;
+            case 39:
+                name = "mIPResourceAllocationDeactivation";
+                break;
+            case 40:
+                name = "pMIPsessionModification";
+                break;
+            case 41:
+                name = "startOfInterceptionWithEUTRANAttachedUE";
+                break;
+            case 42:
+                name = "dSMIPSessionModification";
+                break;
+            case 43:
+                name = "packetDataHeaderInformation";
+                break;
+            case 44:
+                name = "hSS-Subscriber-Record-Change";
+                break;
+            case 45:
+                name = "registration-Termination";
+                break;
+            case 46:
+                name = "location-Up-Date";
+                break;
+            case 47:
+                name = "cancel-Location";
+                break;
+            case 48:
+                name = "register-Location";
+                break;
+            case 49:
+                name = "location-Information-Request";
+                break;
+            case 50:
+                name = "proSeRemoteUEReport";
+                break;
+            case 51:
+                name = "proSeRemoteUEStartOfCommunication";
+                break;
+            case 52:
+                name = "proSeRemoteUEEndOfCommunication";
+                break;
+            case 53:
+                name = "startOfLIwithProSeRemoteUEOngoingComm";
+                break;
+            case 54:
+                name = "startOfLIforProSeUEtoNWRelay";
+                break;
+            case 55:
+                name = "scefRequestednonIPPDNDisconnection";
+                break;
+
+        }
+    } else if (item->identifier == 29 && curr == &(etsidec->epsiri_params)) {
+        /* iMSEvent */
+        switch(enumval) {
+            case 1:
+                name = "unfilteredSIPmessage";
+                break;
+            case 2:
+                name = "sIPheaderOnly";
+                break;
+            case 3:
+                name = "decryptionKeysAvailable";
+                break;
+            case 4:
+                name = "startOfInterceptionForIMSEstablishedSession";
+                break;
+            case 5:
+                name = "xCAPRequest";
+                break;
+            case 6:
+                name = "xCAPResponse";
+                break;
+            case 7:
+                name = "ccUnavailable";
+                break;
+            case 8:
+                name = "sMSOverIMS";
+                break;
+            case 9:
+                name = "servingSystem";
+                break;
+            case 10:
+                name = "subscriberRecordChange";
+                break;
+            case 11:
+                name = "registrationTermination";
+                break;
+            case 12:
+                name = "locationInformationRequest";
+                break;
+        }
+    } else if (item->identifier == 34 && curr == &(etsidec->epsiri_params)) {
+        /* ldiEvent */
+        switch(enumval) {
+            case 1:
+                name = "targetEntersIA";
+                break;
+            case 2:
+                name = "targetLeavesIA";
+                break;
+        }
+    } else if ((item->identifier == 10 || item->identifier == 21)
+            && curr == &(etsidec->eps_gtpv2_params)) {
+        /* typeOfBearer */
+        switch(enumval) {
+            case 1:
+                name = "defaultBearer";
+                break;
+            case 2:
+                name = "dedicatedBearer";
+                break;
+        }
     }
+
 
 
     if (name != NULL) {
@@ -2664,6 +3130,11 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->aaainformation.members);
     free(dec->pop3aaainformation.members);
     free(dec->asmtpaaainformation.members);
+    free(dec->epsiri.members);
+    free(dec->epsiri_params.members);
+    free(dec->umtsqos.members);
+    free(dec->eps_protconfigoptions.members);
+    free(dec->eps_gtpv2_params.members);
     free(dec->umtsiri.members);
     free(dec->umtsiri_params.members);
     free(dec->iricontents.members);
@@ -2677,6 +3148,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
 }
 
 static void init_dumpers(wandder_etsispec_t *dec) {
+
+    size_t i;
 
     dec->ipvalue.membercount = 3;
     ALLOC_MEMBERS(dec->ipvalue);
@@ -3803,6 +4276,330 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_NULL
         };
 
+    dec->umtsqos.membercount = 3;
+    ALLOC_MEMBERS(dec->umtsqos);
+    dec->umtsqos.sequence = WANDDER_NOACTION;
+
+    dec->umtsqos.members[0] = WANDDER_NOACTION;
+    dec->umtsqos.members[1] =
+        (struct wandder_dump_action) {
+                .name = "qosMobileRadio",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->umtsqos.members[2] =
+        (struct wandder_dump_action) {
+                .name = "qosGn",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+    dec->eps_protconfigoptions.membercount = 3;
+    ALLOC_MEMBERS(dec->eps_protconfigoptions);
+    dec->eps_protconfigoptions.sequence = WANDDER_NOACTION;
+
+    dec->eps_protconfigoptions.members[0] = WANDDER_NOACTION;
+    dec->eps_protconfigoptions.members[1] =
+        (struct wandder_dump_action) {
+                .name = "ueToNetwork",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+    dec->eps_protconfigoptions.members[2] =
+        (struct wandder_dump_action) {
+                .name = "networkToUe",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+
+    dec->eps_gtpv2_params.membercount = 36;
+    ALLOC_MEMBERS(dec->eps_gtpv2_params);
+    dec->eps_gtpv2_params.sequence = WANDDER_NOACTION;
+
+    for (i = 0; i < dec->eps_gtpv2_params.membercount; i++) {
+        dec->eps_gtpv2_params.members[i] = WANDDER_NOACTION;
+    }
+
+    dec->eps_gtpv2_params.members[1] =
+        (struct wandder_dump_action) {
+                .name = "pDNAddressAllocation",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+
+    dec->eps_gtpv2_params.members[2] =
+        (struct wandder_dump_action) {
+                .name = "aPN",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_DOMAIN_NAME
+        };
+
+    dec->eps_gtpv2_params.members[3] =
+        (struct wandder_dump_action) {
+                .name = "protConfigOptions",
+                .descend = &(dec->eps_protconfigoptions),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->eps_gtpv2_params.members[4] =
+        (struct wandder_dump_action) {
+                .name = "attachType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_ATTACH_TYPE
+        };
+
+    dec->eps_gtpv2_params.members[5] =
+        (struct wandder_dump_action) {
+                .name = "ePSBearerIdentity",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+
+    dec->eps_gtpv2_params.members[6] =
+        (struct wandder_dump_action) {
+                .name = "detachType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+
+    dec->eps_gtpv2_params.members[7] =
+        (struct wandder_dump_action) {
+                .name = "rATType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_RAT_TYPE
+        };
+
+    dec->eps_gtpv2_params.members[8] =
+        (struct wandder_dump_action) {
+                .name = "failedBearerActivationReason",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_CAUSE
+        };
+
+    dec->eps_gtpv2_params.members[9] =
+        (struct wandder_dump_action) {
+                .name = "ePSBearerQoS",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+
+    dec->eps_gtpv2_params.members[10] =
+        (struct wandder_dump_action) {
+                .name = "bearerActivationType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+
+    dec->eps_gtpv2_params.members[11] =
+        (struct wandder_dump_action) {
+                .name = "aPN-AMBR",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_APN_AMBR
+        };
+
+    dec->eps_gtpv2_params.members[13] =
+        (struct wandder_dump_action) {
+                .name = "linkedEPSBearerId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+
+    dec->eps_gtpv2_params.members[16] =
+        (struct wandder_dump_action) {
+                .name = "failedBearerModificationReason",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_CAUSE
+        };
+
+    dec->eps_gtpv2_params.members[21] =
+        (struct wandder_dump_action) {
+                .name = "bearerDeactivationType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+
+    dec->eps_gtpv2_params.members[22] =
+        (struct wandder_dump_action) {
+                .name = "bearerDeactivationCause",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_CAUSE
+        };
+
+    dec->eps_gtpv2_params.members[23] =
+        (struct wandder_dump_action) {
+                .name = "ePSlocationOfTheTarget",
+                .descend = &(dec->epslocation),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->eps_gtpv2_params.members[24] =
+        (struct wandder_dump_action) {
+                .name = "pDNType",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_EPS_PDN_TYPE
+        };
+
+
+    /* TODO eps_gtpv2_params.members */
+
+    /* Most of these are unused */
+    dec->epsiri_params.membercount = 256;
+    ALLOC_MEMBERS(dec->epsiri_params);
+    dec->epsiri_params.sequence = WANDDER_NOACTION;
+
+    for (i = 0; i < dec->epsiri_params.membercount; i++) {
+        dec->epsiri_params.members[i] = WANDDER_NOACTION;
+    }
+
+    dec->epsiri_params.members[0] =
+        (struct wandder_dump_action) {
+                .name = "hi2epsDomainId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OID
+        };
+
+    dec->epsiri_params.members[1] =
+        (struct wandder_dump_action) {
+                .name = "lawfulInterceptionIdentifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+    dec->epsiri_params.members[3] =
+        (struct wandder_dump_action) {
+                .name = "timeStamp",
+                .descend = &dec->timestamp,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->epsiri_params.members[4] =
+        (struct wandder_dump_action) {
+                .name = "initiator",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+
+    dec->epsiri_params.members[8] =
+        (struct wandder_dump_action) {
+                .name = "locationOfTheTarget",
+                .descend = &dec->location,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->epsiri_params.members[9] =
+        (struct wandder_dump_action) {
+                .name = "partyInformation",
+                .descend = &dec->partyinfo,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->epsiri_params.members[13] =
+        (struct wandder_dump_action) {
+                .name = "serviceCenterAddress",
+                .descend = &dec->partyinfo,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    dec->epsiri_params.members[18] =
+        (struct wandder_dump_action) {
+                .name = "ePSCorrelationNumber",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+
+    dec->epsiri_params.members[20] =
+        (struct wandder_dump_action) {
+                .name = "ePSevent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+
+    dec->epsiri_params.members[21] =
+        (struct wandder_dump_action) {
+                .name = "sgsnAddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epsiri_params.members[22] =
+        (struct wandder_dump_action) {
+                .name = "gPRSOperationErrorCode",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_3G_SM_CAUSE
+        };
+    dec->epsiri_params.members[24] =
+        (struct wandder_dump_action) {
+                .name = "ggsnAddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epsiri_params.members[25] =
+        (struct wandder_dump_action) {
+                .name = "qOS",
+                .descend = &(dec->umtsqos),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epsiri_params.members[26] =
+        (struct wandder_dump_action) {
+                .name = "networkIdentifier",
+                .descend = &(dec->networkidentifier),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epsiri_params.members[27] =
+        (struct wandder_dump_action) {
+                .name = "sMSOriginatingAddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epsiri_params.members[28] =
+        (struct wandder_dump_action) {
+                .name = "sMSTerminatingAddress",
+                .descend = &(dec->datanodeaddress),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epsiri_params.members[29] =
+        (struct wandder_dump_action) {
+                .name = "iMSevent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->epsiri_params.members[30] =
+        (struct wandder_dump_action) {
+                .name = "sIPMessage",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->epsiri_params.members[31] =
+        (struct wandder_dump_action) {
+                .name = "servingSGSN-number",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->epsiri_params.members[32] =
+        (struct wandder_dump_action) {
+                .name = "servingSGSN-address",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->epsiri_params.members[34] =
+        (struct wandder_dump_action) {
+                .name = "ldiEvent",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->epsiri_params.members[35] = WANDDER_NOACTION;      // correlation
+    dec->epsiri_params.members[36] =
+        (struct wandder_dump_action) {
+                .name = "ePS-GTPV2-specificParameters",
+                .descend = &(dec->eps_gtpv2_params),
+                .interpretas = WANDDER_TAG_NULL
+        };
+
+    /* TODO the rest of these members -- OpenLI doesn't need them so
+     * can't justify spending too much time on them right now...
+     */
+
+
+
     dec->umtsiri_params.membercount = 60;
     ALLOC_MEMBERS(dec->umtsiri_params);
     dec->umtsiri_params.sequence = WANDDER_NOACTION;
@@ -4101,6 +4898,17 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->umtsiri.members[2] = WANDDER_NOACTION;
     dec->umtsiri.members[3] = WANDDER_NOACTION;
 
+    dec->epsiri.membercount = 2;
+    ALLOC_MEMBERS(dec->epsiri);
+    dec->epsiri.sequence = WANDDER_NOACTION;
+    dec->epsiri.members[0] =
+        (struct wandder_dump_action) {
+                .name = "iRI-EPS-Parameters",
+                .descend = &(dec->epsiri_params),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epsiri.members[1] = WANDDER_NOACTION;      // TODO ?
+
     dec->emailcc.membercount = 3;
     ALLOC_MEMBERS(dec->emailcc);
     dec->emailcc.sequence =WANDDER_NOACTION;
@@ -4323,7 +5131,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->asmtpaaainformation.sequence = WANDDER_NOACTION;
 
-    dec->iricontents.membercount = 16;
+    dec->iricontents.membercount = 20;
     ALLOC_MEMBERS(dec->iricontents);
     dec->iricontents.members[0] = WANDDER_NOACTION;
     dec->iricontents.members[1] =
@@ -4360,7 +5168,16 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->iricontents.members[12] = WANDDER_NOACTION;
     dec->iricontents.members[13] = WANDDER_NOACTION;
     dec->iricontents.members[14] = WANDDER_NOACTION;
-    dec->iricontents.members[15] = WANDDER_NOACTION;
+    dec->iricontents.members[15] =
+        (struct wandder_dump_action) {
+                .name = "ePSIRI",
+                .descend = &dec->epsiri,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->iricontents.members[16] = WANDDER_NOACTION;
+    dec->iricontents.members[17] = WANDDER_NOACTION;
+    dec->iricontents.members[18] = WANDDER_NOACTION;
+    dec->iricontents.members[19] = WANDDER_NOACTION;
     dec->iricontents.sequence = WANDDER_NOACTION;
 
 
