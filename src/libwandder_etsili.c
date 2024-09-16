@@ -66,6 +66,8 @@ const uint8_t etsi_umtsirioid[9] =
         {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x01, 0x0f, 0x05};
 const uint8_t etsi_epsirioid[9] =
         {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x08, 0x11, 0x00};
+const uint8_t etsi_epsccoid[9] =
+        {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x09, 0x11, 0x00};
 
 static void init_dumpers(wandder_etsispec_t *dec);
 static void free_dumpers(wandder_etsispec_t *dec);
@@ -904,7 +906,7 @@ static uint8_t *internal_get_cc_contents(wandder_etsispec_t *etsidec,
     uint8_t *vp = NULL;
     int tgtcount;
     wandder_found_t *found = NULL;
-    wandder_target_t cctgts[5];
+    wandder_target_t cctgts[6];
     wandder_dumper_t *startpoint;
 
     if (etsidec->decstate == 0) {
@@ -931,18 +933,22 @@ static uint8_t *internal_get_cc_contents(wandder_etsispec_t *etsidec,
     cctgts[3].itemid = 2;
     cctgts[3].found = false;
 
+    cctgts[4].parent = &etsidec->epscc;
+    cctgts[4].itemid = 2;
+    cctgts[4].found = false;
+
     if (dec == etsidec->dec) {
         /* Also look for encrypted payload */
-        tgtcount = 5;
-        cctgts[4].parent = &etsidec->payload;
-        cctgts[4].itemid = 4;
-        cctgts[4].found = false;
+        tgtcount = 6;
+        cctgts[5].parent = &etsidec->payload;
+        cctgts[5].itemid = 4;
+        cctgts[5].found = false;
         startpoint = &(etsidec->root);
     } else if (dec == etsidec->decrypt_dec) {
-        tgtcount = 4;
+        tgtcount = 5;
         startpoint = &(etsidec->encryptedpayloadroot);
     } else {
-        tgtcount = 4;
+        tgtcount = 5;
         startpoint = &(etsidec->root);
     }
 
@@ -966,6 +972,9 @@ static uint8_t *internal_get_cc_contents(wandder_etsispec_t *etsidec,
             strncpy(name, etsidec->emailcc.members[2].name, namelen);
             wandder_etsili_get_email_format(etsidec, dec, startpoint);
         } else if (found->list[0].targetid == 4) {
+            strncpy(name, etsidec->epscc.members[2].name, namelen);
+            etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
+        } else if (found->list[0].targetid == 5) {
             if (decrypt_encryption_container(etsidec, found->list[0].item)) {
                 return internal_get_cc_contents(etsidec, etsidec->decrypt_dec,
                         len, name, namelen);
@@ -3072,9 +3081,42 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 name = "dedicatedBearer";
                 break;
         }
+    } else if (item->identifier == 6 && curr == &(etsidec->ulic_header)) {
+        /* TPDU-direction */
+        switch(enumval) {
+            case 1:
+                name = "from-target";
+                break;
+            case 2:
+                name = "to-target";
+                break;
+            case 3:
+                name = "unknown";
+                break;
+        }
+    } else if (item->identifier == 8 && curr == &(etsidec->ulic_header)) {
+        /* ICE-type */
+        switch(enumval) {
+            case 1:
+                name = "sgsn";
+                break;
+            case 2:
+                name = "ggsn";
+                break;
+            case 3:
+                name = "s-GW";
+                break;
+            case 4:
+                name = "pDN-GW";
+                break;
+            case 5:
+                name = "colocated-SAE-GWs";
+                break;
+            case 6:
+                name = "ePDG";
+                break;
+        }
     }
-
-
 
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
@@ -3102,6 +3144,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->ipcccontents.members);
     free(dec->ipmmcc.members);
     free(dec->ipcc.members);
+    free(dec->epscc.members);
+    free(dec->ulic_header.members);
     free(dec->netelid.members);
     free(dec->linetid.members);
     free(dec->networkidentifier.members);
@@ -3531,6 +3575,71 @@ static void init_dumpers(wandder_etsispec_t *dec) {
         };
     dec->ipcc.sequence = WANDDER_NOACTION;
 
+    dec->epscc.membercount = 3;
+    ALLOC_MEMBERS(dec->epscc);
+    dec->epscc.members[0] = WANDDER_NOACTION;
+    dec->epscc.members[1] =
+        (struct wandder_dump_action) {
+                .name = "uLIC-header",
+                .descend = &dec->ulic_header,
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->epscc.members[2] =
+        (struct wandder_dump_action) {
+                .name = "payload",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_IPPACKET
+        };
+
+    dec->ulic_header.membercount = 9;
+    ALLOC_MEMBERS(dec->ulic_header);
+
+    dec->ulic_header.members[0] =
+        (struct wandder_dump_action) {
+                .name = "hi3DomainId",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OID
+        };
+    dec->ulic_header.members[1] = WANDDER_NOACTION;
+    dec->ulic_header.members[2] =
+        (struct wandder_dump_action) {
+                .name = "lIID",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->ulic_header.members[3] =
+        (struct wandder_dump_action) {
+                .name = "correlation-Number",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_OCTETSTRING
+        };
+    dec->ulic_header.members[4] =
+        (struct wandder_dump_action) {
+                .name = "timeStamp",
+                .descend = &(dec->timestamp),
+                .interpretas = WANDDER_TAG_NULL
+        };
+    dec->ulic_header.members[5] =
+        (struct wandder_dump_action) {
+                .name = "sequence-number",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_INTEGER
+        };
+    dec->ulic_header.members[6] =
+        (struct wandder_dump_action) {
+                .name = "t-PDU-direction",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    // TODO nationalHI3ASN1Parameters
+    dec->ulic_header.members[7] = WANDDER_NOACTION;
+    dec->ulic_header.members[8] =
+        (struct wandder_dump_action) {
+                .name = "ice-type",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+
     dec->ipmmcc.membercount = 5;
     ALLOC_MEMBERS(dec->ipmmcc);
 
@@ -3758,7 +3867,12 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->cccontents.members[14] = WANDDER_NOACTION;
     dec->cccontents.members[15] = WANDDER_NOACTION;
     dec->cccontents.members[16] = WANDDER_NOACTION;
-    dec->cccontents.members[17] = WANDDER_NOACTION;
+    dec->cccontents.members[17] =
+        (struct wandder_dump_action) {
+                .name = "ePSCC",
+                .descend = &dec->epscc,
+                .interpretas = WANDDER_TAG_NULL
+        };
     dec->cccontents.members[18] = WANDDER_NOACTION;
     dec->cccontents.sequence = WANDDER_NOACTION;
 
