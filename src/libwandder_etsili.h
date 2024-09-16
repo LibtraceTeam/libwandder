@@ -44,6 +44,7 @@ extern const uint8_t etsi_ipccoid[4];
 extern const uint8_t etsi_ipmmccoid[4];
 extern const uint8_t etsi_epsirioid[9];
 extern const uint8_t etsi_umtsirioid[9];
+extern const uint8_t etsi_epsccoid[9];
 
 typedef struct wandder_etsistack {
 
@@ -105,6 +106,8 @@ typedef struct wandder_etsispec {
     wandder_dumper_t pspdu;
     wandder_dumper_t ipmmcc;
     wandder_dumper_t ipcc;
+    wandder_dumper_t epscc;
+    wandder_dumper_t ulic_header;
     wandder_dumper_t ipcccontents;
     wandder_dumper_t iripayloadseq;
     wandder_dumper_t hi1operation;
