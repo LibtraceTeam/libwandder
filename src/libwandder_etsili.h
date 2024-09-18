@@ -38,13 +38,13 @@
 #define ENDCONSTRUCTEDBLOCK(ptr,num) memset(ptr, 0, num*2);ptr+=num*2;
 
 extern const uint8_t etsi_lipsdomainid[8];
-extern const uint8_t etsi_ipmmirioid[4];
-extern const uint8_t etsi_ipirioid[4];
-extern const uint8_t etsi_ipccoid[4];
-extern const uint8_t etsi_ipmmccoid[4];
-extern const uint8_t etsi_epsirioid[9];
-extern const uint8_t etsi_umtsirioid[9];
-extern const uint8_t etsi_epsccoid[9];
+extern const uint8_t wandder_etsi_ipmmirioid[4];
+extern const uint8_t wandder_etsi_ipirioid[4];
+extern const uint8_t wandder_etsi_ipccoid[4];
+extern const uint8_t wandder_etsi_ipmmccoid[4];
+extern const uint8_t wandder_etsi_epsirioid[9];
+extern const uint8_t wandder_etsi_umtsirioid[9];
+extern const uint8_t wandder_etsi_epsccoid[9];
 
 typedef struct wandder_etsistack {
 
