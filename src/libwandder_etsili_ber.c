@@ -472,36 +472,36 @@ static wandder_buf_t ** wandder_etsili_preencode_static_fields_ber(
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
-            (uint8_t *)etsi_ipmmirioid, 
-            sizeof etsi_ipmmirioid);
+            (uint8_t *)wandder_etsi_ipmmirioid, 
+            sizeof wandder_etsi_ipmmirioid);
 
     pendarray[WANDDER_PREENCODE_IPCCOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
-            (uint8_t *)etsi_ipccoid, 
-            sizeof etsi_ipccoid);
+            (uint8_t *)wandder_etsi_ipccoid, 
+            sizeof wandder_etsi_ipccoid);
 
     pendarray[WANDDER_PREENCODE_IPIRIOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
-            (uint8_t *)etsi_ipirioid, 
-            sizeof etsi_ipirioid);
+            (uint8_t *)wandder_etsi_ipirioid, 
+            sizeof wandder_etsi_ipirioid);
 
     pendarray[WANDDER_PREENCODE_UMTSIRIOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_OID,
-            (uint8_t *)etsi_umtsirioid, 
-            sizeof etsi_umtsirioid);
+            (uint8_t *)wandder_etsi_umtsirioid, 
+            sizeof wandder_etsi_umtsirioid);
 
     pendarray[WANDDER_PREENCODE_IPMMCCOID] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
             0,
             WANDDER_TAG_RELATIVEOID,
-            (uint8_t *)etsi_ipmmccoid, 
-            sizeof etsi_ipmmccoid);
+            (uint8_t *)wandder_etsi_ipmmccoid, 
+            sizeof wandder_etsi_ipmmccoid);
 
     pendarray[WANDDER_PREENCODE_DIRFROM] =  wandder_encode_new_ber( 
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 
