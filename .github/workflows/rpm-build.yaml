@@ -54,7 +54,7 @@ jobs:
            - "rockylinux:8"
            - "rockylinux:9"
            - "fedora:39"
-           - "fedora:38"
+           - "fedora:40"
      needs: build
      steps:
        - name: Set environment variables for download
@@ -95,7 +95,7 @@ jobs:
            - "rockylinux:8"
            - "rockylinux:9"
            - "fedora:39"
-           - "fedora:38"
+           - "fedora:40"
      needs: test
      steps:
        - name: Set environment variables for download
