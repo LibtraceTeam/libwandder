@@ -17,7 +17,6 @@ jobs:
            - amd64
          target:
            - "debian:bookworm"
-           - "debian:buster"
            - "debian:bullseye"
            - "ubuntu:focal"
            - "ubuntu:jammy"
@@ -53,7 +52,6 @@ jobs:
          arch:
            - amd64
          target:
-           - "debian:buster"
            - "debian:bullseye"
            - "ubuntu:focal"
            - "ubuntu:jammy"
@@ -93,7 +91,6 @@ jobs:
          arch:
            - amd64
          target:
-           - "debian:buster"
            - "debian:bullseye"
            - "debian:bookworm"
            - "ubuntu:focal"
