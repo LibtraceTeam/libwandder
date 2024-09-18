@@ -4,6 +4,7 @@ libwandder2 (2.0.13-1) unstable; urgency=medium
   * Fix bad encoding and decoding of elements that have an
     identifier > 30.
   * Move BER code into its own separate file and header.
+  * Add public definitions for more ETSI OIDs into libwandder_etsili.h
 
  -- Shane Alcock <shane@alcock.co.nz>  Wed, 18 Sep 2024 12:03:16 +1200
 

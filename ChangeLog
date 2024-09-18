@@ -4,6 +4,7 @@ Version 2.0.13
   * Fix bug when encoding and decoding elements with an identifier
     larger than 30
   * Move BER code into its own separate file and header
+  * Add public definitions for more ETSI OIDs into libwandder_etsili.h
 
 Version 2.0.12
 ===============
