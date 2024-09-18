@@ -1,3 +1,9 @@
+Version 2.0.13
+==============
+  * ETSILI: add support for decoding EPSIRIs and EPSCCs
+  * Fix bug when encoding and decoding elements with an identifier
+    larger than 30
+
 Version 2.0.12
 ===============
   * ETSILI: fix incorrect decoding of userLocationInformation
