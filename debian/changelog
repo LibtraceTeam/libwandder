@@ -3,6 +3,7 @@ libwandder2 (2.0.13-1) unstable; urgency=medium
   * ETSILI: add decoding support for EPSIRIs and EPSCCs
   * Fix bad encoding and decoding of elements that have an
     identifier > 30.
+  * Move BER code into its own separate file and header.
 
  -- Shane Alcock <shane@alcock.co.nz>  Wed, 18 Sep 2024 12:03:16 +1200
 
