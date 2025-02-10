@@ -284,6 +284,64 @@ uint8_t wandder_etsili_get_cc_format(wandder_etsispec_t *etsidec) {
     return etsidec->ccformat;
 }
 
+static uint8_t wandder_etsili_get_ipmmcc_format(wandder_etsispec_t *etsidec,
+        wandder_decoder_t *dec, wandder_dumper_t *startpoint) {
+    wandder_found_t *found = NULL;
+    wandder_target_t tgt;
+    uint8_t *vp = NULL;
+
+    if (etsidec->decstate == 0) {
+        fprintf(stderr, "No buffer attached to this decoder -- please call"
+                "wandder_attach_etsili_buffer() first!\n");
+        return 0;
+    }
+
+    /* We already know the format from earlier decoding work, so just use
+     * that. This should be the most common case...
+     */
+    if (etsidec->ccformat != 0) {
+        return etsidec->ccformat;
+    }
+
+    wandder_reset_decoder(dec);
+    tgt.parent = &etsidec->ipmmcc;
+    tgt.itemid = 2;
+    tgt.found = false;
+
+    if (wandder_search_items(dec, 0, startpoint, &tgt, 1, &found, 1) > 0) {
+        int64_t val;
+        uint32_t len;
+
+        len = found->list[0].item->length;
+        vp = found->list[0].item->valptr;
+        if (found->list[0].targetid == 0) {
+            val = wandder_decode_integer_value(vp, len);
+            switch(val) {
+                case 0:
+                    etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
+                    break;
+                case 1:
+                    etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_UDP;
+                    break;
+                case 2:
+                case 5:
+                    etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_RTP;
+                    break;
+                case 4:
+                    etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_TCP;
+                    break;
+                /* TODO one day we might care about MSRP or UDPTL */
+                default:
+                    etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_UNKNOWN;
+            }
+
+        }
+        wandder_free_found(found);
+    }
+
+    return etsidec->ccformat;
+}
+
 static uint8_t wandder_etsili_get_email_format(wandder_etsispec_t *etsidec,
         wandder_decoder_t *dec, wandder_dumper_t *startpoint) {
     wandder_found_t *found = NULL;
@@ -964,7 +1022,7 @@ static uint8_t *internal_get_cc_contents(wandder_etsispec_t *etsidec,
             etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
         } else if (found->list[0].targetid == 1) {
             strncpy(name, etsidec->ipmmcc.members[1].name, namelen);
-            etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
+            wandder_etsili_get_ipmmcc_format(etsidec, dec, startpoint);
         } else if (found->list[0].targetid == 2) {
             strncpy(name, etsidec->cccontents.members[4].name, namelen);
             etsidec->ccformat = WANDDER_ETSILI_CC_FORMAT_IP;
