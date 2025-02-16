@@ -1,3 +1,11 @@
+libwandder2 (2.0.14-1) unstable; urgency=medium
+
+  * ETSILI: wandder_etsili_get_cc_format() now returns the appropriate
+    TCP, UDP or RTP format identifiers for CCs that contain these payload
+    types.
+
+ -- Shane Alcock <shane@alcock.co.nz>  Mon, 17 Feb 2025 11:31:41 +1300
+
 libwandder2 (2.0.13-1) unstable; urgency=medium
 
   * ETSILI: add decoding support for EPSIRIs and EPSCCs
