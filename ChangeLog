@@ -1,3 +1,9 @@
+Version 2.0.14
+==============
+  * ETSILI: wandder_etsili_get_cc_format() can now return the appropriate
+    TCP, UDP or RTP format identifiers for CCs that contain these payload
+	types.
+
 Version 2.0.13
 ==============
   * ETSILI: add support for decoding EPSIRIs and EPSCCs
