@@ -86,6 +86,11 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
         wandder_reset_decoder(dec);
         free_cached_items(dec->cacheditems, dec->item_handler);
         dec->cacheditems = NULL;
+        if (dec->ownsource && dec->source) {
+            free(dec->source);
+            dec->source = NULL;
+            dec->ownsource = false;
+        }
     } else {
         dec = (wandder_decoder_t *)malloc(sizeof(wandder_decoder_t));
         dec->toplevel = NULL;
