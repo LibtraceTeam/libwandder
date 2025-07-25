@@ -468,6 +468,13 @@ static inline void save_value_to_encode(wandder_encode_job_t *job, void *valptr,
         uint32_t vallen) {
 
     switch(job->encodeas) {
+        case WANDDER_TAG_ALREADY_ENCODED:
+            VALALLOC(vallen, job);
+            memcpy(job->valspace, valptr, vallen);
+            job->vallen = vallen;
+            job->preamblen = 0;
+            break;
+
         case WANDDER_TAG_OCTETSTRING:
         case WANDDER_TAG_UTF8STR:
         case WANDDER_TAG_NUMERIC:
@@ -713,6 +720,18 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
         uint32_t *rem) {
     uint32_t ret;
     uint32_t tot = 0;
+
+/*
+    printf("pending: %u %u %u %u  %u %u %u (%u)\n", p->thisjob.identclass,
+            p->thisjob.identifier, p->thisjob.encodeas,
+            p->thisjob.preamblen, p->childrensize, p->thisjob.vallen,
+            p->thisjob.encodedlen, *rem);
+*/
+
+    if (p->thisjob.identclass == WANDDER_CLASS_ALREADY_ENCODED) {
+        goto savevalue;
+    }
+
     if (p->thisjob.identifier <= 30 &&
             p->thisjob.identclass != WANDDER_CLASS_UNKNOWN) {
         ret = encode_identifier_fast(p->thisjob.identclass,
@@ -744,6 +763,7 @@ static inline uint32_t encode_pending(wandder_pend_t *p, uint8_t **buf,
     *rem -= ret;
     tot += ret;
 
+savevalue:
     if (p->thisjob.vallen > 0) {
         if (*rem < p->thisjob.vallen) {
             fprintf(stderr,
