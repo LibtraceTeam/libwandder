@@ -65,7 +65,7 @@ jobs:
          env:
            TARGET: ${{ matrix.target }}
          run: |
-           if [[ "${TARGET}" =~ rocky* ]]; then
+           if [[ "${TARGET}" =~ alma* ]]; then
                dnf install -y dnf-plugins-core epel-release || true
                dnf config-manager --set-enabled powertools || true
                /usr/bin/crb enable || true
