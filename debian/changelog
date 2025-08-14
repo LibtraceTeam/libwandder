@@ -1,3 +1,20 @@
+libwandder2 (2.0.15-1) unstable; urgency=medium
+
+  * ETSILI: add new API methods -- wandder_etsili_get_encryption_container()
+    and wandder_etsili_get_integrity_check_contents()
+  * Fixed decoding error when items were using an indefinite
+    length field.
+  * Added new tag type and class to represent content that had already
+    been encoded: WANDDER_TAG_ALREADY_ENCODED and WANDDER_CLASS_ALREADY_ENCODED
+  * When converting a sequence of integers to a string, add an ellipsis at
+    the end of the string if the buffer is not large enough to fit all of
+    the numbers in the sequence.
+  * Fix incorrect decoding of sequences of primitive types.
+  * Fix memory leak of content that was copied by a decoder inside
+    init_wandder_decoder()
+
+ -- Shane Alcock <shane@alcock.co.nz>  Wed, 13 Aug 2025 10:37:28 +1200
+
 libwandder2 (2.0.14-1) unstable; urgency=medium
 
   * ETSILI: wandder_etsili_get_cc_format() now returns the appropriate

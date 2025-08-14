@@ -169,7 +169,7 @@ static uint32_t decode_length_field(uint8_t *lenstart, uint32_t maxrem,
         *lenlen = 1;
         return (byte & 0x7f);
     }
-    lenoctets = byte;
+    lenoctets = (byte & 0x7f);
     if (lenoctets) {
         /* definite long form */
         if (lenoctets > 8) {
@@ -1075,6 +1075,55 @@ uint8_t *wandder_etsili_get_cc_contents(wandder_etsispec_t *etsidec,
 
 }
 
+uint8_t *wandder_etsili_get_encryption_container(
+        wandder_etsispec_t *etsidec, wandder_decoder_t *dec, uint32_t *len) {
+
+    wandder_found_t *found = NULL;
+    wandder_target_t target;
+    uint8_t *vp = NULL;
+
+    wandder_reset_decoder(dec);
+    target.parent = &etsidec->payload;
+    target.itemid = 4;
+    target.found = false;
+
+    *len = 0;
+
+    if (wandder_search_items(dec, 0, &(etsidec->root), &target, 1,
+                &found, 1) > 0) {
+        *len = found->list[0].item->length;
+        vp = found->list[0].item->valptr;
+
+        wandder_free_found(found);
+    }
+    return vp;
+
+}
+
+uint8_t *wandder_etsili_get_integrity_check_contents(
+        wandder_etsispec_t *etsidec, wandder_decoder_t *dec, uint32_t *len) {
+
+    wandder_found_t *found = NULL;
+    wandder_target_t target;
+    uint8_t *vp = NULL;
+
+    wandder_reset_decoder(dec);
+    target.parent = &etsidec->tripayload;
+    target.itemid = 0;
+    target.found = false;
+
+    *len = 0;
+
+    if (wandder_search_items(dec, 0, &(etsidec->root), &target, 1,
+                &found, 1) > 0) {
+        *len = found->list[0].item->length;
+        vp = found->list[0].item->valptr;
+
+        wandder_free_found(found);
+    }
+    return vp;
+}
+
 static uint8_t *internal_get_iri_contents(wandder_etsispec_t *etsidec,
         wandder_decoder_t *dec, uint32_t *len, uint8_t *ident,
         char *name, int namelen) {
@@ -1770,7 +1819,9 @@ static char *stringify_sequenced_primitives(char *sequence_name,
     uint8_t *ptr = (uint8_t *)(parent->valptr);
     char *writer = space;
     int namelen = strlen(sequence_name);
-    int first = 1;
+    int first = 1, elipsis = 0;
+    uint32_t outerseq_len = 0;
+    int lenlen = 0;
 
     memset(space, 0, spacelen);
 
@@ -1782,6 +1833,17 @@ static char *stringify_sequenced_primitives(char *sequence_name,
     writer ++;
     *writer = ' ';
     writer ++;
+
+    if (*ptr != 0x30) {
+        return space;
+    }
+    ptr ++;
+    outerseq_len = decode_length_field(ptr,
+            parent->length - (ptr - parent->valptr), &lenlen);
+    if (outerseq_len == 0) {
+        return space;
+    }
+    ptr += lenlen;
 
     if (interpretas == WANDDER_TAG_INTEGER_SEQUENCE) {
         while (ptr - parent->valptr < parent->length) {
@@ -1799,7 +1861,9 @@ static char *stringify_sequenced_primitives(char *sequence_name,
             nextint = wandder_decode_integer_value(ptr, nextintlen);
             tmplen = snprintf(tmp, 1024, "%" PRId64, nextint);
 
-            if (tmplen > 0 && spacelen - (writer - space) > tmplen + 2) {
+            // +2 for the preceding ', ' and +5 to leave room for an elipsis
+            // at the end if we run out of room
+            if (tmplen > 0 && spacelen - (writer - space) > tmplen + 2 + 5) {
                 if (!first) {
                     *writer = ',';
                     writer ++;
@@ -1810,7 +1874,13 @@ static char *stringify_sequenced_primitives(char *sequence_name,
                 }
                 memcpy(writer, tmp, tmplen);
                 writer += tmplen;
+            } else if (tmplen > 0 && !elipsis && !first &&
+                    spacelen - (writer - space) > 5) {
+                memcpy(writer, ", ...", 5);
+                writer += 5;
+                elipsis = 1;
             }
+
             ptr += nextintlen;
         }
     } else if (interpretas == WANDDER_TAG_UTF8STR) {
@@ -5170,7 +5240,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->emailiri.members[10] =
         (struct wandder_dump_action) {
                 .name = "e-mail-Recipients",
-                NULL,
+                .descend = NULL,
                 .interpretas = WANDDER_TAG_UTF8STR
         };
     dec->emailiri.members[11] =

@@ -16,8 +16,9 @@ jobs:
          arch:
            - amd64
          target:
-           - "rockylinux:8"
-           - "rockylinux:9"
+           - "almalinux:8"
+           - "almalinux:9"
+           - "almalinux:10"
 
      steps:
       - name: Checkout repo
@@ -49,8 +50,9 @@ jobs:
          arch:
            - amd64
          target:
-           - "rockylinux:8"
-           - "rockylinux:9"
+           - "almalinux:8"
+           - "almalinux:9"
+           - "almalinux:10"
      needs: build
      steps:
        - name: Set environment variables for download
@@ -63,7 +65,7 @@ jobs:
          env:
            TARGET: ${{ matrix.target }}
          run: |
-           if [[ "${TARGET}" =~ rocky* ]]; then
+           if [[ "${TARGET}" =~ alma* ]]; then
                dnf install -y dnf-plugins-core epel-release || true
                dnf config-manager --set-enabled powertools || true
                /usr/bin/crb enable || true
@@ -88,8 +90,9 @@ jobs:
          arch:
            - amd64
          target:
-           - "rockylinux:8"
-           - "rockylinux:9"
+           - "almalinux:8"
+           - "almalinux:9"
+           - "almalinux:10"
      needs: test
      steps:
        - name: Set environment variables for download
