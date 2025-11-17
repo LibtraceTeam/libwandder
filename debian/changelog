@@ -1,3 +1,10 @@
+libwandder2 (2.0.17-1) unstable; urgency=medium
+
+  * Fix bug introduced in 2.0.16 that resulted in UTCTime fields being
+    incorrectly encoded with 4 digit years instead of 2 digit ones.
+
+ -- Shane Alcock <shane@alcock.co.nz>  Mon, 17 Nov 2025 11:55:18 +1300
+
 libwandder2 (2.0.16-1) unstable; urgency=medium
 
   * Add new API method: wandder_timeval_to_generalizedts()

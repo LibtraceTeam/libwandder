@@ -1,3 +1,8 @@
+Version 2.0.17
+==============
+  * Fix bug introduced in 2.0.16 that resulted in UTCTime fields being
+    incorrectly encoded with 4 digit years instead of 2 digit ones.
+
 Version 2.0.16
 ==============
   * Implement wandder_timeval_to_generalizedts() method to convert a timeval

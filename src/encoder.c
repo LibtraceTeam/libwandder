@@ -410,6 +410,7 @@ static inline int encode_time_inline(
 
     switch (time_format) {
         case WANDDER_G_TIME: 
+            strftime(timebuf, 768, "%Y%m%d%H%M%S", &tm);
             snprintf(returnbuf, retbuflen, "%s.%03" PRId64 "Z", timebuf,
                     (int64_t)(tv->tv_usec / 1000));
             break;
@@ -417,6 +418,7 @@ static inline int encode_time_inline(
             fprintf(stderr, 
                 "Encode error: unexpected format for timeval, using UTC\n");
         case WANDDER_UTC_TIME:
+            strftime(timebuf, 768, "%y%m%d%H%M%S", &tm);
             snprintf(returnbuf, retbuflen, "%sZ", timebuf);
             break;
     }
