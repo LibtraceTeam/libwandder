@@ -1,3 +1,12 @@
+libwandder2 (2.0.18-1) unstable; urgency=medium
+
+  * wandder_etsili_get_integrity_check_contents() now includes the top
+    level tag for the IntegrityCheck PDU -- this is better suited to
+    use cases that might require this method (e.g. calculating digest
+    hashes across integrity check hash PDUs).
+
+ -- Shane Alcock <shane@alcock.co.nz>  Wed, 11 Mar 2026 18:15:50 +1300
+
 libwandder2 (2.0.17-1) unstable; urgency=medium
 
   * Fix bug introduced in 2.0.16 that resulted in UTCTime fields being
