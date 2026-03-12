@@ -1,3 +1,10 @@
+Version 2.0.18
+==============
+  *  wandder_etsili_get_integrity_check_contents() now includes the top
+     level tag for the IntegrityCheck PDU -- this is better suited to
+     use cases that might require this method (e.g. calculating digest
+     hashes across integrity check hash PDUs).
+
 Version 2.0.17
 ==============
   * Fix bug introduced in 2.0.16 that resulted in UTCTime fields being

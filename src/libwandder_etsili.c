@@ -1108,8 +1108,8 @@ uint8_t *wandder_etsili_get_integrity_check_contents(
     uint8_t *vp = NULL;
 
     wandder_reset_decoder(dec);
-    target.parent = &etsidec->tripayload;
-    target.itemid = 0;
+    target.parent = &etsidec->payload;
+    target.itemid = 2;
     target.found = false;
 
     *len = 0;
