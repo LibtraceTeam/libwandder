@@ -605,7 +605,7 @@ static int decrypt_payload_content_aes_192_cbc(uint8_t *ciphertext,
 static char *decode_field_to_str(wandder_etsispec_t *etsidec,
         wandder_decoder_t *dec,
         wandder_etsi_stack_t *stack, char *space, int spacelen) {
-    uint32_t ident;
+    uint32_t ident, primtype;
     wandder_dumper_t *curr = NULL;
     char valstr[16384];
 
@@ -850,16 +850,15 @@ static char *decode_field_to_str(wandder_etsispec_t *etsidec,
             break;
 
         case WANDDER_CLASS_UNIVERSAL_PRIMITIVE:
-            ident = (uint32_t)stack->atthislevel[stack->current];
+            primtype = (uint32_t)stack->atthislevel[stack->current];
             (stack->atthislevel[stack->current])++;
             if (!wandder_get_valuestr(dec->current, valstr, 16384,
                     wandder_get_identifier(dec))) {
                 fprintf(stderr, "Failed to interpret standard field %d:%d\n",
-                        stack->current, ident);
+                        stack->current, primtype);
                 return NULL;
             }
-            snprintf(space, spacelen, "%s: %s", curr->members[ident].name,
-                    valstr);
+            snprintf(space, spacelen, " - %s", valstr);
             break;
 
         case WANDDER_CLASS_UNIVERSAL_CONSTRUCT:
@@ -5240,8 +5239,8 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->emailiri.members[10] =
         (struct wandder_dump_action) {
                 .name = "e-mail-Recipients",
-                .descend = NULL,
-                .interpretas = WANDDER_TAG_UTF8STR
+                .descend = &(dec->emailrecipients),
+                .interpretas = WANDDER_TAG_NULL
         };
     dec->emailiri.members[11] =
         (struct wandder_dump_action) {
