@@ -1819,8 +1819,6 @@ static char *stringify_sequenced_primitives(char *sequence_name,
     char *writer = space;
     int namelen = strlen(sequence_name);
     int first = 1, elipsis = 0;
-    uint32_t outerseq_len = 0;
-    int lenlen = 0;
 
     memset(space, 0, spacelen);
 
@@ -1832,17 +1830,6 @@ static char *stringify_sequenced_primitives(char *sequence_name,
     writer ++;
     *writer = ' ';
     writer ++;
-
-    if (*ptr != 0x30) {
-        return space;
-    }
-    ptr ++;
-    outerseq_len = decode_length_field(ptr,
-            parent->length - (ptr - parent->valptr), &lenlen);
-    if (outerseq_len == 0) {
-        return space;
-    }
-    ptr += lenlen;
 
     if (interpretas == WANDDER_TAG_INTEGER_SEQUENCE) {
         while (ptr - parent->valptr < parent->length) {
@@ -5239,8 +5226,8 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->emailiri.members[10] =
         (struct wandder_dump_action) {
                 .name = "e-mail-Recipients",
-                .descend = &(dec->emailrecipients),
-                .interpretas = WANDDER_TAG_NULL
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_UTF8STR
         };
     dec->emailiri.members[11] =
         (struct wandder_dump_action) {
