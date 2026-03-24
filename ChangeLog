@@ -1,3 +1,10 @@
+Version 2.0.19
+==============
+  * ETSILI: fix segfault when wandder_etsili_get_next_fieldstr() was called
+    on a universal primitive field.
+  * ETSILI: fix bug where sequences of universal constructs were expected
+    to include an extraneous sequence tag.
+
 Version 2.0.18
 ==============
   *  wandder_etsili_get_integrity_check_contents() now includes the top

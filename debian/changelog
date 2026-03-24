@@ -1,3 +1,14 @@
+libwandder2 (2.0.19-1) unstable; urgency=medium
+
+  * Fix segfault when converting a universal primitive field into a
+    printable string.
+  * Fix bug where wandder_etsili_get_next_fieldstr() was requiring an
+    erroneous sequence tag to be present when decoding a field that
+    was a sequence of universal primitives (e.g. a sequence of
+    integers or UTF8 strings).
+
+ -- Shane Alcock <shane@alcock.co.nz>  Tue, 24 Mar 2026 13:21:19 +1300
+
 libwandder2 (2.0.18-1) unstable; urgency=medium
 
   * wandder_etsili_get_integrity_check_contents() now includes the top
