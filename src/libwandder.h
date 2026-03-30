@@ -34,8 +34,8 @@
 #include <sys/time.h>
 
 #define IS_CONSTRUCTED(x) ((x->identclass) & 0x01 ? 1: 0)
-#define ALLOC_MEMBERS(x) x.members = (struct wandder_dump_action *)malloc( \
-        sizeof(struct wandder_dump_action) * x.membercount);
+#define ALLOC_MEMBERS(x) x.members = (struct wandder_dump_action *)calloc( \
+        x.membercount, sizeof(struct wandder_dump_action));
 
 
 /* Identifier classes */

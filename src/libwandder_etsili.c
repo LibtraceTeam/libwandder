@@ -258,7 +258,7 @@ static void wandder_etsili_free_stack(wandder_etsi_stack_t *stack) {
 }
 
 wandder_etsispec_t *wandder_create_etsili_decoder(void) {
-    wandder_etsispec_t *etsidec = (wandder_etsispec_t *)malloc(
+    wandder_etsispec_t *etsidec = (wandder_etsispec_t *)calloc(1,
             sizeof(wandder_etsispec_t));
 
     init_dumpers(etsidec);
@@ -480,6 +480,8 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
 
 uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
 
+    int ret;
+
     if (etsidec->decstate == 0) {
         fprintf(stderr, "No buffer attached to this decoder -- please call"
                 "wandder_attach_etsili_buffer() first!\n");
@@ -489,11 +491,14 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
     (provided it is not indefinite)*/
     wandder_reset_decoder(etsidec->dec);
 
-    if (wandder_decode_next(etsidec->dec) <= 0) {
-        return 0;
+    ret = wandder_decode_next(etsidec->dec);
+    if (ret <= 0) {
+        return ret;
     }
 
     int preamble = etsidec->dec->current->preamblelen;
+    int trailing = etsidec->dec->current->trailing;
+
     /* Don't forget to include the preamble length so the caller can skip
      * over the entire PDU if desired.
      */
@@ -501,7 +506,7 @@ uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *etsidec) {
         return wandder_decode_skip(etsidec->dec);
     }
     else {
-        return wandder_get_itemlen(etsidec->dec) + preamble;
+        return wandder_get_itemlen(etsidec->dec) + preamble + trailing;
     }
 }
 
