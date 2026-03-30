@@ -79,19 +79,23 @@ void free_cached_items(wandder_item_t *it, wandder_itemhandler_t *handler) {
     release_wandder_handled_item(handler, it->memsrc);
 }
 
+void wandder_reset_decoder(wandder_decoder_t *dec) {
+
+    if (dec->cacheditems) {
+        free_cached_items(dec->cacheditems, dec->item_handler);
+        dec->cacheditems = NULL;
+    }
+
+    dec->toplevel = NULL;
+    dec->current = NULL;
+    dec->topptr = NULL;
+    dec->nextitem = NULL;
+}
+
 wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
         uint8_t *source, uint32_t len, bool copy) {
 
-    if (dec != NULL) {
-        wandder_reset_decoder(dec);
-        free_cached_items(dec->cacheditems, dec->item_handler);
-        dec->cacheditems = NULL;
-        if (dec->ownsource && dec->source) {
-            free(dec->source);
-            dec->source = NULL;
-            dec->ownsource = false;
-        }
-    } else {
+    if (dec == NULL) {
         dec = (wandder_decoder_t *)malloc(sizeof(wandder_decoder_t));
         dec->toplevel = NULL;
         dec->current = NULL;
@@ -107,6 +111,12 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
         dec->cacheditems = NULL;
         dec->cachedts = 0;
         memset(dec->prevgts, 0, 16);
+        dec->source = NULL;
+        dec->sourcelen = 0;
+    }
+
+    if (dec->source != source || dec->sourcelen != len) {
+        wandder_reset_decoder(dec);
     }
 
     if (copy) {
@@ -119,24 +129,6 @@ wandder_decoder_t *init_wandder_decoder(wandder_decoder_t *dec,
     }
     dec->sourcelen = len;
     return dec;
-}
-
-void wandder_reset_decoder(wandder_decoder_t *dec) {
-
-/*
-    wandder_item_t *it = dec->current;
-
-    while (it) {
-        wandder_item_t *tmp = it;
-        it = it->parent;
-        free_item(tmp);
-    }
-*/
-
-    dec->toplevel = NULL;
-    dec->current = NULL;
-    dec->topptr = NULL;
-    dec->nextitem = NULL;
 }
 
 void free_wandder_decoder(wandder_decoder_t *dec) {
@@ -449,6 +441,20 @@ static inline int _decode_next(wandder_decoder_t *dec) {
         return ret;
     }
 
+    if (dec->sourcelen > 0 && dec->nextitem + dec->current->length +
+            dec->current->preamblelen + dec->current->trailing >
+            dec->source + dec->sourcelen) {
+        return -1;
+    }
+
+    if (dec->current->parent != NULL && dec->current->parent->indefform == 0) {
+        if (dec->nextitem + dec->current->length +dec->current->preamblelen +
+                dec->current->trailing >
+                dec->current->parent->valptr + dec->current->parent->length) {
+            return -1;
+        }
+    }
+
     if (IS_CONSTRUCTED(dec->current)) {
         dec->current->descend = 1;
         dec->nextitem = dec->nextitem + dec->current->preamblelen +
@@ -508,6 +514,7 @@ static int find_indef_length(wandder_decoder_t *dec) {
     int levels = 1;
     int finalskip = 0;
     uint8_t *ptr;
+    int ret;
 
     dec->nextitem = dec->current->valptr;
 
@@ -516,8 +523,11 @@ static int find_indef_length(wandder_decoder_t *dec) {
     ptr = dec->nextitem;
     while (levels > 0) {
         if (*ptr != 0 || *(ptr+1) !=0 ) {
-            skipped += _decode_next(dec);
-
+            ret = _decode_next(dec);
+            if (ret <= 0) {
+                return ret;
+            }
+            skipped += ret;
             if (dec->current->indefform) {
                 dec->nextitem = dec->current->valptr;
                 ptr = dec->nextitem;
@@ -1130,6 +1140,7 @@ static inline void check_if_found_ctxt(wandder_decoder_t *dec, uint32_t ident,
         wandder_dumper_t *actions) {
 
     int i;
+    uint16_t interpret;
 
     for (i = 0; i < targetcount; i++) {
         if (targets[i].found) {
@@ -1144,8 +1155,12 @@ static inline void check_if_found_ctxt(wandder_decoder_t *dec, uint32_t ident,
             continue;
         }
 
-        *found = add_found_item(dec->current, *found, i,
-                actions->members[ident].interpretas, dec);
+        interpret = 0;
+        if (ident < actions->membercount) {
+            interpret = actions->members[ident].interpretas;
+        }
+
+        *found = add_found_item(dec->current, *found, i, interpret, dec);
         targets[i].found = true;
     }
 }
@@ -1155,6 +1170,7 @@ static inline void check_if_found_noctxt(wandder_decoder_t *dec, uint32_t ident,
         wandder_dumper_t *actions, uint16_t interpretas) {
 
     int i;
+    uint16_t interpret;
 
     for (i = 0; i < targetcount; i++) {
         if (targets[i].found) {
@@ -1169,7 +1185,11 @@ static inline void check_if_found_noctxt(wandder_decoder_t *dec, uint32_t ident,
             continue;
         }
 
-        *found = add_found_item(dec->current, *found, i, interpretas, dec);
+        interpret = interpretas;
+        if (ident < actions->membercount && interpret == 0) {
+            interpret = actions->members[ident].interpretas;
+        }
+        *found = add_found_item(dec->current, *found, i, interpret, dec);
         targets[i].found = true;
     }
 }
@@ -1188,6 +1208,11 @@ int wandder_search_items(wandder_decoder_t *dec, uint16_t level,
 
     if (*found && (*found)->itemcount == stopthresh) {
         return stopthresh;
+    }
+
+    if (actions == NULL) {
+        wandder_decode_skip(dec);
+        return 0;
     }
 
     if (level == 0) {
@@ -1224,6 +1249,9 @@ int wandder_search_items(wandder_decoder_t *dec, uint16_t level,
         if (wandder_get_class(dec) == WANDDER_CLASS_CONTEXT_CONSTRUCT) {
             check_if_found_ctxt(dec, ident, targets, targetcount, found,
                     actions);
+            if (ident >= actions->membercount) {
+                return 0;
+            }
 
             act = &(actions->members[ident]);
             if (act == NULL || act->descend == NULL) {
@@ -1247,6 +1275,10 @@ int wandder_search_items(wandder_decoder_t *dec, uint16_t level,
         if (wandder_get_class(dec) == WANDDER_CLASS_UNIVERSAL_CONSTRUCT) {
             check_if_found_noctxt(dec, atthislevel, targets, targetcount, found,
                     actions, ident);
+            if (actions->sequence.descend == NULL) {
+                wandder_decode_skip(dec);
+                continue;
+            }
             ret = wandder_search_items(dec, level + 1,
                     actions->sequence.descend, targets,
                     targetcount, found, stopthresh);
