@@ -58,6 +58,8 @@ typedef struct wandder_etsili_top {
     wandder_generic_body_t ipiri;
     wandder_generic_body_t umtscc;
     wandder_generic_body_t umtsiri;
+    /* TRI / IntegrityCheck body template */
+    wandder_generic_body_t tri_integrity;
     size_t increment_len;
     wandder_buf_t **preencoded;
 } wandder_etsili_top_t;
@@ -128,6 +130,28 @@ void wandder_init_etsili_umtscc(
 void wandder_init_etsili_umtsiri(
         wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top);
+
+/* ---- TRI / IntegrityCheck (TS 102 232-1 §7.2.3, Annex J) ---- */
+/* Build the body template for payload[2] → triPayload[3] → integrityCheck[0] */
+void wandder_init_etsili_tri_integrity(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top);
+
+/* Encode a full PS-PDU carrying a TRIPayload.integrityCheck.
+ *  data_type: 0 = IRI, 1 = CC (NL profile)
+ *  seqnos/nseq: includedSequenceNumbers
+ *  hash32: 32-byte SHA-256
+ *  sig_alg: 0 = none, 1 = dsa-with-sha256, 2 = sha256WithRSAEncryption
+ *  sig_der/sig_der_len: raw DER signature bytes (optional)
+ */
+void wandder_encode_etsi_tri_integrity_ber(
+        int64_t cin, int64_t seqno, struct timeval *tv,
+        uint8_t data_type,
+        const uint32_t *seqnos, size_t nseq,
+        const uint8_t hash32[32],
+        uint8_t sig_alg,
+        const uint8_t *sig_der, size_t sig_der_len,
+        wandder_etsili_child_t *child);
 
 wandder_etsili_child_freelist_t *wandder_create_etsili_child_freelist();
 wandder_etsili_child_t *wandder_create_etsili_child(wandder_etsili_top_t* top, 
