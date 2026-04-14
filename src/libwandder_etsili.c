@@ -2394,7 +2394,9 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
-    else if (item->identifier == 0 && curr == &(etsidec->ccpayload)) {
+    else if ((item->identifier == 0 && curr == &(etsidec->ccpayload)) ||
+             (item->identifier == 5 && curr == &(etsidec->iripayload)) ||
+             (item->identifier == 6 && curr == &(etsidec->iripayload))) {
         /* payloadDirection */
         switch(enumval) {
             case 0:
@@ -5411,7 +5413,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->iricontents.sequence = WANDDER_NOACTION;
 
 
-    dec->iripayload.membercount = 5;
+    dec->iripayload.membercount = 7;
     ALLOC_MEMBERS(dec->iripayload);
     dec->iripayload.members[0] =
         (struct wandder_dump_action) {
@@ -5440,6 +5442,18 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->iripayload.members[4] =
         (struct wandder_dump_action) {
                 .name = "timeStampQualifier",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->iripayload.members[5] =
+        (struct wandder_dump_action) {
+                .name = "sessionDirection",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->iripayload.members[6] =
+        (struct wandder_dump_action) {
+                .name = "payloadDirection",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
