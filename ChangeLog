@@ -1,3 +1,10 @@
+Version 2.0.20
+==============
+  * Reduced likelihood of crashes caused by memory errors in the decoder,
+    especially when dealing with bogus data.
+  * Added support for decoding sessionDirection and payloadDirection
+    fields in ETSI IRI Payloads (thanks NETPLANET GmbH for contributing this).
+
 Version 2.0.19
 ==============
   * ETSILI: fix segfault when wandder_etsili_get_next_fieldstr() was called

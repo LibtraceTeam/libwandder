@@ -1,3 +1,12 @@
+libwandder2 (2.0.20-1) unstable; urgency=medium
+
+  * Fixed a number of memory errors that could lead to crashes in the
+    decoder, especially when parsing bogus data.
+  * Add decode support for sessionDirection and payloadDirection fields
+    in ETSI IRI Payloads.
+
+ -- Shane Alcock <shane@alcock.co.nz>  Thu, 30 Apr 2026 12:07:44 +1200
+
 libwandder2 (2.0.19-1) unstable; urgency=medium
 
   * Fix segfault when converting a universal primitive field into a

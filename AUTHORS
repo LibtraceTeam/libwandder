@@ -1,11 +1,15 @@
 libwandder was primarily written by Shane Alcock, initially on behalf of the
 WAND network research group at the University of Waikato, Hamilton, New
-Zealand.
+Zealand. From 2022 onwards, Shane has continued to develop and maintain
+libwandder as an employee of Searchlight.
 
 BER encoding was added by Tyler Marriner, again on behalf of WAND.
 
 Code to support decryption of ETSI LI payload content was written with
 the assistance of Pim van Stam.
 
-Please email contact@wand.net.nz if you need to get in touch with us
+Code to support decoding of sessionDirection and payloadDirection fields
+in ETSI IRI payloads was added by NETPLANET GmbH.
+
+Please email contact@searchlight.nz if you need to get in touch with us
 regarding this software.
