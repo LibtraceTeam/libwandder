@@ -394,6 +394,19 @@ int wandder_set_etsili_decryption_key(wandder_etsispec_t *dec, char *key);
 wandder_dumper_t *wandder_get_etsili_structure(wandder_etsispec_t *dec);
 
 wandder_decoder_t *wandder_get_etsili_base_decoder(wandder_etsispec_t *dec);
+
+/** Extracts the timestamp field from an ETSI PSHeader and converts it to
+ *  a timeval structure.
+ *
+ *  @param dec  An ETSI decoder with an attached message in its buffer
+ *
+ *  @return a timeval containing the timestamp found within the ETSI PSHeader.
+ *          If the PSHeader was not able to be decoded, the returned timestamp
+ *          will have a tv_sec value of 0 (i.e. an error case).
+ *          If no timestamp field is present in the ETSI PSHeader, the
+ *          returned timestamp will have a tv_sec value of 1. Make sure to
+ *          check for these special cases before using the returned timeval.
+ */
 struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *dec);
 uint32_t wandder_etsili_get_pdu_length(wandder_etsispec_t *dec);
 char *wandder_etsili_get_next_fieldstr(wandder_etsispec_t *dec, char *space,
