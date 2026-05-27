@@ -474,6 +474,7 @@ struct timeval wandder_etsili_get_header_timestamp(wandder_etsispec_t *etsidec)
         tv.tv_usec = wandder_get_integer_value(dec->current, NULL);
         return tv;
     }
+    tv.tv_sec = 1;
     return tv;
 
 }
