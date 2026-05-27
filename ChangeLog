@@ -1,3 +1,10 @@
+Version 2.0.21
+==============
+  * wandder_etsili_get_header_timestamp now returns a timestamp of 1 second
+    past the epoch for valid ETSI records that do not have a timestamp
+    field (as opposed to 0 seconds past the epoch, which is used to indicate
+    a decoding error).
+
 Version 2.0.20
 ==============
   * Reduced likelihood of crashes caused by memory errors in the decoder,
