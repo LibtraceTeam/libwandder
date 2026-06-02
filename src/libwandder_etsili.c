@@ -2450,7 +2450,7 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
     else if (item->identifier == 4 && curr == &(etsidec->integritycheck)) {
-        /* dataType */
+        /* hashAlgorithm */
         switch (enumval) {
             case 1:
                 name = "SHA-1";
@@ -2463,6 +2463,20 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
                 break;
             case 4:
                 name = "SHA-512";
+                break;
+        }
+    }
+    else if (item->identifier == 5 && curr == &(etsidec->integritycheck)) {
+        /* signatureAlgorithm */
+        switch (enumval) {
+            case 1:
+                name = "dSA";
+                break;
+            case 2:
+                name = "eCDSA";
+                break;
+            case 3:
+                name = "edDSA";
                 break;
         }
     }
@@ -4056,7 +4070,7 @@ static void init_dumpers(wandder_etsispec_t *dec) {
                 .interpretas = WANDDER_TAG_OCTETSTRING
         };
 
-    dec->integritycheck.membercount = 5;
+    dec->integritycheck.membercount = 6;
     ALLOC_MEMBERS(dec->integritycheck);
     dec->integritycheck.members[0] =
         (struct wandder_dump_action) {
@@ -4085,6 +4099,12 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->integritycheck.members[4] =
         (struct wandder_dump_action) {
                 .name = "hashAlgorithm",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->integritycheck.members[5] =
+        (struct wandder_dump_action) {
+                .name = "signatureAlgorithm",
                 .descend = NULL,
                 .interpretas = WANDDER_TAG_ENUM
         };
