@@ -1255,9 +1255,9 @@ int wandder_search_items(wandder_decoder_t *dec, uint16_t level,
 
             act = &(actions->members[ident]);
             if (act == NULL || act->descend == NULL) {
-                return 0;
+                wandder_decode_skip(dec);
+                continue;
             }
-            assert(act->descend != NULL);
             ret = wandder_search_items(dec, level + 1, act->descend, targets,
                     targetcount, found, stopthresh);
             if (ret <= 0) {
