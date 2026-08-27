@@ -1,3 +1,15 @@
+libwandder2 (2.0.22-1) unstable; urgency=medium
+
+  * add decoding support for SMS-Report sequences in UMTSIRI records when
+    decoding ETSI LI records.
+  * add decoding support for the signatureAlgorithm enum which was
+    recently added to ETSI LI TRI integrity check records.
+  * Fixed bug where wandder_search_items would prematurely return a failure
+    if it encountered a context constructed class member that libwandder
+    did not know how to decode.
+
+ -- Shane Alcock <shane@alcock.co.nz>  Thu, 27 Aug 2026 19:08:18 +1200
+
 libwandder2 (2.0.21-1) unstable; urgency=medium
 
   * wandder_etsili_get_header_timestamp now returns a timestamp of 1 second

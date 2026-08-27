@@ -1,3 +1,12 @@
+Version 2.0.22
+==============
+  * ETSILI: add decoding support for SMS-Report sequences in UMTSIRI records.
+  * ETSILI: add decoding support for the signatureAlgorithm enum which was
+    recently added to TRI integrity check records.
+  * Fixed bug where wandder_search_items would prematurely return a failure
+    if it encountered a context constructed class member that libwandder
+    did not know how to decode.
+
 Version 2.0.21
 ==============
   * wandder_etsili_get_header_timestamp now returns a timestamp of 1 second
