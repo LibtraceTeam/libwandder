@@ -63,7 +63,7 @@ const uint8_t wandder_etsi_ipirioid[4] = {0x05, 0x03, 0x0a, 0x01};
 const uint8_t wandder_etsi_ipmmccoid[4] = {0x05, 0x05, 0x06, 0x02};
 const uint8_t wandder_etsi_ipmmirioid[4] = {0x05, 0x05, 0x06, 0x01};
 const uint8_t wandder_etsi_umtsirioid[9] =
-        {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x01, 0x0f, 0x05};
+        {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x01, 0x11, 0x00};
 const uint8_t wandder_etsi_epsirioid[9] =
         {0x00, 0x04, 0x00, 0x02, 0x02, 0x04, 0x08, 0x11, 0x00};
 const uint8_t wandder_etsi_epsccoid[9] =
@@ -3254,6 +3254,45 @@ static char *interpret_enum(wandder_etsispec_t *etsidec, wandder_item_t *item,
         }
     }
 
+    if (item->identifier == 1 && curr == &(etsidec->smscontents)) {
+        /* SMS Initiator */
+        switch(enumval) {
+            case 0:
+                name = "target";
+                break;
+            case 1:
+                name = "server";
+                break;
+            case 2:
+                name = "undefined-party";
+                break;
+        }
+    } else if (item->identifier == 2 && curr == &(etsidec->smscontents)) {
+        /* Transfer Status */
+        switch(enumval) {
+            case 0:
+                name = "succeed-transfer";
+                break;
+            case 1:
+                name = "not-succeed-transfer";
+                break;
+            case 2:
+                name = "undefined";
+        }
+    } else if (item->identifier == 3 && curr == &(etsidec->smscontents)) {
+        switch(enumval) {
+            case 0:
+                name = "yes";
+                break;
+            case 1:
+                name = "no";
+                break;
+            case 2:
+                name = "undefined";
+                break;
+        }
+    }
+
     if (name != NULL) {
         snprintf(valstr, len, "%s", name);
         return name;
@@ -3326,7 +3365,8 @@ static void free_dumpers(wandder_etsispec_t *dec) {
     free(dec->pspdu.members);
     free(dec->encryptioncontainer.members);
     free(dec->encryptedpayload.members);
-
+    free(dec->smsumts.members);
+    free(dec->smscontents.members);
 }
 
 static void init_dumpers(wandder_etsispec_t *dec) {
@@ -4856,6 +4896,54 @@ static void init_dumpers(wandder_etsispec_t *dec) {
      * can't justify spending too much time on them right now...
      */
 
+    dec->smscontents.membercount = 6;
+    ALLOC_MEMBERS(dec->smscontents);
+    dec->smscontents.sequence = WANDDER_NOACTION;
+
+    dec->smscontents.members[0] = WANDDER_NOACTION;
+    dec->smscontents.members[1] =
+        (struct wandder_dump_action) {
+                .name = "sms-initiator",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->smscontents.members[2] =
+        (struct wandder_dump_action) {
+                .name = "transfer-status",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->smscontents.members[3] =
+        (struct wandder_dump_action) {
+                .name = "other-message",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_ENUM
+        };
+    dec->smscontents.members[4] =
+        (struct wandder_dump_action) {
+                .name = "content",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_HEX_BYTES
+        };
+    dec->smscontents.members[5] =
+        (struct wandder_dump_action) {
+                .name = "sMSContentRemovedIndicator",
+                .descend = NULL,
+                .interpretas = WANDDER_TAG_BOOLEAN
+        };
+
+    dec->smsumts.membercount = 4;
+    ALLOC_MEMBERS(dec->smsumts);
+    dec->smsumts.sequence = WANDDER_NOACTION;
+    dec->smsumts.members[0] = WANDDER_NOACTION;
+    dec->smsumts.members[1] = WANDDER_NOACTION;
+    dec->smsumts.members[2] = WANDDER_NOACTION;
+    dec->smsumts.members[3] =
+            (struct wandder_dump_action) {
+                .name = "sMS-Contents",
+                .descend = &(dec->smscontents),
+                .interpretas = WANDDER_TAG_NULL
+        };
 
 
     dec->umtsiri_params.membercount = 60;
@@ -4906,7 +4994,13 @@ static void init_dumpers(wandder_etsispec_t *dec) {
     dec->umtsiri_params.members[11] = WANDDER_NOACTION;
     dec->umtsiri_params.members[12] = WANDDER_NOACTION;
     dec->umtsiri_params.members[13] = WANDDER_NOACTION;
-    dec->umtsiri_params.members[14] = WANDDER_NOACTION;
+    dec->umtsiri_params.members[14] =
+        (struct wandder_dump_action) {
+                .name = "sMS",
+                .descend = &dec->smsumts,
+                .interpretas = WANDDER_TAG_NULL
+        };
+
     dec->umtsiri_params.members[15] = WANDDER_NOACTION;
     dec->umtsiri_params.members[16] = WANDDER_NOACTION;
     dec->umtsiri_params.members[17] = WANDDER_NOACTION;
