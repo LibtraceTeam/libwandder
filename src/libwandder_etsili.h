@@ -125,7 +125,8 @@ typedef struct wandder_etsispec {
     wandder_dumper_t additionalsignalling;
     wandder_dumper_t lipspdulocation;
     wandder_dumper_t epslocation;
-
+    wandder_dumper_t smsumts;
+    wandder_dumper_t smscontents;
     wandder_decoder_t *dec;
     wandder_etsi_stack_t *stack;
 
