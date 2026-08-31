@@ -6,6 +6,10 @@ Version 2.0.22
   * Fixed bug where wandder_search_items would prematurely return a failure
     if it encountered a context constructed class member that libwandder
     did not know how to decode.
+  * Ensure the decoder correctly sets its "current" pointer to NULL when it
+    reaches the end of the provided buffer. This prevents calls to lookup
+    methods like wandder_get_identifier() from returning random garbage
+    if called after wandder_decode_next() returned 0 (i.e. EOF).
 
 Version 2.0.21
 ==============

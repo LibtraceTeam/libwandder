@@ -7,8 +7,10 @@ libwandder2 (2.0.22-1) unstable; urgency=medium
   * Fixed bug where wandder_search_items would prematurely return a failure
     if it encountered a context constructed class member that libwandder
     did not know how to decode.
+  * Ensure the decoder correctly sets its "current" pointer to NULL when it
+    reaches the end of the provided buffer.
 
- -- Shane Alcock <shane@alcock.co.nz>  Thu, 27 Aug 2026 19:08:18 +1200
+ -- Shane Alcock <shane@alcock.co.nz>  Mon, 31 Aug 2026 14:20:46 +1200
 
 libwandder2 (2.0.21-1) unstable; urgency=medium
 
