@@ -424,6 +424,7 @@ static inline int _decode_next(wandder_decoder_t *dec) {
     }
 
     if (dec->nextitem >= dec->source + dec->sourcelen){
+        dec->current = NULL;
         return 0; //reached end
     }
 
