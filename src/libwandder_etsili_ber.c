@@ -111,9 +111,10 @@ static inline void encode_ipaddress(wandder_encoder_ber_t* enc_ber,
     free(addr->ipvalue);
 }
 
-//ensures that the buffer exceeds child->body.buf + currlen in allocated memeroy
-//adjusts all internal pointers accordingly if realloc
-//returns the difference between new, and old buffers
+/* ensures that the buffer exceeds child->body.buf + currlen in allocated memeroy
+ * adjusts all internal pointers accordingly if realloc
+ * returns the difference between new, and old buffers
+ */
 static ptrdiff_t check_body_size(wandder_etsili_child_t * child, size_t currlen){
     
     uint8_t* new;
@@ -564,62 +565,63 @@ static uint8_t* wandder_encode_body_data_ber(
     return ret + child->body.data;
 }
 
+
 static void update_etsili_pshdr_pc(wandder_pshdr_t * header, int64_t cin,
         int64_t seqno, struct timeval* tv){
 
     ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            1, 
-            &(cin), 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE,
+            1,
+            &(cin),
             sizeof cin,
             header->cin);
 
     ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            4, 
-            &(seqno), 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE,
+            4,
+            &(seqno),
             sizeof seqno,
             header->seqno);
 
     ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            0, 
-            &(tv->tv_sec), 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE,
+            0,
+            &(tv->tv_sec),
             sizeof tv->tv_sec,
             header->sec);
 
     ber_rebuild_integer(
-            WANDDER_CLASS_CONTEXT_PRIMITIVE, 
-            1, 
-            &(tv->tv_usec), 
+            WANDDER_CLASS_CONTEXT_PRIMITIVE,
+            1,
+            &(tv->tv_usec),
             sizeof tv->tv_usec,
             header->usec);
 }
 
-static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber, 
+static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber,
         wandder_etsili_top_t* top) {
 
     int64_t cin = 0;
     int64_t seqno = 0;
     struct timeval tv = {0,0};
 
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_USEQUENCE]);
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_CSEQUENCE_1]);
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_PSDOMAINID]);
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_LIID]);
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_AUTHCC]);
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_CSEQUENCE_3]);
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_OPERATORID]);
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_NETWORKELEMID]);
     wandder_encode_endseq_ber(enc_ber, 1);
 
@@ -628,7 +630,7 @@ static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber,
             WANDDER_CLASS_CONTEXT_PRIMITIVE, 1, &(cin),
             sizeof cin);
 
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_DELIVCC]);
     wandder_encode_endseq_ber(enc_ber, 1);
 
@@ -638,10 +640,10 @@ static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber,
             sizeof seqno);
 
     if (top->preencoded[WANDDER_PREENCODE_INTPOINTID]) {
-        wandder_append_preencoded_ber(enc_ber, 
+        wandder_append_preencoded_ber(enc_ber,
                 top->preencoded[WANDDER_PREENCODE_INTPOINTID]);
     }
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_CSEQUENCE_7]);
 
     ptrdiff_t sec_diff = enc_ber->ptr - enc_ber->buf;
@@ -656,7 +658,7 @@ static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber,
 
     wandder_encode_endseq_ber(enc_ber, 1);
 
-    wandder_append_preencoded_ber(enc_ber, 
+    wandder_append_preencoded_ber(enc_ber,
             top->preencoded[WANDDER_PREENCODE_TVCLASS]);
     wandder_encode_endseq_ber(enc_ber, 1);
     ptrdiff_t end_diff = enc_ber->ptr - enc_ber->buf;
@@ -674,6 +676,149 @@ static void init_etsili_pshdr_pc(wandder_encoder_ber_t* enc_ber,
 
     free(res_ber);
 }
+
+
+/*
+ * TRI / IntegrityCheck encoder
+ * Path: payload [2] → triPayload [3] → integrityCheck [0]
+ * Fields (schema order):
+ *   0) checkType            ENUM (messageDigest=0)
+ *   1) dataType             ENUM (iri=0 | cc=1)
+ *   2) hashAlgorithm        ENUM (sha256=2)
+ *   3) includedSeqNumbers   SEQUENCE OF INTEGER
+ *   4) hashValue            OCTET STRING (32)
+ *   5) signature            OPTIONAL  (OCTET STRING with DER signature)
+ */
+#define WANDDER_TAGID_PAYLOAD         2
+#define WANDDER_TAGID_TRIPAYLOAD      3
+#define WANDDER_TAGID_INTEGRITYCHECK  0
+
+/* checkType: messageDigest */
+#define WANDDER_IC_CHECKTYPE_MESSAGE_DIGEST 0u
+
+static void init_etsili_tri_integrity_body(wandder_encoder_ber_t *enc_ber,
+        wandder_etsili_top_t *top)
+{
+    /* Open [2] payload */
+    wandder_append_preencoded_ber(enc_ber,
+        top->preencoded[WANDDER_PREENCODE_CSEQUENCE_2]);
+    /* Open [3] triPayload */
+    wandder_append_preencoded_ber(enc_ber,
+        top->preencoded[WANDDER_PREENCODE_CSEQUENCE_3]);
+    /* Open [0] integrityCheck */
+    wandder_append_preencoded_ber(enc_ber,
+        top->preencoded[WANDDER_PREENCODE_CSEQUENCE_0]);
+
+    /* Close integrityCheck, triPayload, payload — three EOCs total */
+    wandder_encode_endseq_ber(enc_ber, 3);
+}
+
+void wandder_init_etsili_tri_integrity(
+        wandder_encoder_ber_t* enc_ber,
+        wandder_etsili_top_t* top)
+{
+    if (!top || !top->preencoded || !enc_ber){
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
+        return;
+    }
+    wandder_encoded_result_ber_t* res_ber;
+
+    wandder_reset_encoder_ber(enc_ber);
+    init_etsili_tri_integrity_body(enc_ber, top);
+    res_ber = wandder_encode_finish_ber(enc_ber);
+    if (!res_ber) {
+        fprintf(stderr,"wandder: failed to build TRI/Integrity template\n");
+        return;
+    }
+
+    top->tri_integrity.buf       = res_ber->buf;
+    top->tri_integrity.len       = res_ber->len;
+    top->tri_integrity.alloc_len = res_ber->len;
+    top->tri_integrity.meta      = res_ber->buf + (top->header.end - top->header.buf); /* keep style consistent */
+    top->tri_integrity.data      = res_ber->buf + (top->header.end - top->header.buf); /* updated at encode */
+    top->tri_integrity.flist     = wandder_create_etsili_child_freelist();
+    free(res_ber);
+}
+
+static void update_etsili_tri_integrity(uint8_t data_type,
+        const uint32_t *seqnos, size_t nseq,
+        const uint8_t hash32[32],
+        uint8_t sig_alg, const uint8_t *sig_der, size_t sig_der_len,
+        wandder_etsili_child_t *child)
+{
+    uint8_t *ptr = child->body.data;
+    ptrdiff_t rem = child->alloc_len - (ptr - child->buf);
+
+    /* 0) checkType = messageDigest */
+    encode_here_ber_update(
+        0, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+        (uint8_t*)&(uint32_t){ WANDDER_IC_CHECKTYPE_MESSAGE_DIGEST }, sizeof(uint32_t),
+        &ptr, &rem, child);
+
+    /* 1) dataType = iri(0) | cc(1) */
+    encode_here_ber_update(
+        1, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+        (uint8_t*)&(uint32_t){ data_type }, sizeof(uint32_t),
+        &ptr, &rem, child);
+
+    /* 2) hashAlgorithm = sha256(2) */
+    encode_here_ber_update(
+        2, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_ENUM,
+        (uint8_t*)&(uint32_t){ 2u }, sizeof(uint32_t),
+        &ptr, &rem, child);
+
+    /* 3) includedSequenceNumbers: SEQUENCE OF INTEGER */
+    encode_here_ber_update(
+        3, WANDDER_CLASS_CONTEXT_CONSTRUCT, WANDDER_TAG_SEQUENCE,
+        NULL, 0, &ptr, &rem, child);
+    for (size_t i=0; i<nseq; i++) {
+        encode_here_ber_update(
+            WANDDER_TAG_INTEGER, WANDDER_CLASS_UNIVERSAL_PRIMITIVE, WANDDER_TAG_INTEGER,
+            (uint8_t*)&seqnos[i], sizeof(uint32_t),
+            &ptr, &rem, child);
+    }
+    ENDCONSTRUCTEDBLOCK(ptr, 1); rem -= 2;
+
+    /* 4) hashValue: OCTET STRING (32) */
+    encode_here_ber_update(
+        4, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+        (uint8_t*)hash32, 32, &ptr, &rem, child);
+
+    /* 5) signature (optional): OCTET STRING with DER signature bytes */
+    if (sig_alg != 0 && sig_der && sig_der_len > 0) {
+        encode_here_ber_update(
+            5, WANDDER_CLASS_CONTEXT_PRIMITIVE, WANDDER_TAG_OCTETSTRING,
+            (uint8_t*)sig_der, sig_der_len, &ptr, &rem, child);
+    }
+
+    /* Done. The enclosing three sequences were already closed in the template. */
+    child->body.data = ptr;
+    child->body.len  = ptr - child->body.buf;
+    child->len       = ptr - child->buf;
+}
+
+void wandder_encode_etsi_tri_integrity_ber(
+        int64_t cin, int64_t seqno, struct timeval *tv,
+        uint8_t data_type,
+        const uint32_t *seqnos, size_t nseq,
+        const uint8_t hash32[32],
+        uint8_t sig_alg,
+        const uint8_t *sig_der, size_t sig_der_len,
+        wandder_etsili_child_t *child)
+{
+    if (!child || !child->header.buf) {
+        fprintf(stderr,"Make sure wandder_encode_init_top_ber is called first\n");
+        return;
+    }
+    if (!child->body.buf) {
+        fprintf(stderr,"Call wandder_init_etsili_tri_integrity() first.\n");
+        return;
+    }
+    update_etsili_pshdr_pc(&child->header, cin, seqno, tv);
+    update_etsili_tri_integrity(
+        data_type, seqnos, nseq, hash32, sig_alg, sig_der, sig_der_len, child);
+}
+
 
 static void update_etsili_ipcc(
         void* ipcontents, size_t iplen, uint8_t dir, 
